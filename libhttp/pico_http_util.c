@@ -6,12 +6,11 @@
  *********************************************************************/
 
 #include <stdint.h>
+#include "pico_defines.h"
 #include "pico_config.h"
 #include "pico_stack.h"
 #include "pico_protocol.h"
 #include "pico_http_util.h"
-
-#if defined PICO_SUPPORT_HTTP_CLIENT || defined PICO_SUPPORT_HTTP_SERVER
 
 int pico_itoaHex(uint16_t port, char *ptr)
 {
@@ -99,4 +98,3 @@ void pico_http_url_decode(char *dst, const char *src)
 }
 
 
-#endif

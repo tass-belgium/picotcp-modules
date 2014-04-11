@@ -6,6 +6,7 @@
  *********************************************************************/
 #include <string.h>
 #include <stdint.h>
+#include "pico_defines.h"
 #include "pico_tree.h"
 #include "pico_config.h"
 #include "pico_socket.h"
@@ -26,8 +27,6 @@
  *
  * where <resource>,<host> and <port> will be added later.
  */
-
-#ifdef PICO_SUPPORT_HTTP_CLIENT
 
 #define HTTP_GET_BASIC_SIZE   63u
 #define HTTP_HEADER_LINE_SIZE 50u
@@ -1018,4 +1017,3 @@ static int readChunkLine(struct pico_http_client *client)
 
     return HTTP_RETURN_OK;
 }
-#endif
