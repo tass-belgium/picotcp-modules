@@ -350,7 +350,7 @@ static void dnsCallback(char *ip, void *ptr)
         client->wakeup(EV_HTTP_DNS, client->connectionID);
 
         /* add the ip address to the client, and start a tcp connection socket */
-        pico_string_to_ipv4(ip, &client->ip.addr);
+        pico_string_to_ipv4(ip, (uint32_t *)&client->ip.addr);
         client->sck = pico_socket_open(PICO_PROTO_IPV4, PICO_PROTO_TCP, &tcpCallback);
         if(!client->sck)
         {
