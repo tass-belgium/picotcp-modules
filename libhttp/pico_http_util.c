@@ -6,7 +6,6 @@
  *********************************************************************/
 
 #include <stdint.h>
-#include "pico_defines.h"
 #include "pico_config.h"
 #include "pico_stack.h"
 #include "pico_protocol.h"

@@ -5,7 +5,6 @@
    Author: Andrei Carp <andrei.carp@tass.be>
  *********************************************************************/
 
-#include "pico_defines.h"
 #include "pico_stack.h"
 #include "pico_http_server.h"
 #include "pico_tcp.h"
@@ -163,6 +162,10 @@ void httpServerCbk(uint16_t ev, struct pico_socket *s)
     {
         server.accepted = 0u;
         server.wakeup(EV_HTTP_CON, HTTP_SERVER_ID);
+        if(!server.accepted)
+        {
+            pico_socket_close(s); /* reject socket */
+        }
     }
 
     if((ev & PICO_SOCK_EV_CLOSE) || (ev & PICO_SOCK_EV_FIN))
@@ -693,7 +696,7 @@ int readRemainingHeader(struct httpClient *client)
                 if(!count)
                 {
                     client->state = HTTP_EOF_HDR;
-                    dbg("End of header !\n");
+                    /*dbg("End of header !\n");*/
 
                     body_len = (uint32_t)(len - index);
                     if(body_len > 0)
@@ -723,13 +726,10 @@ int readRemainingHeader(struct httpClient *client)
 void sendData(struct httpClient *client)
 {
     uint16_t length;
-    while(client->bufferSent < client->bufferSize)
+    while( client->bufferSent < client->bufferSize &&
+           (length = (uint16_t)pico_socket_write(client->sck, (uint8_t *)client->buffer + client->bufferSent, \
+                                                 client->bufferSize - client->bufferSent)) > 0 )
     {
-        length = (uint16_t)pico_socket_write(client->sck, (uint8_t *)client->buffer + client->bufferSent,
-                            client->bufferSize - client->bufferSent);
-        if (length <= 0)
-            break;
-
         client->bufferSent = (uint16_t)(client->bufferSent + length);
         server.wakeup(EV_HTTP_PROGRESS, client->connectionID);
     }
