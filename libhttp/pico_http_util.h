@@ -99,10 +99,15 @@
 #define EV_HTTP_BODY            64u
 #define EV_HTTP_DNS             128u
 
+struct pico_mime_map {
+    const char * extension;
+    const char * mimetype;
+};
 
 /* used for chunks */
 int pico_itoaHex(uint16_t port, char *ptr);
 uint32_t pico_itoa(uint32_t port, char *ptr);
 void pico_http_url_decode(char *dst, const char *src);
+const char* pico_http_get_mimetype(char* resourcename);
 
 #endif /* PICO_HTTP_UTIL_H_ */

@@ -35,7 +35,7 @@ Connection: close\r\n\
 <html><body>There was a problem with your request !</body></html>";
 
 
-int constructReturnOkHeader(char* headerstring, int cacheable, char* contenttype)
+int constructReturnOkHeader(char* headerstring, int cacheable, const char* contenttype)
 {
     strcat(headerstring, "HTTP/1.1 200 OK\r\n");
     strcat(headerstring, "Host: localhost\r\n");
@@ -334,7 +334,7 @@ char *pico_http_getBody(uint16_t conn)
  * immediately submit (static) data.
  *
  */
-int pico_http_respond(uint16_t conn, uint16_t code, const char* mimetype)
+int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetype)
 {
     struct httpClient *client = findClient(conn);
 
@@ -378,7 +378,71 @@ int pico_http_respond(uint16_t conn, uint16_t code, const char* mimetype)
         dbg("Bad state for the client \n");
         return HTTP_RETURN_ERROR;
     }
+}
 
+/*
+ * After the resource was asked by the client (EV_HTTP_REQ)
+ * before doing anything else, the server has to let know
+ * the client if the resource can be provided or not.
+ *
+ * This is controlled via the code parameter which can
+ * have three values :
+ *
+ * HTTP_RESOURCE_FOUND, HTTP_STATIC_RESOURCE_FOUND or HTTP_RESOURCE_NOT_FOUND
+ *
+ * If a resource is reported not found the 404 header will be sent and the connection
+ * will be closed , otherwise the 200 header is sent and the user should
+ * immediately submit (static) data.
+ *
+ */
+int pico_http_respond(uint16_t conn, uint16_t code)
+{
+    struct httpClient *client = findClient(conn);
+
+    if(!client)
+    {
+        dbg("Client not found !\n");
+        return HTTP_RETURN_ERROR;
+    }
+
+    if(client->state == HTTP_WAIT_RESPONSE)
+    {
+        if(code & HTTP_RESOURCE_FOUND)
+        {
+            client->state = (code & HTTP_STATIC_RESOURCE) ? HTTP_WAIT_STATIC_DATA : HTTP_WAIT_DATA;
+            char retheader[256];
+            memset(retheader, 0, 256);
+
+            /* Try to guess MIME type */
+            const char* mimetype = pico_http_get_mimetype(client->resource);
+
+            if(code & HTTP_CACHEABLE_RESOURCE)
+            {
+                int length = constructReturnOkHeader(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
+                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+            }
+            else
+            {
+                int length = constructReturnOkHeader(retheader, HTTP_STATIC_RESOURCE, mimetype);
+                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+            }
+        }
+        else
+        {
+            int length;
+
+            length = pico_socket_write(client->sck, (const char *)returnFailHeader, sizeof(returnFailHeader) - 1); /* remove \0 */
+            pico_socket_close(client->sck);
+            client->state = HTTP_CLOSED;
+            return length;
+
+        }
+    }
+    else
+    {
+        dbg("Bad state for the client \n");
+        return HTTP_RETURN_ERROR;
+    }
 }
 
 /*

@@ -37,7 +37,8 @@ int      pico_http_getProgress(uint16_t conn, uint16_t *sent, uint16_t *total);
 /*
  * Handshake and data functions
  */
-int      pico_http_respond(uint16_t conn, uint16_t code, const char* mimetype);
+int      pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetype);
+int      pico_http_respond(uint16_t conn, uint16_t code);
 int8_t   pico_http_submitData(uint16_t conn, void *buffer, uint16_t len);
 int      pico_http_close(uint16_t conn);
 

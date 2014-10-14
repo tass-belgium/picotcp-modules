@@ -11,6 +11,56 @@
 #include "pico_protocol.h"
 #include "pico_http_util.h"
 
+struct pico_mime_map supported_mime_types[] = {
+    {".html", "text/html"},
+    {".htm", "text/html"},
+    {".shtm", "text/html"},
+    {".shtml", "text/html"},
+    {".css", "text/css"},
+    {".js", "application/x-javascript"},
+    {".ico", "image/x-icon"},
+    {".gif", "image/gif"},
+    {".jpg", "image/jpeg"},
+    {".jpeg", "image/jpeg"},
+    {".png", "image/png"},
+    {".svg", "image/svg+xml"},
+    {".txt", "text/plain"},
+    {".torrent", "application/x-bittorrent"},
+    {".wav", "audio/x-wav"},
+    {".mp3", "audio/x-mp3"},
+    {".mid", "audio/mid"},
+    {".m3u", "audio/x-mpegurl"},
+    {".ogg", "application/ogg"},
+    {".ram", "audio/x-pn-realaudio"},
+    {".xml", "text/xml"},
+    {".json", "application/json"},
+    {".xslt", "application/xml"},
+    {".xsl", "application/xml"},
+    {".ra", "audio/x-pn-realaudio"},
+    {".doc", "application/msword"},
+    {".exe", "application/octet-stream"},
+    {".zip", "application/x-zip-compressed"},
+    {".xls", "application/excel"},
+    {".tgz", "application/x-tar-gz"},
+    {".tar", "application/x-tar"},
+    {".gz", "application/x-gunzip"},
+    {".arj", "application/x-arj-compressed"},
+    {".rar", "application/x-rar-compressed"},
+    {".rtf", "application/rtf"},
+    {".pdf", "application/pdf"},
+    {".swf", "application/x-shockwave-flash"},
+    {".mpg", "video/mpeg"},
+    {".webm", "video/webm"},
+    {".mpeg", "video/mpeg"},
+    {".mov", "video/quicktime"},
+    {".mp4", "video/mp4"},
+    {".m4v", "video/x-m4v"},
+    {".asf", "video/x-ms-asf"},
+    {".avi", "video/x-msvideo"},
+    {".bmp", "image/bmp"},
+    {".ttf", "application/x-font-ttf"}
+};
+
 int pico_itoaHex(uint16_t port, char *ptr)
 {
     int size = 0;
@@ -95,4 +145,20 @@ void pico_http_url_decode(char *dst, const char *src)
     }
     *dst++ = '\0';
 }
-
+/*
+    Function for guessing the mimetype based on the last part of the filename supplied (the file extension).
+    If no good guess can be made (none of the supported extensions is found as a substring of the filename), NULL is returned. Otherwise the MIME-type string is returned.
+*/
+const char* pico_http_get_mimetype(char* resourcename)
+{
+    int loopcounter = 0;
+    for(loopcounter = 0; loopcounter < sizeof(supported_mime_types) / sizeof(struct pico_mime_map); loopcounter++)
+    {
+        struct pico_mime_map mime_map_element = supported_mime_types[loopcounter];
+        if ( strstr(resourcename, mime_map_element.extension) != NULL )
+        {
+            return mime_map_element.mimetype;
+        }
+    }
+    return NULL;
+}
