@@ -20,21 +20,6 @@
 
 #define consumeChar(c) (pico_socket_read(client->sck, &c, 1u))
 
-static const char returnOkHeader[] =
-    "HTTP/1.1 200 OK\r\n\
-Host: localhost\r\n\
-Transfer-Encoding: chunked\r\n\
-Connection: close\r\n\
-\r\n";
-
-static const char returnOkCacheableHeader[] =
-    "HTTP/1.1 200 OK\r\n\
-Host: localhost\r\n\
-Cache-control: public, max-age=86400\r\n\
-Transfer-Encoding: chunked\r\n\
-Connection: close\r\n\
-\r\n";
-
 static const char returnFailHeader[] =
     "HTTP/1.1 404 Not Found\r\n\
 Host: localhost\r\n\
@@ -48,6 +33,26 @@ Host: localhost\r\n\
 Connection: close\r\n\
 \r\n\
 <html><body>There was a problem with your request !</body></html>";
+
+
+int constructReturnOkHeader(char* headerstring, int cacheable, char* contenttype)
+{
+    strcat(headerstring, "HTTP/1.1 200 OK\r\n");
+    strcat(headerstring, "Host: localhost\r\n");
+    if ( cacheable == HTTP_CACHEABLE_RESOURCE )
+    {
+        strcat(headerstring, "Cache-control: public, max-age=86400\r\n");
+    }
+    if ( contenttype != NULL)
+    {
+        sprintf(headerstring, "%sContent-Type: %s\r\n", headerstring, contenttype);
+    }
+    strcat(headerstring, "Transfer-Encoding: chunked\r\n");
+    strcat(headerstring, "Connection: close\r\n");
+    strcat(headerstring, "\r\n");
+    return strlen(headerstring);
+}
+
 
 struct httpServer
 {
@@ -329,7 +334,7 @@ char *pico_http_getBody(uint16_t conn)
  * immediately submit (static) data.
  *
  */
-int pico_http_respond(uint16_t conn, uint16_t code)
+int pico_http_respond(uint16_t conn, uint16_t code, const char* mimetype)
 {
     struct httpClient *client = findClient(conn);
 
@@ -344,13 +349,17 @@ int pico_http_respond(uint16_t conn, uint16_t code)
         if(code & HTTP_RESOURCE_FOUND)
         {
             client->state = (code & HTTP_STATIC_RESOURCE) ? HTTP_WAIT_STATIC_DATA : HTTP_WAIT_DATA;
+            char retheader[256];
+            memset(retheader, 0, 256);
             if(code & HTTP_CACHEABLE_RESOURCE)
             {
-                return pico_socket_write(client->sck, (const char *)returnOkCacheableHeader, sizeof(returnOkCacheableHeader) - 1); /* remove \0 */
+                int length = constructReturnOkHeader(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
+                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
             }
             else
             {
-                return pico_socket_write(client->sck, (const char *)returnOkHeader, sizeof(returnOkHeader) - 1); /* remove \0 */
+                int length = constructReturnOkHeader(retheader, HTTP_STATIC_RESOURCE, mimetype);
+                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
             }
         }
         else
