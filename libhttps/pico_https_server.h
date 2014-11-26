@@ -10,6 +10,7 @@
 
 #include <stdint.h>
 #include "pico_https_util.h"
+#include "pico_https_glue.h"
 
 /* Response codes */
 #define HTTPS_RESOURCE_NOT_FOUND     1u

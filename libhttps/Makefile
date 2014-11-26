@@ -1,14 +1,21 @@
 -include ../../../config.mk
+-include ../../../tools/kconfig/.config
 
 PREFIX?=$(PWD)/build
 CROSS_COMPILE?=arm-none-eabi-
 CC?=gcc
 ARCH?=stm32
-OBJS:=pico_https_server.o pico_https_util.o pico_https_glue.o
-CFLAGS=-Iconfig $(EXTRA_CFLAGS) $(PLATFORM_CFLAGS) -I $(PREFIX)/include -DCYASSL_PICOTCP -DCYASSL_USER_IO -DNO_WRITEV
-CFLAGS+=-DPOLARSSL_DEBUG_MSG -DPOLARSSL_DEBUG_C
+CXX_FILES := $(wildcard *.c)
+OBJS:= $(patsubst %.c,%.o,$(CXX_FILES))
+CFLAGS+=-Iconfig $(EXTRA_CFLAGS) $(PLATFORM_CFLAGS) -I $(PREFIX)/include 
 
 all: $(PREFIX)/lib/libhttps.a
+
+CFLAGS-y:=
+CFLAGS-$(CYASSL)+=-DLIBHTTPS_USE_CYASSL -DCYASSL_PICOTCP -DCYASSL_USER_IO -DNO_WRITEV
+CFLAGS-$(POLARSSL)+=-DLIBHTTPS_USE_POLARSSL
+
+CFLAGS+=$(CFLAGS-y)
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) -o $@ $<

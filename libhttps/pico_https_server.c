@@ -2,7 +2,7 @@
    PicoTCP. Copyright (c) 2012 TASS Belgium NV. Some rights reserved.
    See LICENSE and COPYING for usage.
 
-   Author: Andrei Carp <andrei.carp@tass.be>
+   Author: Andrei Carp <andrei.carp@tass.be>, Alexander Zuliani <alexander.zuliani@tass.be>
  *********************************************************************/
 
 #include "pico_https_server.h"
@@ -11,14 +11,6 @@
 #include "pico_tcp.h"
 #include "pico_tree.h"
 
-#include "polarssl/entropy.h"
-#include "polarssl/ctr_drbg.h"
-#include "polarssl/certs.h"
-#include "polarssl/x509.h"
-#include "polarssl/ssl.h"
-#include "polarssl/error.h"
-#include "polarssl/debug.h"
-
 #define BACKLOG                             10
 
 #define HTTPS_SERVER_CLOSED      0
@@ -26,7 +18,7 @@
 
 #define HTTPS_HEADER_MAX_LINE    256u
 
-#define consumeChar(c) (ssl_read(client->ssl_obj, &(c), 1u))
+#define consumeChar(c) (SSL_READ(client->ssl_obj, &(c), 1u))
 
 static const char returnOkHeader[] =
     "HTTP/1.1 200 OK\r\n\
@@ -70,7 +62,7 @@ struct httpsClient
 {
     uint16_t connectionID;
     struct pico_socket *sck;
-	ssl_context* ssl_obj;
+    SSL_CONTEXT* ssl_obj;
     void *buffer;
     uint16_t bufferSize;
     uint16_t bufferSent;
@@ -114,12 +106,23 @@ static int compareClients(void *ka, void *kb)
     return ((struct httpsClient *)ka)->connectionID - ((struct httpsClient *)kb)->connectionID;
 }
 
+static const unsigned char* certificate_buffer = NULL;
+static unsigned int certificate_buffer_size = 0;
+static const unsigned char* privkey_buffer = NULL;
+static unsigned int privkey_buffer_size = 0;
+
 void pico_https_setCertificate(const unsigned char* buffer, int size){
-    // TODO
+    // Just copy over pointers. Actual sanity checks/initialisations are
+    // SSL-implementation specific and should happen at init-time
+    certificate_buffer = buffer;
+    certificate_buffer_size = size;
 }
 
 void pico_https_setPrivateKey(const unsigned char* buffer, int size){
-    // TODO
+    // Just copy over pointers. Actual sanity checks/initialisations are
+    // SSL-implementation specific and should happen at init-time
+    privkey_buffer = buffer;
+    privkey_buffer_size = size;
 }
 
 PICO_TREE_DECLARE(pico_https_clients, compareClients);
@@ -153,8 +156,8 @@ void httpsServerCbk(uint16_t ev, struct pico_socket *s)
 
 	// Never execute rest of logic until handshake is complete
 	if (client && client->state == HTTPS_HANDSHAKE){
-		int accState = ssl_handshake(client->ssl_obj);	
-		if (accState == 0) // Can't find the appropriate define for "OK"
+		int accState = SSL_HANDSHAKE(client->ssl_obj);	
+		if (accState == 0) // Handshake is complete. This part probably needs error handling as well
 			client->state = HTTPS_WAIT_HDR;
 		return;
 	}
@@ -166,7 +169,7 @@ void httpsServerCbk(uint16_t ev, struct pico_socket *s)
         {
             /* send out error */
             client->state = HTTPS_ERROR;
-            ssl_write(client->ssl_obj, (const char *)errorHeader, sizeof(errorHeader) - 2);
+            SSL_WRITE(client->ssl_obj, (const char *)errorHeader, sizeof(errorHeader) - 2);
             server.wakeup(EV_HTTPS_ERROR, client->connectionID);
         }
     }
@@ -197,7 +200,7 @@ void httpsServerCbk(uint16_t ev, struct pico_socket *s)
     {
         server.wakeup(EV_HTTPS_CLOSE, (uint16_t)(serverEvent ? HTTPS_SERVER_ID : (client->connectionID)));
 		if (client && client->ssl_obj){ 
-			ssl_free(client->ssl_obj);
+			SSL_FREE(client->ssl_obj);
 			client->ssl_obj = NULL;
 		}
     }
@@ -206,75 +209,12 @@ void httpsServerCbk(uint16_t ev, struct pico_socket *s)
     {
         server.wakeup(EV_HTTPS_ERROR, (uint16_t)(serverEvent ? HTTPS_SERVER_ID : (client->connectionID)));
 		if (client && client->ssl_obj){ 
-			ssl_free(client->ssl_obj);
+			SSL_FREE(client->ssl_obj);
 			client->ssl_obj = NULL;
 		}
     }
 }
 
-entropy_context entropy;
-ctr_drbg_context ctr_drbg;
-x509_crt srvcert;
-pk_context pkey;
-
-void pico_https_ssl_init(){
-    x509_crt_init( &srvcert );
-    pk_init( &pkey );
-    entropy_init( &entropy );
-
-
-    /*
-     * 1. Load the certificates and private RSA key
-     */
-    printf( "\n  . Loading the server cert. and key..." );
-    fflush( stdout );
-
-    /*
-     * This demonstration program uses embedded test certificates.
-     * Instead, you may want to use x509_crt_parse_file() to read the
-     * server and CA certificates, as well as pk_parse_keyfile().
-     */
-	int ret;
-    ret = x509_crt_parse( &srvcert, (const unsigned char *) test_srv_crt,
-                          strlen( test_srv_crt ) );
-    if( ret != 0 )
-    {
-        printf( " failed\n  !  x509_crt_parse returned %d\n\n", ret );
-    }
-
-    ret = x509_crt_parse( &srvcert, (const unsigned char *) test_ca_list,
-                          strlen( test_ca_list ) );
-    if( ret != 0 )
-    {
-        printf( " failed\n  !  x509_crt_parse returned %d\n\n", ret );
-    }
-
-    ret =  pk_parse_key( &pkey, (const unsigned char *) test_srv_key,
-                         strlen( test_srv_key ), NULL, 0 );
-    if( ret != 0 )
-    {
-        printf( " failed\n  !  pk_parse_key returned %d\n\n", ret );
-    }
-
-    printf( " ok\n" );
-
-
-    /*
-     * 3. Seed the RNG
-     */
-    printf( "  . Seeding the random number generator..." );
-    fflush( stdout );
-
-    if( ( ret = ctr_drbg_init( &ctr_drbg, entropy_func, &entropy,
-                               (const unsigned char *) "lalala",
-                               6 ) ) != 0 )
-    {
-        printf( " failed\n  ! ctr_drbg_init returned %d\n", ret );
-    }
-
-    printf( " ok\n" );
-
-}
 
 /*
  * API for starting the server. If 0 is passed as a port, the port 80
@@ -297,15 +237,7 @@ int8_t pico_https_server_start(uint16_t port, void (*wakeup)(uint16_t ev, uint16
         pico_err = PICO_ERR_EINVAL;
         return HTTPS_RETURN_ERROR;
     }
-    /*
-    We should probably port this for Cya
-	if(!certificate_buffer || !privkey_buffer)
-	{
-		pico_err = PICO_ERR_EINVAL;
-		return HTTPS_RETURN_ERROR;
-	}
-    */
-
+    
     server.sck = pico_socket_open(PICO_PROTO_IPV4, PICO_PROTO_TCP, &httpsServerCbk);
 
     if(!server.sck)
@@ -326,25 +258,14 @@ int8_t pico_https_server_start(uint16_t port, void (*wakeup)(uint16_t ev, uint16
         return HTTPS_RETURN_ERROR;
     }
 
-    pico_https_ssl_init();
+    // Glue should implement this
+    pico_https_ssl_init(certificate_buffer, certificate_buffer_size, privkey_buffer, privkey_buffer_size);
 
 	// Some state
     server.wakeup = wakeup;
     server.state = HTTPS_SERVER_LISTEN;
 	
     return HTTPS_RETURN_OK;
-}
-
-// MAKE THIS BETTER
-#define DEBUG_LEVEL 10
-static void my_debug( void *ctx, int level, const char *str )
-{
-    
-    //if( level < DEBUG_LEVEL )
-    {
-        fprintf( (FILE *) ctx, "%s", str );
-        fflush(  (FILE *) ctx  );
-    }
 }
 
 /*
@@ -377,44 +298,9 @@ int pico_https_server_accept(void)
         return HTTPS_RETURN_ERROR;
     }
 
-    // DO THIS BETTER
-    client->ssl_obj = PICO_ZALLOC(sizeof(ssl_context));
-	ssl_init(client->ssl_obj);
+    // Error handling?
+    client->ssl_obj = pico_https_ssl_accept(client->sck);
 
-	int ret; 
-    /*
-     * 4. Setup stuff
-     */
-    printf( "  . Setting up the SSL data...." );
-    fflush( stdout );
-
-    if( ( ret = ssl_init( client->ssl_obj ) ) != 0 )
-    {
-        printf( " failed\n  ! ssl_init returned %d\n\n", ret );
-    }
-
-    ssl_set_endpoint( client->ssl_obj, SSL_IS_SERVER );
-    ssl_set_authmode( client->ssl_obj, SSL_VERIFY_NONE );
-
-    ssl_set_dbg( client->ssl_obj, my_debug, stdout );
-
-    ssl_set_ca_chain( client->ssl_obj, srvcert.next, NULL, NULL );
-    if( ( ret = ssl_set_own_cert( client->ssl_obj, &srvcert, &pkey ) ) != 0 )
-    {
-        printf( " failed\n  ! ssl_set_own_cert returned %d\n\n", ret );
-    }
-
-    printf( " ok\n" );
-
-	ssl_set_rng( client->ssl_obj, ctr_drbg_random, &ctr_drbg );
-
-    ssl_set_bio( client->ssl_obj, pico_EmbedReceive, client->sck,
-                           pico_EmbedSend, client->sck );
-
-    // Set using nonblock?
-     
-	ret = ssl_handshake(client->ssl_obj);
-    
 	if (client->ssl_obj){
 		server.accepted=1u;
     	client->state = HTTPS_HANDSHAKE;
@@ -512,19 +398,19 @@ int pico_https_respond(uint16_t conn, uint16_t code)
             client->state = (code & HTTPS_STATIC_RESOURCE) ? HTTPS_WAIT_STATIC_DATA : HTTPS_WAIT_DATA;
             if(code & HTTPS_CACHEABLE_RESOURCE)
             {
-                return ssl_write(client->ssl_obj, (const char *)returnOkCacheableHeader, sizeof(returnOkCacheableHeader) - 1); /* remove \0 */
+                return SSL_WRITE(client->ssl_obj, (const char *)returnOkCacheableHeader, sizeof(returnOkCacheableHeader) - 1); /* remove \0 */
             }
             else
             {
-                return ssl_write(client->ssl_obj, (const char *)returnOkHeader, sizeof(returnOkHeader) - 1); /* remove \0 */
+                return SSL_WRITE(client->ssl_obj, (const char *)returnOkHeader, sizeof(returnOkHeader) - 1); /* remove \0 */
             }
         }
         else
         {
             int length;
 
-            length = ssl_write(client->ssl_obj, (const char *)returnFailHeader, sizeof(returnFailHeader) - 1); /* remove \0 */
-			ssl_close_notify(client->ssl_obj);
+            length = SSL_WRITE(client->ssl_obj, (const char *)returnFailHeader, sizeof(returnFailHeader) - 1); /* remove \0 */
+			SSL_SHUTDOWN(client->ssl_obj);
             pico_socket_close(client->sck);
             client->state = HTTPS_CLOSED;
             return length;
@@ -617,7 +503,7 @@ int8_t pico_https_submitData(uint16_t conn, void *buffer, uint16_t len)
         chunkCount = pico_itoaHex(client->bufferSize, chunkStr);
         chunkStr[chunkCount++] = '\r';
         chunkStr[chunkCount++] = '\n';
-        ssl_write(client->ssl_obj, chunkStr, chunkCount); // We assume this succeeds. Bad idea.
+        SSL_WRITE(client->ssl_obj, chunkStr, chunkCount); // We assume this succeeds. Bad idea.
     }
     else
     {
@@ -707,7 +593,7 @@ int pico_https_close(uint16_t conn)
             PICO_FREE(client->body);
 
 		if(client->ssl_obj){
-			ssl_free(client->ssl_obj);
+			SSL_FREE(client->ssl_obj);
 			client->ssl_obj=NULL;
 		}
 
@@ -850,7 +736,7 @@ int readRemainingHeader(struct httpsClient *client)
     int count = 0;
     int len;
 
-    while((len = ssl_read(client->ssl_obj, line, 1000u)) > 0)
+    while((len = SSL_READ(client->ssl_obj, line, 1000u)) > 0)
     {
         char c;
         int index = 0;
@@ -898,7 +784,7 @@ void sendData(struct httpsClient *client)
 {
     int length;
     while( client->bufferSent < client->bufferSize &&
-           (length = ssl_write(client->ssl_obj, (uint8_t *)client->buffer + client->bufferSent, \
+           (length = SSL_WRITE(client->ssl_obj, (uint8_t *)client->buffer + client->bufferSent, \
                                                  client->bufferSize - client->bufferSent)) > 0 )
     {
         client->bufferSent = (uint16_t)(client->bufferSent + length);
@@ -907,7 +793,7 @@ void sendData(struct httpsClient *client)
     if(client->bufferSent == client->bufferSize && client->bufferSize)
     {
         /* send chunk trail */
-        if(ssl_write(client->ssl_obj, "\r\n", 2) > 0)
+        if(SSL_WRITE(client->ssl_obj, "\r\n", 2) > 0)
         {
             /* free the buffer */
             if(client->state == HTTPS_SENDING_DATA)
@@ -926,9 +812,9 @@ void sendData(struct httpsClient *client)
 
 void sendFinal(struct httpsClient *client)
 {
-    if(ssl_write(client->ssl_obj, "0\r\n\r\n", 5u) > 0)
+    if(SSL_WRITE(client->ssl_obj, "0\r\n\r\n", 5u) > 0)
     {
-		ssl_close_notify(client->ssl_obj);
+		SSL_SHUTDOWN(client->ssl_obj);
         pico_socket_close(client->sck);
         client->state = HTTPS_CLOSED;
     }
