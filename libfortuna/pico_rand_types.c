@@ -14,7 +14,7 @@ inline void increment_counter (struct counter_fortuna* counter) {
     int i;
 
     for (i = 0; i < 16; i++) {
-        if (counter->values[i] ^ counter->values[i] != 0) { /* Not at maximum value */
+        if (counter->values[i] < 0xFF) { /* Not at maximum value */
             counter->values[i]++;
             return; /* Only return once we've found one not ready to overflow */
 
