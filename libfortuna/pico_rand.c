@@ -2,29 +2,29 @@
 #include "pico_rand_types.h"
 
 /* Sets up the generator, loading the seed from persistent storage if possible*/
-int pico_rand_init(struct pico_rand_generator_state* state) {
+int pico_rand_init() {
     int i = 0;
 
-    state->key = PICO_ZALLOC(sizeof(uint8_t) * 32);
-    state->pool = PICO_ZALLOC(sizeof(Sha256) * PICO_RAND_POOL_COUNT); /* n pools of strings; in practice, hashes iteratively updated */
-    state->counter = PICO_ZALLOC(sizeof(struct counter_fortuna));
+    pico_rand_generator.key = PICO_ZALLOC(sizeof(uint8_t) * 32);
+    pico_rand_generator.pool = PICO_ZALLOC(sizeof(Sha256) * PICO_RAND_POOL_COUNT); /* n pools of strings; in practice, hashes iteratively updated */
+    pico_rand_generator.counter = PICO_ZALLOC(sizeof(struct counter_fortuna));
 
-    state->aes = PICO_ZALLOC(sizeof(Aes));
-    state->sha = PICO_ZALLOC(sizeof(Sha256));
+    pico_rand_generator.aes = PICO_ZALLOC(sizeof(Aes));
+    pico_rand_generator.sha = PICO_ZALLOC(sizeof(Sha256));
 
-    if (NULL == state->key ||
-        NULL == state->pool ||
-        NULL == state->aes ||
-        NULL == state->sha) {
+    if (NULL == pico_rand_generator.key ||
+        NULL == pico_rand_generator.pool ||
+        NULL == pico_rand_generator.aes ||
+        NULL == pico_rand_generator.sha) {
             return 0; /* Failed to allocate memory! */
 
     }
 
     /* Set counter to 0 (also indicates unseeded state) */
-	init_counter (state->counter);
+	init_counter (pico_rand_generator.counter);
 
     for (i = 0; i < PICO_RAND_POOL_COUNT; i++) {
-        InitSha256(&(state->pool[i])); // FIXME right? What does this look like in assembly?
+        InitSha256(&(pico_rand_generator.pool[i])); // FIXME right? What does this look like in assembly?
 
     }
 
@@ -38,25 +38,25 @@ int pico_rand_init(struct pico_rand_generator_state* state) {
 }
 
 /* Add some entropy to a given pool TODO why need source IDs? */
-void pico_rand_accu(struct pico_rand_generator_state* state, int source, int pool, uint8_t* data, int data_size) {
+void pico_rand_accu(int source, int pool, uint8_t* data, int data_size) {
     /* To be safe, but should avoid needing to do this, as it'll favour lower pools... */
     pool = pool % PICO_RAND_POOL_COUNT;
 
     /* Add the new entropy data to the specified pool */
-    Sha256Update(&(state->pool[pool]), data, data_size);
+    Sha256Update(&(pico_rand_generator.pool[pool]), data, data_size);
 
 }
 
 /* Prepare a seed from the selected pools. Helper function for re-seeding. */
-static int pico_rand_extract_seed(struct pico_rand_generator_state* state, uint8_t* seed_buffer, int buffer_size) {
+static int pico_rand_extract_seed(uint8_t* seed_buffer, int buffer_size) {
     int i;
     int hashes_added = 0;
 
     for (i = 0; i < PICO_RAND_POOL_COUNT; i++) {
-        if (state->counter->values[i / 8] & 1 << (i % 8)) { /* Use nth pool every (2^n)th reseed (so p0 every time, p1 every other, p2 every 4th... */ // TODO check this logic
+        if (pico_rand_generator.counter->values[i / 8] & 1 << (i % 8)) { /* Use nth pool every (2^n)th reseed (so p0 every time, p1 every other, p2 every 4th... */ // TODO check this logic
             if ((hashes_added + 1) * PICO_RAND_HASH_SIZE <= buffer_size) {
                  /* Extract final hash for given pool, and put in appropriate part of seed buffer */
-                Sha256Final(&(state->pool[i]), seed_buffer + (PICO_RAND_HASH_SIZE * hashes_added));
+                Sha256Final(&(pico_rand_generator.pool[i]), seed_buffer + (PICO_RAND_HASH_SIZE * hashes_added));
                 hashes_added++;
 
             } else {
@@ -74,7 +74,7 @@ static int pico_rand_extract_seed(struct pico_rand_generator_state* state, uint8
 }
 
 /* Re-seed the generator. Called when enough data has been used from the current 'run' */
-static int pico_rand_reseed(struct pico_rand_generator_state* state, uint8_t* seed, uint8_t seed_size) {
+static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size) {
     uint8_t* sha_input = NULL;
 
     sha_input = (uint8_t*) PICO_ZALLOC (seed_size + PICO_RAND_ENCRYPT_KEY_SIZE); /* Seed size + 256b of current SHA hash key */
@@ -84,16 +84,16 @@ static int pico_rand_reseed(struct pico_rand_generator_state* state, uint8_t* se
         return 0;
 
     } else {
-        memcpy (sha_input, state->key, PICO_RAND_ENCRYPT_KEY_SIZE); /* Current key */
+        memcpy (sha_input, pico_rand_generator.key, PICO_RAND_ENCRYPT_KEY_SIZE); /* Current key */
         memcpy (sha_input + PICO_RAND_ENCRYPT_KEY_SIZE, seed, seed_size); /* New seed */
 
     }
 
-    InitSha256(state->sha);
-    Sha256Update(state->sha, sha_input, seed_size + 32);
-    Sha256Final(state->sha, state->key);
+    InitSha256(pico_rand_generator.sha);
+    Sha256Update(pico_rand_generator.sha, sha_input, seed_size + 32);
+    Sha256Final(pico_rand_generator.sha, pico_rand_generator.key);
 
-    increment_counter(state->counter);
+    increment_counter(pico_rand_generator.counter);
 
     free (sha_input);
 
@@ -102,17 +102,17 @@ static int pico_rand_reseed(struct pico_rand_generator_state* state, uint8_t* se
 }
 
 /* Generate blocks of random data. Underlying function used by the user-callable random data functions. */
-static int pico_rand_generate_block (struct pico_rand_generator_state* state, uint8_t* buffer, int buffer_size) {
+static int pico_rand_generate_block (uint8_t* buffer, int buffer_size) {
 
     uint8_t encrypt_iv[PICO_RAND_ENCRYPT_IV_SIZE] = { 0 }; /* Can't use ECB mode and combine it with our external counter, so doing it this way */
 
     /* Run encryption block */
-    if (!counter_is_zero (state->counter)) { /* Refuse if not seeded */
+    if (!counter_is_zero (pico_rand_generator.counter)) { /* Refuse if not seeded */
         if (buffer_size >= PICO_RAND_ENCRYPT_BLOCK_SIZE) {
-            AesSetKey(state->aes, state->key, PICO_RAND_ENCRYPT_KEY_SIZE, encrypt_iv, AES_ENCRYPTION);
-            AesCbcEncrypt(state->aes, buffer, (const byte*) state->counter, PICO_RAND_ENCRYPT_IV_SIZE);
+            AesSetKey(pico_rand_generator.aes, pico_rand_generator.key, PICO_RAND_ENCRYPT_KEY_SIZE, encrypt_iv, AES_ENCRYPTION);
+            AesCbcEncrypt(pico_rand_generator.aes, buffer, (const byte*) pico_rand_generator.counter, PICO_RAND_ENCRYPT_IV_SIZE);
 
-            increment_counter (state->counter);
+            increment_counter (pico_rand_generator.counter);
 
             return 1; /* Done succesfully */
 
@@ -130,7 +130,7 @@ static int pico_rand_generate_block (struct pico_rand_generator_state* state, ui
 }
 
 /* Get some random bytes from the generator. */
-int pico_rand_bytes(struct pico_rand_generator_state* state, uint8_t* buffer, int count) {
+int pico_rand_bytes(uint8_t* buffer, int count) {
     int remaining_bytes = 0;
     uint8_t* block_buffer = 0;
     uint8_t* seed_buffer = 0;
@@ -139,13 +139,13 @@ int pico_rand_bytes(struct pico_rand_generator_state* state, uint8_t* buffer, in
 
     if (count > 0 && count < 2^20) {
 
-        if ((PICO_TIME_MS() - state->last_reseed_time >= PICO_RAND_MINIMUM_RESEED_MS) &&
+        if ((PICO_TIME_MS() - pico_rand_generator.last_reseed_time >= PICO_RAND_MINIMUM_RESEED_MS) &&
             (1 >= PICO_RAND_MINIMUM_RESEED_ENTR)) { // FIXME to check 'size' of pool 0
 
             seed_buffer = PICO_ZALLOC (sizeof (uint8_t) * PICO_RAND_POOL_COUNT * PICO_RAND_HASH_SIZE); /* Assume that we use every pool hash... */
 
-            seed_size = pico_rand_extract_seed (state, seed_buffer, sizeof (uint8_t) * PICO_RAND_POOL_COUNT * PICO_RAND_HASH_SIZE);
-            pico_rand_reseed (state, seed_buffer, seed_size);
+            seed_size = pico_rand_extract_seed (seed_buffer, sizeof (uint8_t) * PICO_RAND_POOL_COUNT * PICO_RAND_HASH_SIZE);
+            pico_rand_reseed (seed_buffer, seed_size);
             
             free (seed_buffer);
 
@@ -154,14 +154,14 @@ int pico_rand_bytes(struct pico_rand_generator_state* state, uint8_t* buffer, in
         /* Get random blocks until we have our data. */
         for (remaining_bytes = count; remaining_bytes > 0; remaining_bytes -= PICO_RAND_ENCRYPT_BLOCK_SIZE) {
             if (remaining_bytes / PICO_RAND_ENCRYPT_BLOCK_SIZE > 0) { /* At least one full block remaining? Can copy directly without overflowing. */
-                pico_rand_generate_block(state, buffer + (PICO_RAND_ENCRYPT_BLOCK_SIZE * blocks_done++), PICO_RAND_ENCRYPT_BLOCK_SIZE); // TODO check!
+                pico_rand_generate_block(buffer + (PICO_RAND_ENCRYPT_BLOCK_SIZE * blocks_done++), PICO_RAND_ENCRYPT_BLOCK_SIZE); // TODO check!
 
             } else {
                 /* This'll only be necessary for the last block, and only if requested byte count != multiple of block size */
                 block_buffer = PICO_ZALLOC(PICO_RAND_ENCRYPT_BLOCK_SIZE);
 
                 if (block_buffer) {
-                    pico_rand_generate_block(state, block_buffer, PICO_RAND_ENCRYPT_BLOCK_SIZE);
+                    pico_rand_generate_block(block_buffer, PICO_RAND_ENCRYPT_BLOCK_SIZE);
 
                     /* Copy required part of block to output */
                     memcpy (buffer + (blocks_done * PICO_RAND_ENCRYPT_BLOCK_SIZE),
@@ -186,12 +186,20 @@ int pico_rand_bytes(struct pico_rand_generator_state* state, uint8_t* buffer, in
 
     }
 
-    // FIXME doesn't return fail if generator not seeded
-
 }
 
 /* Get some random bytes within a range. Again, use this instead of modulo. */
-int pico_rand_bytes_range(struct pico_rand_generator_state* state, uint8_t* buffer, int count, uint8_t max) {
+int pico_rand_bytes_range(uint8_t* buffer, int count, uint8_t max) { /* TODO */
+}
+
+/* Wrapper for compatibility with original PRNG */
+uint32_t pico_rand() {
+    uint32_t data;
+
+    pico_rand_bytes((uint8_t*) &data, 4);
+
+    return data;
+
 }
 
 /* Load seed function */
@@ -202,7 +210,7 @@ uint32_t pico_rand_seed_load() {
 uint32_t pico_rand_seed_store() {
 }
 
-void pico_rand_shutdown(struct pico_rand_generator_state* state) {
+void pico_rand_shutdown() {
 	#ifdef PICO_RAND_SEED_PERSISTENT
 	    pico_rand_seed_store();
 
@@ -211,18 +219,18 @@ void pico_rand_shutdown(struct pico_rand_generator_state* state) {
 	#endif /* PICO_RAND_SEED_PERSISTENT */
 
     /* Don't just free them, otherwise generator internals still available in RAM! */
-    *(state->key) = 0;
-    init_counter (state->counter);
-    //*(state->pool) = 0;
+    *(pico_rand_generator.key) = 0;
+    init_counter (pico_rand_generator.counter);
+    //*(pico_rand_generator.pool) = 0;
 
-    //*(state->aes) = 0; /* FIXME */
-    //*(state->sha) = 0; /* FIXME */
+    //*(pico_rand_generator.aes) = 0; /* FIXME */
+    //*(pico_rand_generator.sha) = 0; /* FIXME */
 
-    free(state->key);
-    free(state->counter);
-    // free(state->pool);
-    free(state->aes);
-    free(state->sha);
+    free(pico_rand_generator.key);
+    free(pico_rand_generator.counter);
+    // free(pico_rand_generator.pool);
+    free(pico_rand_generator.aes);
+    free(pico_rand_generator.sha);
 
 }
 
