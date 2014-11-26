@@ -7,16 +7,16 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define PICO_ZALLOC(x) calloc(x, 1) // TODO
-
 #include "cyassl/ctaocrypt/aes.h"
 #include "cyassl/ctaocrypt/sha256.h"
 
 #include "pico_rand_types.h"
+#include "pico_stack.h"
 
 /* Fortuna architecture defines */
 #define PICO_RAND_POOL_COUNT            32
 #define PICO_RAND_MINIMUM_RESEED_MS     100
+#define PICO_RAND_MINIMUM_RESEED_ENTR   1
 #define PICO_RAND_MAX_REQUEST_BYTES     1048576
 
 /* Defines for hash and encryption algorithms */
@@ -34,7 +34,7 @@ struct pico_rand_generator_state {
 	uint8_t* key; /* 32 byte key */
 	struct counter_fortuna* counter;
 	Sha256* pool;
-    int last_reseed_time;
+    pico_time last_reseed_time;
 
     /* AES and SHA internal stuff */
     Aes* aes;

@@ -139,7 +139,9 @@ int pico_rand_bytes(struct pico_rand_generator_state* state, uint8_t* buffer, in
 
     if (count > 0 && count < 2^20) {
 
-        if (1) { // FIXME test time since last reseed, and length(P_0) >= MIN_POOL_SIZE
+        if ((PICO_TIME_MS() - state->last_reseed_time >= PICO_RAND_MINIMUM_RESEED_MS) &&
+            (1 >= PICO_RAND_MINIMUM_RESEED_ENTR)) { // FIXME to check 'size' of pool 0
+
             seed_buffer = PICO_ZALLOC (sizeof (uint8_t) * PICO_RAND_POOL_COUNT * PICO_RAND_HASH_SIZE); /* Assume that we use every pool hash... */
 
             seed_size = pico_rand_extract_seed (state, seed_buffer, sizeof (uint8_t) * PICO_RAND_POOL_COUNT * PICO_RAND_HASH_SIZE);
@@ -155,7 +157,7 @@ int pico_rand_bytes(struct pico_rand_generator_state* state, uint8_t* buffer, in
                 pico_rand_generate_block(state, buffer + (PICO_RAND_ENCRYPT_BLOCK_SIZE * blocks_done++), PICO_RAND_ENCRYPT_BLOCK_SIZE); // TODO check!
 
             } else {
-                /* This'll only happen for the last block, and only if requested byte count != multiple of block size */
+                /* This'll only be necessary for the last block, and only if requested byte count != multiple of block size */
                 block_buffer = PICO_ZALLOC(PICO_RAND_ENCRYPT_BLOCK_SIZE);
 
                 if (block_buffer) {
