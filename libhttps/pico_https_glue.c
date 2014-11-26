@@ -1,8 +1,14 @@
 #include "pico_https_glue.h"
+#include "polarssl/entropy.h"
+#include "polarssl/ctr_drbg.h"
+#include "polarssl/certs.h"
+#include "polarssl/x509.h"
+#include "polarssl/ssl.h"
+#include "polarssl/error.h"
 
-int pico_EmbedSend(CYASSL* ssl, char *buf, int sz, void *ctx)
+int pico_EmbedSend(void * pico_sock, const unsigned char * buf, size_t sz)
 {
-    struct pico_socket *sock = (struct pico_socket *) ctx;
+    struct pico_socket *sock = (struct pico_socket *) pico_sock;
     int sent;
     int len = sz;
 
@@ -13,9 +19,9 @@ int pico_EmbedSend(CYASSL* ssl, char *buf, int sz, void *ctx)
 		return -2;
 }
 
-int pico_EmbedReceive(CYASSL *ssl, char *buf, int sz, void *ctx)
+int pico_EmbedReceive(void * pico_sock, unsigned char * buf, size_t sz)
 {
-	struct pico_socket *sock = (struct pico_socket *) ctx;
+	struct pico_socket *sock = (struct pico_socket *) pico_sock;
     int read;
     int len = sz; 
 
