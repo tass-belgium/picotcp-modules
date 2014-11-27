@@ -32,7 +32,7 @@
 struct pico_rand_generator_state {
     /* Fortuna internals */
 	uint8_t* key; /* 32 byte key */
-	struct counter_fortuna* counter;
+	struct pico_rand_counter_fortuna* counter;
 	Sha256* pool;
     pico_time last_reseed_time;
 
@@ -46,19 +46,16 @@ struct pico_rand_generator_state {
 int pico_rand_init();
 void pico_rand_accu(int source, int pool, uint8_t* data, int data_size);
 
-/* Internal helper functions */
-static int pico_rand_extract_seed(uint8_t* seed_buffer, int buffer_size);
-static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size);
-static int pico_rand_generate_block (uint8_t* buffer, int buffer_size);
-
 /* Get random stuff! */
 int pico_rand_bytes(uint8_t* buffer, int count);
 int pico_rand_bytes_range(uint8_t* buffer, int count, uint8_t max);
 uint32_t pico_rand();
 
 /* Seed persistency functions (if possible on the architecture) */
+#ifdef PICO_RAND_SEED_PERSISTENT
 uint32_t pico_rand_seed_load();
 uint32_t pico_rand_seed_store();
+#endif
 
 /* Shut down the generator securely if it is no longer needed */
 void pico_rand_shutdown();

@@ -1,6 +1,6 @@
 #include "pico_rand_types.h"
 
-inline void init_counter (struct counter_fortuna* counter) {
+inline void pico_rand_init_counter (struct pico_rand_counter_fortuna* counter) {
     int i;
 
     for (i = 0; i < 16; i++) {
@@ -10,7 +10,7 @@ inline void init_counter (struct counter_fortuna* counter) {
 
 }
 
-inline void increment_counter (struct counter_fortuna* counter) {
+inline void pico_rand_increment_counter (struct pico_rand_counter_fortuna* counter) {
     int i;
 
     for (i = 0; i < 16; i++) {
@@ -27,7 +27,7 @@ inline void increment_counter (struct counter_fortuna* counter) {
 
 }
 
-int counter_is_zero (struct counter_fortuna* counter) {
+int pico_rand_counter_is_zero (struct pico_rand_counter_fortuna* counter) {
     int i;
 
     for (i = 0; i < 16; i++) {

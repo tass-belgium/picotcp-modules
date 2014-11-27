@@ -4,8 +4,6 @@
 #define PRODUCE_BYTES 100
 
 int main (int argc, char* argv[]) {
-    printf ("libfortuna test 0.1\n");
-
     uint8_t iv[16] = { 0 }; /* For the AES, to put it into essentially CBC mode (actually really in counter mode, but using our external counter) */
 
     uint8_t entropy[32] = {
@@ -19,24 +17,29 @@ int main (int argc, char* argv[]) {
 
     uint8_t produced_data[PRODUCE_BYTES] = {0};
 
-    printf ("Initialising generator...\n");
     pico_rand_init ();
 
-    printf ("Accumulating entropy...\n");
     /* Entropy tiem */
     for (i = 0; i < 32; i++) {
         pico_rand_accu (i, i, entropy + i, 1);
 
     }
 
-    printf ("Producing random data...\n");
     int j = pico_rand_bytes (produced_data, PRODUCE_BYTES);
 
-    printf ("Printing random data...\n");
     for (i = 0; i < PRODUCE_BYTES; i++) {
         printf ("%d\n", produced_data[i]);
 
     }
+
+//    printf ("And uint32_ts with pico_rand...\n");
+//    for (i = 0; i < PRODUCE_BYTES / 4; i++) {
+//        uint32_t data = pico_rand ();
+//        printf ("%lu ", (unsigned long) data);
+//
+//    }
+
+    pico_rand_shutdown();
     
     return 0;
 
