@@ -16,5 +16,5 @@ Application level modules to run on top of the popular Embedded TCP/IP stack
  The result of the make command  will be libhttp/libhttp.a, which *ALREADY* contains picotcp symbols, and it is ready to be linked to your pico_http application
 
 
-in doubt? contact us at picotcp _at_ tass _dot_ be
+in doubt? contact us at info _at_ picotcp _dot_ com
 
