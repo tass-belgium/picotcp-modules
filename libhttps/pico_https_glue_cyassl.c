@@ -65,7 +65,7 @@ int pico_cyassl_recv(CYASSL *ssl, char *buf, int sz, void *ctx)
 
 int SSL_HANDSHAKE(CYASSL* ssl){
     int ret = CyaSSL_accept(ssl);
-    if (ret == SSL_SUCCESS) // Fuck you CyaSSL. Who defines OK != 0?
+    if (ret == SSL_SUCCESS) /* SSL_SUCCESS apparently != 0 for some reason. */
         return 0;
     return -1;
 }
