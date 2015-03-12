@@ -43,22 +43,22 @@ struct pico_rand_generator_state {
 } pico_rand_generator;
 
 /* For setting up the generator and feeding entropy */
-int pico_rand_init();
+int pico_rand_init(void);
 void pico_rand_accu(int source, int pool, uint8_t* data, int data_size);
 
 /* Get random stuff! */
 int pico_rand_bytes(uint8_t* buffer, int count);
 int pico_rand_bytes_range(uint8_t* buffer, int count, uint8_t max);
-uint32_t pico_rand();
+uint32_t pico_rand(void);
 
 /* Seed persistency functions (if possible on the architecture) */
 #ifdef PICO_RAND_SEED_PERSISTENT
-uint32_t pico_rand_seed_load();
-uint32_t pico_rand_seed_store();
+uint32_t pico_rand_seed_load(void);
+uint32_t pico_rand_seed_store(void);
 #endif
 
 /* Shut down the generator securely if it is no longer needed */
-void pico_rand_shutdown();
+void pico_rand_shutdown(void);
 
 #endif /* PICO_RAND_H_ */
 

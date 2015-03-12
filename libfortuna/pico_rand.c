@@ -7,7 +7,7 @@ static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size);
 static int pico_rand_generate_block (uint8_t* buffer, int buffer_size);
 
 /* Sets up the generator, loading the seed from persistent storage if possible*/
-int pico_rand_init() {
+int pico_rand_init(void) {
     int i = 0;
 
     pico_rand_generator.key = PICO_ZALLOC(sizeof(uint8_t) * 32);
@@ -17,11 +17,11 @@ int pico_rand_init() {
     pico_rand_generator.aes = PICO_ZALLOC(sizeof(Aes));
     pico_rand_generator.sha = PICO_ZALLOC(sizeof(Sha256));
 
-    if (NULL == pico_rand_generator.key ||
+    if (NULL == pico_rand_generator.key  ||
         NULL == pico_rand_generator.pool ||
-        NULL == pico_rand_generator.aes ||
+        NULL == pico_rand_generator.aes  ||
         NULL == pico_rand_generator.sha) {
-            return 0; /* Failed to allocate memory! */
+            return -1; /* Failed to allocate memory! */
 
     }
 
@@ -29,7 +29,7 @@ int pico_rand_init() {
 	pico_rand_init_counter (pico_rand_generator.counter);
 
     for (i = 0; i < PICO_RAND_POOL_COUNT; i++) {
-        InitSha256(&(pico_rand_generator.pool[i])); /* FIXME right? What does this look like in assembly? */
+        InitSha256(&(pico_rand_generator.pool[i])); /* TODO right? What does this look like in assembly? */
 
     }
 
@@ -39,6 +39,8 @@ int pico_rand_init() {
         /* Set up timer for saving seed */
 
 	#endif /* PICO_RAND_SEED_PERSISTENT */
+
+	return 0;
 
 }
 
@@ -142,7 +144,7 @@ int pico_rand_bytes(uint8_t* buffer, int count) {
     int blocks_done = 0;
     int seed_size = 0;
 
-    if (count > 0 && count < 2^20) {
+    if ((count > 0) && (count < (2^20))) {
 
         if ((PICO_TIME_MS() - pico_rand_generator.last_reseed_time >= PICO_RAND_MINIMUM_RESEED_MS) &&
             (1 >= PICO_RAND_MINIMUM_RESEED_ENTR)) { /* FIXME to check 'size' of pool 0 */
@@ -200,10 +202,12 @@ int pico_rand_bytes(uint8_t* buffer, int count) {
 
 /* Get some random bytes within a range. Again, use this instead of modulo. */
 int pico_rand_bytes_range(uint8_t* buffer, int count, uint8_t max) { /* TODO */
+	return -1; /* FIXME not implemented */
+
 }
 
 /* Wrapper for compatibility with original PRNG */
-uint32_t pico_rand() {
+uint32_t pico_rand(void) {
     uint32_t data;
 
     pico_rand_bytes((uint8_t*) &data, 4); /* TODO is this fair? */
@@ -215,15 +219,15 @@ uint32_t pico_rand() {
 /* Seed persistency functions (if possible on the architecture) */
 #ifdef PICO_RAND_SEED_PERSISTENT
 /* Load seed function */
-uint32_t pico_rand_seed_load() {
+uint32_t pico_rand_seed_load(void) {
 }
 
 /* Save seed function */
-uint32_t pico_rand_seed_store() {
+uint32_t pico_rand_seed_store(void) {
 }
 #endif /* PICO_RAND_SEED_PERSISTENT */
 
-void pico_rand_shutdown() {
+void pico_rand_shutdown(void) {
 	#ifdef PICO_RAND_SEED_PERSISTENT
 	pico_rand_seed_store();
     /* TODO Set up timer for saving seed */

@@ -8,6 +8,7 @@ struct pico_rand_counter_fortuna {
 
 };
 
+void pico_rand_init_counter (struct pico_rand_counter_fortuna* counter);
 void pico_rand_increment_counter (struct pico_rand_counter_fortuna* counter);
 void pico_rand_reset_counter (struct pico_rand_counter_fortuna* counter);
 int pico_rand_counter_is_zero (struct pico_rand_counter_fortuna* counter);
