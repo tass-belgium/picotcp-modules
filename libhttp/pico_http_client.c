@@ -179,7 +179,7 @@ static int8_t pico_processURI(const char *uri, struct pico_http_uri *urikey)
     else
     {
         lastIndex = index;
-        while(uri[index] && uri[index] != '?' && uri[index] != '&' && uri[index] != '#') index++;
+        while(uri[index] /*&& uri[index] != '?' && uri[index] != '&' && uri[index] != '#'*/) index++;
         urikey->resource = (char *)PICO_ZALLOC((size_t)(index - lastIndex + 1));
 
         if(!urikey->resource)
@@ -383,7 +383,7 @@ static void dnsCallback(char *ip, void *ptr)
  * The function returns a connection ID >= 0 if successful
  * -1 if an error occured.
  */
-int pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
+int MOCKABLE pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
 {
     struct pico_http_client *client;
     uint32_t ip = 0;
@@ -416,7 +416,7 @@ int pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
         pico_err = PICO_ERR_EEXIST;
         PICO_FREE(client->uriKey);
         PICO_FREE(client);
-        return HTTP_RETURN_ERROR;
+        return HTTP_RETURN_ALREADYIN;
     }
 
     /* dns query */
@@ -446,7 +446,7 @@ int pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
  * based on the uri passed when opening the client.
  *
  */
-int32_t pico_http_client_sendHeader(uint16_t conn, char *header, uint8_t hdr)
+int32_t MOCKABLE pico_http_client_sendHeader(uint16_t conn, char *header, uint8_t hdr)
 {
     struct pico_http_client search = {
         .connectionID = conn
@@ -626,7 +626,7 @@ int32_t pico_http_client_readData(uint16_t conn, char *data, uint16_t size)
  *
  * Reads out the header struct received from server.
  */
-struct pico_http_header *pico_http_client_readHeader(uint16_t conn)
+struct pico_http_header * MOCKABLE pico_http_client_readHeader(uint16_t conn)
 {
     struct pico_http_client dummy = {
         .connectionID = conn
@@ -699,7 +699,7 @@ static inline void freeUri(struct pico_http_client *toBeRemoved)
         PICO_FREE(toBeRemoved->uriKey);
     }
 }
-int pico_http_client_close(uint16_t conn)
+int MOCKABLE pico_http_client_close(uint16_t conn)
 {
     struct pico_http_client *toBeRemoved = NULL;
     struct pico_http_client dummy = {
