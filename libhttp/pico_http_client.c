@@ -600,7 +600,7 @@ static inline int readChunkedData(struct pico_http_client *client, char *data, u
  * a chunked transfer encoding will "de-chunk" the data
  * and pass it to the user.
  */
-int32_t pico_http_client_readData(uint16_t conn, char *data, uint16_t size)
+int32_t MOCKABLE pico_http_client_readData(uint16_t conn, char *data, uint16_t size)
 {
     struct pico_http_client dummy = {
         .connectionID = conn
