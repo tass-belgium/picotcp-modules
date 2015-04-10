@@ -144,7 +144,7 @@ int pico_rand_bytes(uint8_t* buffer, int count) {
     int blocks_done = 0;
     int seed_size = 0;
 
-    if ((count > 0) && (count < (2^20))) {
+    if ((count > 0) && (count < (2 * 1024 * 1024))) {
 
         if ((PICO_TIME_MS() - pico_rand_generator.last_reseed_time >= PICO_RAND_MINIMUM_RESEED_MS) &&
             (1 >= PICO_RAND_MINIMUM_RESEED_ENTR)) { /* FIXME to check 'size' of pool 0 */
