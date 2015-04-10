@@ -102,7 +102,7 @@ static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size) {
 
     pico_rand_increment_counter(pico_rand_generator.counter);
 
-    free (sha_input);
+    PICO_FREE (sha_input);
 
     return 1;
 
@@ -159,7 +159,7 @@ int pico_rand_bytes(uint8_t* buffer, int count) {
             seed_size = pico_rand_extract_seed (seed_buffer, sizeof (uint8_t) * PICO_RAND_POOL_COUNT * PICO_RAND_HASH_SIZE);
             pico_rand_reseed (seed_buffer, seed_size);
             
-            free (seed_buffer);
+            PICO_FREE (seed_buffer);
 
         }
 
@@ -179,7 +179,7 @@ int pico_rand_bytes(uint8_t* buffer, int count) {
                     memcpy (buffer + (blocks_done * PICO_RAND_ENCRYPT_BLOCK_SIZE),
                             block_buffer, remaining_bytes);
 
-                    free (block_buffer);
+                    PICO_FREE (block_buffer);
 
                 } else {
                     return 0;
@@ -233,7 +233,7 @@ void pico_rand_shutdown(void) {
     /* TODO Set up timer for saving seed */
 	#endif /* PICO_RAND_SEED_PERSISTENT */
 
-    /* Don't just free them, otherwise generator internals still available in RAM! */
+    /* Don't just PICO_FREE them, otherwise generator internals still available in RAM! */
     /* If we're going to set it to something, might as well be 10101010, in case there're any weird electrical effects making it easy to detect was-1s or was-0s or something */
     memset (pico_rand_generator.key, 0x55, sizeof(uint8_t) * 32);
     memset (pico_rand_generator.counter, 0x55, sizeof(struct pico_rand_counter_fortuna));
@@ -241,11 +241,11 @@ void pico_rand_shutdown(void) {
     memset (pico_rand_generator.aes, 0x55, sizeof(Aes));
     memset (pico_rand_generator.sha, 0x55, sizeof(Sha256));
 
-    free(pico_rand_generator.key);
-    free(pico_rand_generator.counter);
-    free(pico_rand_generator.pool);
-    free(pico_rand_generator.aes);
-    free(pico_rand_generator.sha);
+    PICO_FREE(pico_rand_generator.key);
+    PICO_FREE(pico_rand_generator.counter);
+    PICO_FREE(pico_rand_generator.pool);
+    PICO_FREE(pico_rand_generator.aes);
+    PICO_FREE(pico_rand_generator.sha);
 
 }
 
