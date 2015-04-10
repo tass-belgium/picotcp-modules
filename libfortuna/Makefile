@@ -1,4 +1,4 @@
-PICOTCP?=../../picotcp
+PICOTCP?=../../picotcp/build
 CYASSL?=../../cyassl
 CC:=$(CROSS_COMPILE)gcc
 LD:=$(CROSS_COMPILE)ld
@@ -9,7 +9,7 @@ STRIP_BIN:=$(CROSS_COMPILE)strip
 TEST_LDFLAGS=-pthread  $(PREFIX)/modules/*.o $(PREFIX)/lib/*.o -lvdeplug -lpcap
 OPTIONS?=
 
-CFLAGS=-I$(PICOTCP)/include -I$(CYASSL)
+CFLAGS=-I$(PICOTCP)/include -I$(CYASSL) -ggdb
 CFLAGS += -Wall
 PWD=`pwd`
 
@@ -19,6 +19,10 @@ all: libfortuna.a
 picotcp/lib/libpicotcp.a:
 	@[ -d $(PICOTCP) ] || ( echo && echo && echo "PicoTCP path not found. Please run 'make PICOTCP=/path/to/picotcp/src'" && echo && exit 1)
 	make -C $(PICOTCP) lib PREFIX=$(PWD)/picotcp $(FEATURES) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) 
+
+test: libfortuna.a test.c
+	$(CC) -c -o test.o test.c $(CFLAGS)
+	gcc -o test test.o libfortuna.a -lcyassl
 
 
 libfortuna.a:
@@ -31,3 +35,4 @@ libfortuna.a:
 clean:
 	rm -rf picotcp
 	rm -f *.o *.a
+	rm -f test
