@@ -32,12 +32,13 @@ int main (int argc, char* argv[]) {
 
     }
 
-//    printf ("And uint32_ts with pico_rand...\n");
-//    for (i = 0; i < PRODUCE_BYTES / 4; i++) {
-//        uint32_t data = pico_rand ();
-//        printf ("%lu ", (unsigned long) data);
-//
-//    }
+    printf ("And uint32_ts with pico_rand...\n");
+    for (i = 0; i < PRODUCE_BYTES / 4; i++) {
+        uint32_t data = pico_rand ();
+        printf ("%lu ", (unsigned long) data);
+
+    }
+    printf("\n\n");
 
     pico_rand_shutdown();
     
