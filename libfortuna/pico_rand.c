@@ -56,11 +56,12 @@ void pico_rand_accu(int source, int pool, uint8_t* data, int data_size) {
 
 /* Prepare a seed from the selected pools. Helper function for re-seeding. */
 static int pico_rand_extract_seed(uint8_t* seed_buffer, int buffer_size) {
-    int i;
+    int i = 0;
     int hashes_added = 0;
 
     for (i = 0; i < PICO_RAND_POOL_COUNT; i++) {
-        if (pico_rand_generator.counter->values[i / 8] & 1 << (i % 8)) { /* Use nth pool every (2^n)th reseed (so p0 every time, p1 every other, p2 every 4th... */ /* TODO check this logic */
+        if (((i % 8) == 0) || (pico_rand_generator.counter->values[0] & (1 << ((i - 1) % 8)))) {
+            /* Use nth pool every (2^n)th reseed (so p1 every other time, p2 every 4th... */ 
             if ((hashes_added + 1) * PICO_RAND_HASH_SIZE <= buffer_size) {
                  /* Extract final hash for given pool, and put in appropriate part of seed buffer */
                 Sha256Final(&(pico_rand_generator.pool[i]), seed_buffer + (PICO_RAND_HASH_SIZE * hashes_added));
