@@ -49,6 +49,8 @@
 #define is_hex_digit(x) ((('0' <= x) && (x <= '9')) || (('a' <= x) && (x <= 'f')))
 #define hex_digit_to_dec(x) ((('0' <= x) && (x <= '9')) ? (x - '0') : ((('a' <= x) && (x <= 'f')) ? (x - 'a' + 10) : (-1)))
 
+static uint16_t GlobalClientConnID = 0; 
+
 struct pico_http_client
 {
     uint16_t connectionID;
@@ -397,7 +399,7 @@ int MOCKABLE pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16
     }
 
     client->wakeup = wakeup;
-    client->connectionID = (uint16_t)pico_rand() & 0x7FFFu; /* negative values mean error, still not good generation */
+    client->connectionID = GlobalClientConnID++; 
 
     client->uriKey = PICO_ZALLOC(sizeof(struct pico_http_uri));
 
