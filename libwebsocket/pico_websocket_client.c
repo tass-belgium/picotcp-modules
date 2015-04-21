@@ -1,6 +1,6 @@
 #include "pico_websocket_util.h"
 #include "pico_websocket_client.h"
-#include "pico_http_util.h"
+#include "../libhttp/pico_http_util.h"
 #include <stdint.h>
 #include "pico_tree.h"
 #include "pico_config.h"
@@ -284,7 +284,7 @@ static void handle_websocket_body(struct pico_websocket_client* client)
         int ret;
 
         ret = pico_socket_read(client->sck, client->buffer , WEBSOCKET_BUFFER_SIZE);
-        if (len < 0)
+        if (ret < 0)
         {
                 client->wakeup(EV_WS_ERR, client->connectionID);
                 return;
