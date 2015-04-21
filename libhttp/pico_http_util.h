@@ -105,6 +105,14 @@ struct pico_mime_map {
     const char * mimetype;
 };
 
+struct pico_http_uri
+{
+    uint8_t protoHttp; /* is the protocol Http ? */
+    char *host;              /* hostname */
+    uint16_t port;       /* port if specified */
+    char *resource;      /* resource , ignoring the other possible parameters */
+};
+
 /* used for chunks */
 int pico_itoaHex(uint16_t port, char *ptr);
 uint32_t pico_itoa(uint32_t port, char *ptr);

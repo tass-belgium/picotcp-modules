@@ -12,6 +12,7 @@
 #include "pico_tcp.h"
 #include "pico_dns_client.h"
 #include "pico_http_client.h"
+#include "pico_http_util.h"
 #include "pico_ipv4.h"
 #include "pico_stack.h"
 
@@ -72,14 +73,6 @@ struct pico_http_client
 /* HTTP URI string parsing */
 #define HTTP_PROTO_TOK      "http://"
 #define HTTP_PROTO_LEN      7u
-
-struct pico_http_uri
-{
-    uint8_t protoHttp; /* is the protocol Http ? */
-    char *host;              /* hostname */
-    uint16_t port;       /* port if specified */
-    char *resource;      /* resource , ignoring the other possible parameters */
-};
 
 static int8_t pico_processURI(const char *uri, struct pico_http_uri *urikey)
 {
