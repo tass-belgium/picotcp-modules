@@ -53,6 +53,31 @@ PACKED_STRUCT_DEF pico_websocket_header
         uint8_t mask : 1;
 };
 
+/* TODO: this function is copied from pico_http_util.c, make http_util.c a common library or something to avoid code duplication */
+uint32_t pico_itoa(uint32_t port, char *ptr)
+{
+        uint32_t size = 0;
+        uint32_t index;
+
+        /* transform to from number to string [ in backwards ] */
+        while(port)
+        {
+                ptr[size] = (char)(port % 10 + '0');
+                port = port / 10;
+                size++;
+        }
+        /* invert positions */
+        for(index = 0; index < (size >> 1u); index++)
+        {
+                char c = ptr[index];
+                ptr[index] = ptr[size - index - 1];
+                ptr[size - index - 1] = c;
+        }
+        ptr[size] = '\0';
+        return size;
+}
+
+
 static int compare_ws_with_connID(void *ka, void *kb)
 {
         return ((struct pico_websocket_client *)ka)->connectionID - ((struct pico_websocket_client *)kb)->connectionID;
@@ -429,20 +454,28 @@ static void handle_websocket_message(struct pico_websocket_client* client)
         wakeup_client_using_opcode(ret, client);
 }
 
-static char* pico_websocket_upgradeHeader_build(void)
+static char* pico_websocket_upgradeHeader_build(struct pico_http_uri* uriKey)
 {
+        /* TODO: review this building process */
         char* header;
         int header_size = 256;
+        char port[6u];
+
+        pico_itoa(uriKey->port, port);
 
         header = PICO_ZALLOC(header_size);
         strcpy(header, "GET /chat HTTP/1.1\r\n");
-        strcat(header, "Host: 10.50.0.1:8888\r\n"); // TODO: dynamic
+        strcat(header, "Host: ");
+        strcat(header, uriKey->host);
+        strcat(header, ":");
+        strcat(header, port);
+        strcat(header, "\r\n");
         strcat(header, "Upgrade: websocket\r\n");
         strcat(header, "Connection: Upgrade\r\n");
-        strcat(header, "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n"); // this is a 16-byte value that has been base64-encoded, it is randomly selected (pico_rand?).
+        strcat(header, "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n"); /*TODO: this is a 16-byte value that has been base64-encoded, it is randomly selected. */
         strcat(header, "Sec-WebSocket-Protocol: chat, superchat\r\n");
         strcat(header, "Sec-WebSocket-Version: 13\r\n");
-        strcat(header, "Origin: http://example.com\r\n");
+        strcat(header, "Origin: http://example.com\r\n"); /* TODO: define better origin */
         strcat(header, "\r\n");
         return header;
 }
@@ -470,12 +503,13 @@ static struct pico_websocket_header* pico_websocket_client_build_header(int data
         return header;
 }
 
-static int pico_websocket_client_send_upgrade_header(struct pico_socket* socket)
+static int pico_websocket_client_send_upgrade_header(struct pico_websocket_client* client)
 {
         char *header;
         int ret;
+        struct pico_socket* socket = client->sck;
 
-        header= pico_websocket_upgradeHeader_build();
+        header= pico_websocket_upgradeHeader_build(client->uriKey);
         if (!header)
         {
                 dbg("WebSocket Header could not be created.\n");
@@ -586,7 +620,7 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(ev & PICO_SOCK_EV_CONN)
         {
-                int a = pico_websocket_client_send_upgrade_header(s);
+                int a = pico_websocket_client_send_upgrade_header(client);
                 if (a < 0)
                 {
                         dbg("Webserver client sendHeader failed.\n");
