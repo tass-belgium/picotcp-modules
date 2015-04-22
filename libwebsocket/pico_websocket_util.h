@@ -30,4 +30,9 @@
 #define EV_WS_ERR             1u
 #define EV_WS_BODY            64u
 
+/* Payload lengths, used to determine start of payload data */
+#define WS_16_BIT_PAYLOAD_LENGTH_INDICATOR     126
+#define WS_64_BIT_PAYLOAD_LENGTH_INDICATOR     127
+
+
 #endif /* PICO_WEBSOCKET_UTIL_H */

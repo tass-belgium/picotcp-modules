@@ -17,8 +17,12 @@
 
 #define HTTP_HEADER_LINE_SIZE 50u
 #define HTTP_RESPONSE_INDEX   9u
-#define WEBSOCKET_BUFFER_SIZE 1024u
+#define WEBSOCKET_COMMON_HEADER_SIZE 2u
 
+#define PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES 2u
+#define PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES 8u
+
+#define MASKING_KEY_SIZE_IN_BYTES 4u
 
 #define WS_UPGRADE_NOT_SENT   0u
 #define WS_UPGRADE_SENT       1u
@@ -31,8 +35,8 @@ struct pico_websocket_client
         struct pico_socket *sck;
         void (*wakeup)(uint16_t ev, uint16_t conn);
         uint16_t connectionID;
-        uint8_t* buffer;
         struct pico_websocket_header* hdr;
+        uint32_t current_server_masking_key;
         struct pico_http_uri* uriKey;
         struct pico_ip4 ip;
         uint8_t state;
@@ -47,15 +51,14 @@ PACKED_STRUCT_DEF pico_websocket_header
         uint8_t fin : 1;
         uint8_t payload_length : 7; //TODO : read up + Multibyte length quantities are expressed in network byte order.
         uint8_t mask : 1;
-        uint32_t masking_key; //only needed if mask == WS_MASK_ENABLE
 };
 
-static int compareWebsocketClientsWithConnID(void *ka, void *kb)
+static int compare_ws_with_connID(void *ka, void *kb)
 {
         return ((struct pico_websocket_client *)ka)->connectionID - ((struct pico_websocket_client *)kb)->connectionID;
 }
 
-PICO_TREE_DECLARE(pico_websocket_client_list, compareWebsocketClientsWithConnID);
+PICO_TREE_DECLARE(pico_websocket_client_list, compare_ws_with_connID);
 
 static struct pico_websocket_client* retrieve_websocket_client_with_conn_ID(uint16_t wsConnID)
 {
@@ -231,17 +234,13 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         int ret = -1;
 
         dbg("Closing the websocket client...\n");
+        /*  TODO: sent close websocket message!*/
 
         toBeRemoved = pico_tree_delete(&pico_websocket_client_list, client);
         if(!toBeRemoved)
         {
                 dbg("Warning ! Websocket to be closed not found ...");
                 return -1;
-        }
-
-        if (client->buffer)
-        {
-                PICO_FREE(client->buffer);
         }
 
         if (client->sck)
@@ -251,54 +250,183 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         return 0;
 }
 
-static int parse_websocket_header(uint8_t* packet)
+static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size)
 {
-        uint8_t* first_byte = packet;
+        int i;
+        uint8_t mask[4];
 
-        /* FIN bit */
-        if (first_byte[0] == 1)
+        memcpy(mask, &masking_key, sizeof(uint32_t));
+
+        for( i = 0 ; i < size ; ++i )
         {
-                dbg("FIN bit set.\n");
+                data[i] = data[i] ^ mask[i%4];
         }
-        else
+
+        return i;
+}
+
+static uint32_t determine_masking_key_from_payload_length(uint8_t payload_length, struct pico_websocket_client* client){
+        int ret;
+        uint8_t* payload_length_buffer; /* TODO: store this for later if needed? */
+        uint32_t masking_key;
+
+        if (client == NULL)
         {
-                dbg("FIN bit not set.\n");
+                goto error;
         }
-        /* Skip 3 bits, these are reserved */
 
-        char* opcode = packet + 4;
+        payload_length_buffer = PICO_ZALLOC(PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
 
-        //mask
+        if (!payload_length_buffer)
+        {
+                goto error;
+        }
 
-        //payload length
+        switch (payload_length)
+        {
+        case WS_16_BIT_PAYLOAD_LENGTH_INDICATOR:
+                ret = pico_socket_read(client->sck, payload_length_buffer, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
+                break;
+        case WS_64_BIT_PAYLOAD_LENGTH_INDICATOR:
+                ret = pico_socket_read(client->sck, payload_length_buffer, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
+                break;
+        default:
+                /* No extra reading required, size is already known */
+                ret = payload_length;
+                break;
+        }
 
-        //masking key (if mask == 1)
+        if (ret < 0)
+        {
+                goto error;
+        }
 
-        //payload data (extension data + application data)
+        /* Read masking key and store it */
 
+        ret = pico_socket_read(client->sck, &masking_key, MASKING_KEY_SIZE_IN_BYTES);
+
+        if (ret < 0)
+        {
+                goto error;
+        }
+
+        return masking_key;
+
+error:
+        if (payload_length_buffer)
+        {
+                PICO_FREE(payload_length_buffer);
+        }
+        return 0;
 
 }
 
-static void handle_websocket_body(struct pico_websocket_client* client)
+static void wakeup_client_using_opcode(uint8_t opcode, struct pico_websocket_client* client)
+{
+        switch(opcode)
+        {
+        case WS_CONTINUATION_FRAME:
+                break;
+        case WS_CONN_CLOSE:
+                break;
+        case WS_PING:
+                break;
+        case WS_PONG:
+                break;
+        case WS_BINARY_FRAME:
+                break;
+        case WS_TEXT_FRAME:
+                /* Wakeup client, unmasking data will be handled in read api */
+                client->wakeup(EV_WS_BODY, client->connectionID);
+                break;
+        default:
+                /*bad message received*/
+                client->wakeup(EV_WS_ERR, client->connectionID);
+                break;
+        }
+
+}
+
+static int parse_websocket_header(struct pico_websocket_client* client)
+{
+        /* TODO: change state of client when data is ready? */
+        int ret;
+        uint8_t* start_of_data;
+        uint64_t payload_size;
+        uint32_t masking_key;
+
+        struct pico_websocket_header* hdr = client->hdr;
+
+        /* FIN bit */
+
+        if (hdr->fin)
+        {
+                /*This is the last packet in the message*/
+        }
+        else
+        {
+                /*This is part of a bigger message*/
+        }
+
+        /* Opcode */
+        switch(hdr->opcode)
+        {
+        case WS_CONTINUATION_FRAME:
+                ret = WS_CONTINUATION_FRAME;
+                break;
+        case WS_CONN_CLOSE:
+                ret = WS_CONN_CLOSE;
+                break;
+        case WS_PING:
+                ret = WS_PING;
+                break;
+        case WS_PONG:
+                ret = WS_PONG;
+                break;
+        case WS_BINARY_FRAME:
+                ret = WS_BINARY_FRAME;
+                break;
+        case WS_TEXT_FRAME:
+                ret = WS_TEXT_FRAME;
+                break;
+        default:
+                /*bad header*/
+                return -1;
+                break;
+        }
+
+        if (hdr->mask == WS_MASK_ENABLE)
+        {
+                /* Store the masking key for unmasking when client calls readdata */
+                client->current_server_masking_key = determine_masking_key_from_payload_length(hdr->payload_length, client);
+                if (client->current_server_masking_key == 0 )
+                {
+                        dbg("Masking key could not be determined.\n");
+                        return -1;
+                }
+        }
+        else
+        {
+                client->current_server_masking_key = 0;
+        }
+
+        return ret;
+}
+
+static void handle_websocket_message(struct pico_websocket_client* client)
 {
         int ret;
 
-        ret = pico_socket_read(client->sck, client->buffer , WEBSOCKET_BUFFER_SIZE);
+        ret = pico_socket_read(client->sck, client->hdr , WEBSOCKET_COMMON_HEADER_SIZE);
         if (ret < 0)
         {
                 client->wakeup(EV_WS_ERR, client->connectionID);
                 return;
         }
 
-        ret = parse_websocket_header(client->buffer);
+        ret = parse_websocket_header(client);
 
-        if (ret < 0)
-        {
-                client->wakeup(EV_WS_ERR, client->connectionID);
-                return;
-        }
-
-        client->wakeup(EV_WS_BODY, client->connectionID);
+        wakeup_client_using_opcode(ret, client);
 }
 
 static char* pico_websocket_upgradeHeader_build(void)
@@ -319,7 +447,7 @@ static char* pico_websocket_upgradeHeader_build(void)
         return header;
 }
 
-static struct pico_websocket_header* pico_websocket_build_header(int dataSize)
+static struct pico_websocket_header* pico_websocket_client_build_header(int dataSize)
 {
         struct pico_websocket_header * header = PICO_ZALLOC(sizeof(struct pico_websocket_header));
 
@@ -336,7 +464,6 @@ static struct pico_websocket_header* pico_websocket_build_header(int dataSize)
         header->RSV3 = 0;
         header->opcode = WS_TEXT_FRAME;
         header->mask = WS_MASK_ENABLE;
-        header->masking_key = pico_rand(); // TODO: good random selection?
 
         header->payload_length = dataSize; // TODO: read up on payload length + implement further
 
@@ -364,23 +491,6 @@ static int pico_websocket_client_send_upgrade_header(struct pico_socket* socket)
         }
 
         return ret;
-}
-
-
-static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size)
-{
-        //TODO: use new buffer or use existing (force user to use arrays, not string literals)?
-        int i;
-        uint8_t mask[4];
-
-        memcpy(mask, &masking_key, sizeof(uint32_t));
-
-        for( i = 0 ; i < size ; ++i )
-        {
-                data[i] = data[i] ^ mask[i%4];
-        }
-
-        return i;
 }
 
 static inline void ws_read_first_line(struct pico_websocket_client* client, char *line, uint32_t *index)
@@ -456,7 +566,7 @@ static void ws_treat_read_event(struct pico_websocket_client* client)
 
         else
         {
-                handle_websocket_body(client);
+                handle_websocket_message(client);
         }
 }
 
@@ -572,15 +682,6 @@ int pico_websocket_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t c
         client->connectionID = GlobalWebSocketConnectionID++;
         client->state = WS_UPGRADE_NOT_SENT;
 
-        client->buffer= PICO_ZALLOC(WEBSOCKET_BUFFER_SIZE);
-
-        if (!client->buffer)
-        {
-                dbg("Websocket could not create buffer.\n");
-                //TODO: cleanup!
-                return -1;
-        }
-
         client->uriKey = PICO_ZALLOC(sizeof(struct pico_http_uri));
 
         if(!client->uriKey)
@@ -643,14 +744,22 @@ int pico_websocket_client_close(uint16_t connID)
  */
 void pico_websocket_client_readData(uint16_t conn, void* data, uint16_t size)
 {
-        //TODO:retrieve right pico_websocket_client
+        int ret;
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(conn);
         if (!client)
         {
                 dbg("Wrong conn ID for readData!\n");
                 return;
         }
-        memcpy(data, client->buffer, size);
+
+        /* TODO: how to handle multiple frames (FIN bit not set for some messages)? */
+
+        ret = pico_socket_read(client->sck, data, size);
+
+
+
+
+        return ret;
 }
 
 /*
@@ -664,9 +773,11 @@ int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
         uint8_t* buff;
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(conn);
         struct pico_socket* socket = client->sck;
-        struct pico_websocket_header* header = pico_websocket_build_header(size);
+        struct pico_websocket_header* header = pico_websocket_client_build_header(size);
 
-        ret = pico_websocket_mask_data(header->masking_key, (uint8_t*)data, size);
+        uint32_t masking_key = pico_rand();
+
+        ret = pico_websocket_mask_data(masking_key, (uint8_t*)data, size);
 
         if (ret != size)
         {
@@ -674,7 +785,7 @@ int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
                 return -1;
         }
 
-        buff = PICO_ZALLOC(sizeof(struct pico_websocket_header) + size);
+        buff = PICO_ZALLOC(sizeof(struct pico_websocket_header) + size + sizeof(uint32_t));
 
         if(!buff)
         {
@@ -683,12 +794,13 @@ int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
         }
 
         memcpy(buff, header, sizeof(struct pico_websocket_header));
-        memcpy(buff + sizeof(struct pico_websocket_header), data, size);
+        memcpy(buff + sizeof(struct pico_websocket_header), &masking_key, sizeof(uint32_t));
+        memcpy(buff + sizeof(struct pico_websocket_header) + sizeof(uint32_t), data, size);
 
         //TODO: if not all data can be written immediately, keep writing until all data is written.
-        ret = pico_socket_write(socket, buff, sizeof(struct pico_websocket_header) + size);
+        ret = pico_socket_write(socket, buff, sizeof(struct pico_websocket_header) + sizeof(uint32_t) + size);
 
-        PICO_FREE(buff);
+        //PICO_FREE(buff);
 
         return ret;
 }
