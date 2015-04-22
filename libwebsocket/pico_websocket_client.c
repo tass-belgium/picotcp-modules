@@ -770,7 +770,6 @@ void pico_websocket_client_readData(uint16_t conn, void* data, uint16_t size)
 int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
 {
         int ret;
-        uint8_t* buff;
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(conn);
         struct pico_socket* socket = client->sck;
         struct pico_websocket_header* header = pico_websocket_client_build_header(size);
@@ -785,22 +784,10 @@ int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
                 return -1;
         }
 
-        buff = PICO_ZALLOC(sizeof(struct pico_websocket_header) + size + sizeof(uint32_t));
-
-        if(!buff)
-        {
-                dbg("Failed to allocate buffer for sending message.\n");
-                return -1;
-        }
-
-        memcpy(buff, header, sizeof(struct pico_websocket_header));
-        memcpy(buff + sizeof(struct pico_websocket_header), &masking_key, sizeof(uint32_t));
-        memcpy(buff + sizeof(struct pico_websocket_header) + sizeof(uint32_t), data, size);
-
         //TODO: if not all data can be written immediately, keep writing until all data is written.
-        ret = pico_socket_write(socket, buff, sizeof(struct pico_websocket_header) + sizeof(uint32_t) + size);
-
-        PICO_FREE(buff);
+        ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header));
+        ret = pico_socket_write(socket, &masking_key, sizeof(uint32_t));
+        ret = pico_socket_write(socket, data, size);
 
         return ret;
 }
