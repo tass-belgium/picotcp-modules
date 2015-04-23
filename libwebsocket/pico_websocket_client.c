@@ -2,6 +2,7 @@
 #include "pico_websocket_client.h"
 #include "../libhttp/pico_http_util.h"
 #include <stdint.h>
+#include <string.h>
 #include "pico_tree.h"
 #include "pico_config.h"
 #include "pico_socket.h"
@@ -10,35 +11,39 @@
 #include "pico_stack.h"
 #include "pico_socket.h"
 
-//TODO: better macro or add client to macro
-#define consumeChar(c)        (pico_socket_read(client->sck, &c, 1u))
-#define WS_PROTO_TOK      "ws://"
-#define WS_PROTO_LEN      5u
+#define WS_PROTO_TOK                           "ws://"
+#define WS_PROTO_LEN                           5u
 
-#define HTTP_HEADER_LINE_SIZE 50u
-#define HTTP_RESPONSE_INDEX   9u
-#define WEBSOCKET_COMMON_HEADER_SIZE 2u
+#define HTTP_HEADER_LINE_SIZE                  50u
+#define HTTP_RESPONSE_CODE_INDEX               9u
+#define WEBSOCKET_COMMON_HEADER_SIZE           2u
 
-#define PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES 2u
-#define PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES 8u
+#define PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES    2u
+#define PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES    8u
 
-#define MASKING_KEY_SIZE_IN_BYTES 4u
+#define MASKING_KEY_SIZE_IN_BYTES              4u
 
-#define WS_UPGRADE_NOT_SENT   0u
-#define WS_UPGRADE_SENT       1u
-#define WS_READY_STATE        2u
+/* States of the websocket client */
+#define WS_INIT                                0u
+#define WS_CONNECTING                          1u
+#define WS_CONNECTED                           2u
+#define WS_CLOSING                             3u
+#define WS_CLOSED                              4u
 
-static uint16_t GlobalWebSocketConnectionID= 0;
+
+static uint16_t GlobalWebSocketConnectionID = 0;
 
 struct pico_websocket_client
 {
         struct pico_socket *sck;
         void (*wakeup)(uint16_t ev, uint16_t conn);
         uint16_t connectionID;
+        struct pico_websocket_client_handshake_options* options;
+        struct pico_ip4 ip;
+
         struct pico_websocket_header* hdr;
         uint32_t current_server_masking_key;
         struct pico_http_uri* uriKey;
-        struct pico_ip4 ip;
         uint8_t state;
 };
 
@@ -51,6 +56,13 @@ PACKED_STRUCT_DEF pico_websocket_header
         uint8_t fin : 1;
         uint8_t payload_length : 7; //TODO : read up + Multibyte length quantities are expressed in network byte order.
         uint8_t mask : 1;
+};
+
+struct pico_websocket_client_handshake_options
+{
+        /* These members are dynamically allocated and are user-terminated by a '\0' */
+        char* protocols;
+        char* extensions;
 };
 
 /* TODO: this function is copied from pico_http_util.c, make http_util.c a common library or something to avoid code duplication */
@@ -132,7 +144,7 @@ static struct pico_websocket_client* find_websocket_client_with_socket(struct pi
 
 }
 
-//TODO: move to pico_http_util
+/* TODO: move to pico_http_util */
 static int8_t pico_process_URI(const char *uri, struct pico_http_uri *urikey)
 {
 
@@ -259,7 +271,6 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         int ret = -1;
 
         dbg("Closing the websocket client...\n");
-        /*  TODO: sent close websocket message!*/
 
         toBeRemoved = pico_tree_delete(&pico_websocket_client_list, client);
         if(!toBeRemoved)
@@ -374,7 +385,6 @@ static void wakeup_client_using_opcode(uint8_t opcode, struct pico_websocket_cli
 
 static int parse_websocket_header(struct pico_websocket_client* client)
 {
-        /* TODO: change state of client when data is ready? */
         int ret;
         uint8_t* start_of_data;
         uint64_t payload_size;
@@ -454,29 +464,84 @@ static void handle_websocket_message(struct pico_websocket_client* client)
         wakeup_client_using_opcode(ret, client);
 }
 
-static char* pico_websocket_upgradeHeader_build(struct pico_http_uri* uriKey)
+
+static void add_protocols_to_header(char* header, char* protocols)
+{
+        if (!protocols)
+        {
+                /* No protocols specified by user, defaulting to chat and superchat */
+                strcat(header, "Sec-WebSocket-Protocol: chat, superchat\r\n");
+                return;
+        }
+
+        while(*protocols != '\0')
+        {
+                strcat(header, "Sec-WebSocket-Protocol: ");
+                strcat(header, protocols);
+                if (*(protocols+1) != '\0')
+                {
+                        strcat(header, ", ");
+                }
+
+                protocols++;
+        }
+        strcat(header, "\r\n");
+}
+
+static void add_extensions_to_header(char* header, char* extensions)
+{
+        if (!extensions)
+        {
+                /* No extensions specified by user, defaulting to no extensions */
+                return;
+        }
+
+        while(*extensions != '\0')
+        {
+                strcat(header, "Sec-WebSocket-Extensions: ");
+                strcat(header, extensions);
+                if (*(extensions+1) != '\0')
+                {
+                        strcat(header, ", ");
+                }
+
+                extensions++;
+        }
+        strcat(header, "\r\n");
+}
+
+
+static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* client)
 {
         /* TODO: review this building process */
         char* header;
         int header_size = 256;
-        char port[6u];
+        struct pico_http_uri* uriKey = client->uriKey;
 
-        pico_itoa(uriKey->port, port);
 
         header = PICO_ZALLOC(header_size);
         strcpy(header, "GET /chat HTTP/1.1\r\n");
         strcat(header, "Host: ");
         strcat(header, uriKey->host);
-        strcat(header, ":");
-        strcat(header, port);
+
+        if (uriKey->port)
+        {
+                char port[6u];
+                pico_itoa(uriKey->port, port);
+                strcat(header, ":");
+                strcat(header, port);
+        }
         strcat(header, "\r\n");
         strcat(header, "Upgrade: websocket\r\n");
         strcat(header, "Connection: Upgrade\r\n");
         strcat(header, "Sec-WebSocket-Key: x3JJHMbDL1EzLkh9GBhXDw==\r\n"); /*TODO: this is a 16-byte value that has been base64-encoded, it is randomly selected. */
-        strcat(header, "Sec-WebSocket-Protocol: chat, superchat\r\n");
+
+        add_protocols_to_header(header, client->options->protocols);
+        add_extensions_to_header(header, client->options->extensions);
+
         strcat(header, "Sec-WebSocket-Version: 13\r\n");
-        strcat(header, "Origin: http://example.com\r\n"); /* TODO: define better origin */
         strcat(header, "\r\n");
+
         return header;
 }
 
@@ -509,7 +574,7 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
         int ret;
         struct pico_socket* socket = client->sck;
 
-        header= pico_websocket_upgradeHeader_build(client->uriKey);
+        header= build_pico_websocket_upgradeHeader(client);
         if (!header)
         {
                 dbg("WebSocket Header could not be created.\n");
@@ -527,42 +592,79 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
         return ret;
 }
 
-static inline void ws_read_first_line(struct pico_websocket_client* client, char *line, uint32_t *index)
+static inline int read_char_from_client_socket(struct pico_websocket_client* client, char* output)
+{
+        if (!client)
+        {
+                return -1;
+        }
+        return pico_socket_read(client->sck, output, 1u);
+}
+
+static void ws_read_http_header_line(struct pico_websocket_client* client, char *line)
 {
         char c;
+        uint32_t index = 0;
 
-        /* read the first line of the header */
-        while(consumeChar(c) > 0 && c != '\r')
+        while(read_char_from_client_socket(client, &c) > 0 && c != '\r')
         {
-                if(*index < HTTP_HEADER_LINE_SIZE) /* truncate if too long */
-                        line[(*index)++] = c;
+                line[index++] = c;
         }
-        consumeChar(c); /* consume \n */
+        line[index] = (char)0;
+        read_char_from_client_socket(client, &c); /* Consume '\n' */
+}
+
+static int parse_server_http_respone_line(char* line, char* colon_ptr)
+{
+        /* TODO */
+        return 0;
 }
 
 static int ws_parse_upgrade_header(struct pico_websocket_client* client)
 {
-        char line[HTTP_HEADER_LINE_SIZE];
-        uint32_t index = 0;
+        char* line = PICO_ZALLOC(HTTP_HEADER_LINE_SIZE);
+        char* colon_ptr;
         uint16_t responseCode = -1;
+        int ret;
         char c;
 
-        ws_read_first_line(client, line, &index);
+        ws_read_http_header_line(client, line);
 
-        responseCode = (uint16_t)((line[HTTP_RESPONSE_INDEX] - '0') * 100 +
-                                  (line[HTTP_RESPONSE_INDEX + 1] - '0') * 10 +
-                                  (line[HTTP_RESPONSE_INDEX + 2] - '0'));
-        if (responseCode != HTTP_SWITCHING_PROTOCOLS) {
-                dbg("Response to upgrade request was not HTTP_SWITCHING_PROTOCOLS (101).\n");
+        responseCode = (uint16_t)((line[HTTP_RESPONSE_CODE_INDEX] - '0') * 100 +
+                                  (line[HTTP_RESPONSE_CODE_INDEX + 1] - '0') * 10 +
+                                  (line[HTTP_RESPONSE_CODE_INDEX + 2] - '0'));
+
+        switch (responseCode)
+        {
+        case HTTP_SWITCHING_PROTOCOLS:
+                dbg("Response to upgrade request was HTTP_SWITCHING_PROTOCOLS (101).\n");
+                break;
+        case HTTP_UNAUTH:
+                /* TODO */
+                return -1;
+        default:
+                if (responseCode >= HTTP_MULTI_CHOICE && responseCode < HTTP_BAD_REQUEST)
+                {
+                        /* REDIRECTION */
+                        /* TODO */
+                        return -1;
+                }
                 return -1;
         }
 
-        /* Response was OK, consume the rest of it to ensure full frame is discarded */
-        while(consumeChar(c) > 0)
-        {
-
-        }
-
+        /* Response code was OK, validate rest of the response */
+        do{
+                ws_read_http_header_line(client, line);
+                colon_ptr = strstr(line, ":");
+                if (colon_ptr != NULL)
+                {
+                        ret = parse_server_http_respone_line(line, colon_ptr);
+                        if (ret < 0)
+                        {
+                                /* TODO: cancel everything */
+                        }
+                }
+        } while ( strlen(line) != 0 );
 
         return 0;
 }
@@ -570,14 +672,15 @@ static int ws_parse_upgrade_header(struct pico_websocket_client* client)
 static void ws_treat_read_event(struct pico_websocket_client* client)
 {
         dbg("treat read event, client state: %d\n", client->state);
-        if(client->state != WS_UPGRADE_SENT && client->state != WS_READY_STATE)
+        if (client->state == WS_INIT)
         {
-                dbg("Upgrade not sent but tried to treat read event.\n");
+                dbg("Client is still in init state! Can't handle read event now.\n");
                 return;
         }
 
-        if(client->state == WS_UPGRADE_SENT && client->state != WS_READY_STATE)
+        if (client->state == WS_CONNECTING)
         {
+                int ret;
                 dbg("Parse upgrade header sent by back server.\n");
                 client->hdr = PICO_ZALLOC(sizeof(struct pico_websocket_header));
 
@@ -587,18 +690,19 @@ static void ws_treat_read_event(struct pico_websocket_client* client)
                         pico_err = PICO_ERR_ENOMEM;
                         return;
                 }
-                int ret = ws_parse_upgrade_header(client);
+                ret = ws_parse_upgrade_header(client);
 
                 if (ret < 0)
                 {
                         dbg("received bad header from server.\n");
+                        /* TODO: close everything */
                         return;
                 }
 
-                client->state = WS_READY_STATE;
+                client->state = WS_CONNECTED;
         }
 
-        else
+        if (client->state == WS_CONNECTED)
         {
                 handle_websocket_message(client);
         }
@@ -607,9 +711,8 @@ static void ws_treat_read_event(struct pico_websocket_client* client)
 
 static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 {
-        struct pico_websocket_client *client;
-
-        client = find_websocket_client_with_socket(s);
+        int ret;
+        struct pico_websocket_client* client = find_websocket_client_with_socket(s);
 
         if(!client)
         {
@@ -620,14 +723,13 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(ev & PICO_SOCK_EV_CONN)
         {
-                int a = pico_websocket_client_send_upgrade_header(client);
-                if (a < 0)
+                ret = pico_websocket_client_send_upgrade_header(client);
+                if (ret < 0)
                 {
                         dbg("Webserver client sendHeader failed.\n");
                         pico_websocket_client_close(client->connectionID);
                         return;
                 }
-                client->state= WS_UPGRADE_SENT;
         }
 
         if(ev & PICO_SOCK_EV_ERR)
@@ -649,7 +751,7 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(ev & PICO_SOCK_EV_WR)
         {
-
+                /* ? */
         }
 }
 
@@ -669,20 +771,6 @@ static void dnsCallback(char *ip, void *ptr)
         if(ip)
         {
                 pico_string_to_ipv4(ip, &client->ip.addr);
-                client->sck = pico_socket_open(PICO_PROTO_IPV4, PICO_PROTO_TCP, &ws_tcp_callback);
-                if(!client->sck)
-                {
-                        dbg("Failed to open socket.\n");
-                        client->wakeup(EV_WS_ERR, client->connectionID);
-                        return;
-                }
-
-                if(pico_socket_connect(client->sck, &client->ip, short_be(client->uriKey->port)) < 0)
-                {
-                        client->wakeup(EV_WS_ERR, client->connectionID);
-                        return;
-                }
-
         }
         else
         {
@@ -695,36 +783,73 @@ static void dnsCallback(char *ip, void *ptr)
 }
 
 
-/*
- * API for opening a new websocket client
- *
- * returns the connection ID of the websocket client
- */
-int pico_websocket_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
-{
-        struct pico_websocket_client *client;
-        uint32_t ip = 0;
 
-        client = PICO_ZALLOC(sizeof(struct pico_websocket_client));
+static struct pico_websocket_client* build_pico_websocket_client_with_callback(void(*wakeup)(uint16_t ev, uint16_t conn))
+{
+        /* TODO: solve memory leaks with a cleanup function */
+        struct pico_websocket_client *client = PICO_ZALLOC(sizeof(struct pico_websocket_client));
+
         if (!client)
         {
                 dbg("Could not allocate websocket client.\n");
-                return -1;
+                return NULL;
         }
 
         client->wakeup = wakeup;
         client->connectionID = GlobalWebSocketConnectionID++;
-        client->state = WS_UPGRADE_NOT_SENT;
-
+        client->state = WS_INIT;
         client->uriKey = PICO_ZALLOC(sizeof(struct pico_http_uri));
 
         if(!client->uriKey)
         {
                 dbg("Failed to allocate urikey for websocket client.\n");
+                return NULL;
+        }
+
+        client->options = PICO_ZALLOC(sizeof(struct pico_http_uri));
+        if(!client->options)
+        {
+                dbg("failed to allocate options structure for websocket client.\n");
+                return NULL;
+        }
+
+        if(pico_tree_insert(&pico_websocket_client_list, client))
+        {
+                /* already in : should not be possible*/
+                pico_err = PICO_ERR_EEXIST;
+                /* TODO: cleanup! */
+                return NULL;
+        }
+
+        return client;
+}
+
+/*
+ * API for opening a new websocket client
+ *
+ * returns the connection ID of the websocket client
+ */
+int pico_websocket_client_open(char* uri, void (*wakeup)(uint16_t ev, uint16_t conn))
+{
+        uint32_t ip = 0;
+        int ret;
+        struct pico_websocket_client* client;
+
+        client = build_pico_websocket_client_with_callback(wakeup);
+
+        if (client == NULL)
+        {
+                dbg("Client could not be allocated!\n");
                 return -1;
         }
 
-        pico_process_URI(uri, client->uriKey);
+        ret = pico_process_URI(uri, client->uriKey);
+
+        if (ret < 0)
+        {
+                dbg("URI could not be processed.\n");
+                return -1;
+        }
 
         /* dns query */
         if(pico_string_to_ipv4(client->uriKey->host, &ip) == -1)
@@ -736,15 +861,6 @@ int pico_websocket_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t c
         {
                 dbg("host already and ip address, no dns required.\n");
                 dnsCallback(client->uriKey->host, client);
-        }
-
-
-        if(pico_tree_insert(&pico_websocket_client_list, client))
-        {
-                /* already in : should not be possible*/
-                pico_err = PICO_ERR_EEXIST;
-                //TODO: cleanup!
-                return -1;
         }
 
         return client->connectionID;
@@ -759,6 +875,7 @@ int pico_websocket_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t c
 int pico_websocket_client_close(uint16_t connID)
 {
         struct pico_websocket_client *client;
+        /*  TODO: sent close websocket message!*/
 
         client = retrieve_websocket_client_with_conn_ID(connID);
 
@@ -776,10 +893,10 @@ int pico_websocket_client_close(uint16_t connID)
  *
  *
  */
-void pico_websocket_client_readData(uint16_t conn, void* data, uint16_t size)
+int pico_websocket_client_readData(uint16_t connID, void* data, uint16_t size)
 {
         int ret;
-        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(conn);
+        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
         if (!client)
         {
                 dbg("Wrong conn ID for readData!\n");
@@ -801,10 +918,10 @@ void pico_websocket_client_readData(uint16_t conn, void* data, uint16_t size)
  *
  *
  */
-int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
+int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
 {
         int ret;
-        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(conn);
+        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
         struct pico_socket* socket = client->sck;
         struct pico_websocket_header* header = pico_websocket_client_build_header(size);
 
@@ -824,4 +941,162 @@ int pico_websocket_client_writeData(uint16_t conn, void* data, uint16_t size)
         ret = pico_socket_write(socket, data, size);
 
         return ret;
+}
+
+/* For the add_*_to_client functions, allocate more memory for new protocol/extension + insert terminator string at the end of the array '\0' */
+static int add_protocol_to_client(struct pico_websocket_client* client, void* protocol)
+{
+        /* TODO */
+        return 0;
+}
+
+static int add_extension_to_client(struct pico_websocket_client* client, void* extension)
+{
+        /* TODO */
+        return 0;
+}
+
+/*
+ * API for adding protocol to client
+ *
+ *
+ */
+int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)
+{
+        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
+
+        if (!client)
+        {
+                dbg("Websocket client cannot be closed, wrong connID provided!");
+                return -1;
+        }
+
+        if (client->state != WS_INIT)
+        {
+                dbg("Protocols have to be added before initiating handshake!");
+                return -1;
+        }
+
+        if (add_protocol_to_client(client, protocol) < 0)
+        {
+                dbg("Could not add protol to client.\n");
+                return -1;
+        }
+
+        return 0;
+}
+
+/*
+ * API for adding extensions to client
+ *
+ *
+ */
+int pico_websocket_client_add_extension(uint16_t connID, void* extension)
+{
+        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
+
+        if (!client)
+        {
+                dbg("Websocket client cannot be closed, wrong connID provided!");
+                return -1;
+        }
+
+        if (client->state != WS_INIT)
+        {
+                dbg("Extensions have to be added before initiating handshake!");
+                return -1;
+        }
+
+        if (add_extension_to_client(client, extension) < 0)
+        {
+                dbg("Could not add protol to client.\n");
+                return -1;
+        }
+
+        return 0;
+
+}
+
+static int compare_clients_for_same_remote_connection(struct pico_websocket_client* ca, struct pico_websocket_client* cb)
+{
+        if (ca->ip.addr == cb->ip.addr )
+        {
+                if (ca->uriKey->port == cb->uriKey->port)
+                {
+                        return 0;
+                }
+        }
+        return -1;
+}
+
+static int is_duplicate_client(struct pico_websocket_client* client)
+{
+        struct pico_tree_node *index;
+
+        if (!client)
+        {
+                return -1;
+        }
+
+        pico_tree_foreach(index, &pico_websocket_client_list)
+        {
+                if (((struct pico_websocket_client *)index->keyValue) == client)
+                {
+                        continue;
+                }
+
+                if (compare_clients_for_same_remote_connection(client, ((struct pico_websocket_client *)index->keyValue)) == 0)
+                {
+                        return 0;
+                        break;
+                }
+        }
+
+        return -1;
+}
+
+/*
+ * API for initiating connection
+ *
+ *
+ */
+int pico_websocket_client_initiate_connection(uint16_t connID)
+{
+        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
+        int ret;
+
+        if (!client)
+        {
+                dbg("Websocket client cannot be closed, wrong connID provided!");
+                return -1;
+        }
+
+        /* TODO: check if dns ready */
+
+        if (is_duplicate_client(client) == 0)
+        {
+                dbg("You can only open one websocket connection to the same IP adress.");
+                return -1;
+        }
+
+        if (client->state != WS_INIT)
+        {
+                dbg("Client is already started or failed to connect earlier.\n");
+        }
+
+        client->sck = pico_socket_open(PICO_PROTO_IPV4, PICO_PROTO_TCP, &ws_tcp_callback);
+        if(!client->sck)
+        {
+                dbg("Failed to open socket.\n");
+                client->wakeup(EV_WS_ERR, client->connectionID);
+                return;
+        }
+
+        if(pico_socket_connect(client->sck, &client->ip, short_be(client->uriKey->port)) < 0)
+        {
+                client->wakeup(EV_WS_ERR, client->connectionID);
+                return;
+        }
+
+        client->state = WS_CONNECTING;
 }
