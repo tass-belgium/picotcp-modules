@@ -29,7 +29,7 @@ int pico_rand_init(void) {
 	pico_rand_init_counter (pico_rand_generator.counter);
 
     for (i = 0; i < PICO_RAND_POOL_COUNT; i++) {
-        InitSha256(&(pico_rand_generator.pool[i])); /* TODO right? What does this look like in assembly? */
+        wc_InitSha256(&(pico_rand_generator.pool[i])); /* TODO right? What does this look like in assembly? */
 
     }
 
@@ -50,7 +50,7 @@ void pico_rand_accu(int source, int pool, uint8_t* data, int data_size) {
     pool = pool % PICO_RAND_POOL_COUNT;
 
     /* Add the new entropy data to the specified pool */
-    Sha256Update(&(pico_rand_generator.pool[pool]), data, data_size);
+    wc_Sha256Update(&(pico_rand_generator.pool[pool]), data, data_size);
 
 }
 
@@ -64,7 +64,7 @@ static int pico_rand_extract_seed(uint8_t* seed_buffer, int buffer_size) {
             /* Use nth pool every (2^n)th reseed (so p1 every other time, p2 every 4th... */ 
             if ((hashes_added + 1) * PICO_RAND_HASH_SIZE <= buffer_size) {
                  /* Extract final hash for given pool, and put in appropriate part of seed buffer */
-                Sha256Final(&(pico_rand_generator.pool[i]), seed_buffer + (PICO_RAND_HASH_SIZE * hashes_added));
+                wc_Sha256Final(&(pico_rand_generator.pool[i]), seed_buffer + (PICO_RAND_HASH_SIZE * hashes_added));
                 hashes_added++;
 
             } else {
@@ -97,9 +97,9 @@ static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size) {
 
     }
 
-    InitSha256(pico_rand_generator.sha);
-    Sha256Update(pico_rand_generator.sha, sha_input, seed_size + 32);
-    Sha256Final(pico_rand_generator.sha, pico_rand_generator.key);
+    wc_InitSha256(pico_rand_generator.sha);
+    wc_Sha256Update(pico_rand_generator.sha, sha_input, seed_size + 32);
+    wc_Sha256Final(pico_rand_generator.sha, pico_rand_generator.key);
 
     pico_rand_increment_counter(pico_rand_generator.counter);
 
@@ -117,8 +117,8 @@ static int pico_rand_generate_block (uint8_t* buffer, int buffer_size) {
     /* Run encryption block */
     if (!pico_rand_counter_is_zero (pico_rand_generator.counter)) { /* Refuse if not seeded */
         if (buffer_size >= PICO_RAND_ENCRYPT_BLOCK_SIZE) {
-            AesSetKey(pico_rand_generator.aes, pico_rand_generator.key, PICO_RAND_ENCRYPT_KEY_SIZE, encrypt_iv, AES_ENCRYPTION);
-            AesCbcEncrypt(pico_rand_generator.aes, buffer, (const byte*) pico_rand_generator.counter, PICO_RAND_ENCRYPT_IV_SIZE);
+            wc_AesSetKey(pico_rand_generator.aes, pico_rand_generator.key, PICO_RAND_ENCRYPT_KEY_SIZE, encrypt_iv, AES_ENCRYPTION);
+            wc_AesCbcEncrypt(pico_rand_generator.aes, buffer, (const byte*) pico_rand_generator.counter, PICO_RAND_ENCRYPT_IV_SIZE);
 
             pico_rand_increment_counter (pico_rand_generator.counter);
 

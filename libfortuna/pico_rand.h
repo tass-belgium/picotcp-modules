@@ -7,8 +7,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-#include "cyassl/ctaocrypt/aes.h"
-#include "cyassl/ctaocrypt/sha256.h"
+#include "wolfssl/wolfcrypt/aes.h"
+#include "wolfssl/wolfcrypt/sha256.h"
 
 #include "pico_rand_types.h"
 #include "pico_stack.h"
