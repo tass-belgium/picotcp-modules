@@ -16,35 +16,55 @@
 
 #define HTTP_HEADER_LINE_SIZE                  50u
 #define HTTP_RESPONSE_CODE_INDEX               9u
-#define WEBSOCKET_COMMON_HEADER_SIZE           2u
+#define WEBSOCKET_COMMON_HEADER_SIZE           (sizeof(struct pico_websocket_header))
 
 #define PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES    2u
 #define PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES    8u
 
-#define MASKING_KEY_SIZE_IN_BYTES              4u
+#define WS_MASKING_KEY_SIZE_IN_BYTES           4u
+
+#define WS_BUFFER_SIZE                         5*1024u /* Provide 5K for fragmented messages (recv or sending) */
+#define WS_FRAME_SIZE                          1024u   /* We define one frame as 1K payload */
+
+#define WS_CONTROL_FRAME_MAX_SIZE              125u
+
+#define WS_CLOSING_WAIT_TIME_IN_MS             5000u
+
+#define WS_STATUS_CODE_SIZE_IN_BYTES           2u
+#define WS_DEFAULT_STATUS_CODE                 1005u
 
 /* States of the websocket client */
 #define WS_INIT                                0u
+
 #define WS_CONNECTING                          1u
+
 #define WS_CONNECTED                           2u
+
 #define WS_CLOSING                             3u
+/* I sent a close frame and am waiting for the server to sent his. If WS_CLOSE_PERIOD expires before this happening, I will close the tcp connection */
+
 #define WS_CLOSED                              4u
 
 
 static uint16_t GlobalWebSocketConnectionID = 0;
 
+/* TODO: provide sending and receive buffer?
+ * client could be recv fragmented message and sending fragmented message at the same time?
+ */
 struct pico_websocket_client
 {
         struct pico_socket *sck;
         void (*wakeup)(uint16_t ev, uint16_t conn);
         uint16_t connectionID;
-        struct pico_websocket_client_handshake_options* options;
-        struct pico_ip4 ip;
-
-        struct pico_websocket_header* hdr;
-        uint32_t current_server_masking_key;
-        struct pico_http_uri* uriKey;
         uint8_t state;
+        void* buffer;
+        void* next_free_pos_in_buffer;
+
+        struct pico_ip4 ip;
+        struct pico_websocket_header* hdr; /* This is the header of the last received frame */
+        struct pico_websocket_client_handshake_options* options;
+        struct pico_websocket_RSV* rsv;
+        struct pico_http_uri* uriKey;
 };
 
 PACKED_STRUCT_DEF pico_websocket_header
@@ -54,95 +74,41 @@ PACKED_STRUCT_DEF pico_websocket_header
         uint8_t RSV2 : 1;
         uint8_t RSV1 : 1;
         uint8_t fin : 1;
-        uint8_t payload_length : 7; //TODO : read up + Multibyte length quantities are expressed in network byte order.
+        uint8_t payload_length : 7;
         uint8_t mask : 1;
 };
 
+/* This structure can be passed to pico_websocket_client_writeData if you use certain special protocols and extensions */
 struct pico_websocket_client_handshake_options
 {
         /* These members are dynamically allocated and are user-terminated by a '\0' */
         char* protocols;
         char* extensions;
+        char* extension_arguments; /* TODO: not yet implemented */
 };
 
-/* TODO: this function is copied from pico_http_util.c, make http_util.c a common library or something to avoid code duplication */
-uint32_t pico_itoa(uint32_t port, char *ptr)
+/* This struct is used when sending data to the server, the user sets the RSV bits with the function pico_websocket_client_set_RSV_bits() */
+struct pico_websocket_RSV
 {
-        uint32_t size = 0;
-        uint32_t index;
-
-        /* transform to from number to string [ in backwards ] */
-        while(port)
-        {
-                ptr[size] = (char)(port % 10 + '0');
-                port = port / 10;
-                size++;
-        }
-        /* invert positions */
-        for(index = 0; index < (size >> 1u); index++)
-        {
-                char c = ptr[index];
-                ptr[index] = ptr[size - index - 1];
-                ptr[size - index - 1] = c;
-        }
-        ptr[size] = '\0';
-        return size;
-}
+        uint8_t RSV3 : 1;
+        uint8_t RSV2 : 1;
+        uint8_t RSV1 : 1;
+};
 
 
-static int compare_ws_with_connID(void *ka, void *kb)
-{
-        return ((struct pico_websocket_client *)ka)->connectionID - ((struct pico_websocket_client *)kb)->connectionID;
-}
+static void cleanup_websocket_client(pico_time now, void* args);
+static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size);
+static int compare_clients_for_same_remote_connection(struct pico_websocket_client* ca, struct pico_websocket_client* cb);
+static int determine_payload_length(struct pico_websocket_client* client);
+static int compare_ws_with_connID(void *ka, void *kb);
+static int is_duplicate_client(struct pico_websocket_client* client);
+static int ws_add_protocol_to_client(struct pico_websocket_client* client, void* protocol);
+static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension);
+static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3);
+
 
 PICO_TREE_DECLARE(pico_websocket_client_list, compare_ws_with_connID);
 
-static struct pico_websocket_client* retrieve_websocket_client_with_conn_ID(uint16_t wsConnID)
-{
-        struct pico_websocket_client dummy = {
-                .connectionID = wsConnID
-        };
-        struct pico_websocket_client *client = pico_tree_findKey(&pico_websocket_client_list, &dummy);
-
-        if(!client)
-        {
-                dbg("Wrong connection id !\n");
-                pico_err = PICO_ERR_EINVAL;
-                return NULL;
-        }
-
-        return client;
-
-}
-
-static struct pico_websocket_client* find_websocket_client_with_socket(struct pico_socket* s)
-{
-        struct pico_websocket_client *client = NULL;
-        struct pico_tree_node *index;
-
-        if (!s)
-        {
-                return NULL;
-        }
-
-        pico_tree_foreach(index, &pico_websocket_client_list)
-        {
-                if(((struct pico_websocket_client *)index->keyValue)->sck == s )
-                {
-                        client = (struct pico_websocket_client *)index->keyValue;
-                        break;
-                }
-        }
-
-        if(!client)
-        {
-                dbg("Client not found using given socket...Something went wrong !\n");
-                return NULL;
-        }
-
-        return client;
-
-}
 
 /* TODO: move to pico_http_util */
 static int8_t pico_process_URI(const char *uri, struct pico_http_uri *urikey)
@@ -265,10 +231,243 @@ error:
         return -1;
 }
 
+/* TODO: this function is copied from pico_http_util.c, make http_util.c a common library or something to avoid code duplication */
+uint32_t pico_itoa(uint32_t port, char *ptr)
+{
+        uint32_t size = 0;
+        uint32_t index;
+
+        /* transform to from number to string [ in backwards ] */
+        while(port)
+        {
+                ptr[size] = (char)(port % 10 + '0');
+                port = port / 10;
+                size++;
+        }
+        /* invert positions */
+        for(index = 0; index < (size >> 1u); index++)
+        {
+                char c = ptr[index];
+                ptr[index] = ptr[size - index - 1];
+                ptr[size - index - 1] = c;
+        }
+        ptr[size] = '\0';
+        return size;
+}
+
+static int is_duplicate_client(struct pico_websocket_client* client)
+{
+        struct pico_tree_node *index;
+
+        if (!client)
+        {
+                return -1;
+        }
+
+        pico_tree_foreach(index, &pico_websocket_client_list)
+        {
+                if (((struct pico_websocket_client *)index->keyValue) == client)
+                {
+                        continue;
+                }
+
+                if (compare_clients_for_same_remote_connection(client, ((struct pico_websocket_client *)index->keyValue)) == 0)
+                {
+                        return 0;
+                        break;
+                }
+        }
+
+        return -1;
+}
+
+
+static int compare_clients_for_same_remote_connection(struct pico_websocket_client* ca, struct pico_websocket_client* cb)
+{
+        if (ca->ip.addr == cb->ip.addr )
+        {
+                if (ca->uriKey->port == cb->uriKey->port)
+                {
+                        return 0;
+                }
+        }
+        return -1;
+}
+
+
+static int compare_ws_with_connID(void *ka, void *kb)
+{
+        return ((struct pico_websocket_client *)ka)->connectionID - ((struct pico_websocket_client *)kb)->connectionID;
+}
+
+
+static struct pico_websocket_client* retrieve_websocket_client_with_conn_ID(uint16_t wsConnID)
+{
+        struct pico_websocket_client dummy = {
+                .connectionID = wsConnID
+        };
+        struct pico_websocket_client *client = pico_tree_findKey(&pico_websocket_client_list, &dummy);
+
+        if(!client)
+        {
+                dbg("Wrong connection id !\n");
+                pico_err = PICO_ERR_EINVAL;
+                return NULL;
+        }
+
+        return client;
+
+}
+
+static struct pico_websocket_client* find_websocket_client_with_socket(struct pico_socket* s)
+{
+        struct pico_websocket_client *client = NULL;
+        struct pico_tree_node *index;
+
+        if (!s)
+        {
+                return NULL;
+        }
+
+        pico_tree_foreach(index, &pico_websocket_client_list)
+        {
+                if(((struct pico_websocket_client *)index->keyValue)->sck == s )
+                {
+                        client = (struct pico_websocket_client *)index->keyValue;
+                        break;
+                }
+        }
+
+        if(!client)
+        {
+                return NULL;
+        }
+
+        return client;
+
+}
+
+/* For the add_*_to_client functions, allocate more memory for new protocol/extension + insert terminator string at the end of the array '\0' */
+static int ws_add_protocol_to_client(struct pico_websocket_client* client, void* protocol)
+{
+        /* TODO */
+        return 0;
+}
+
+static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension)
+{
+        /* TODO */
+        return 0;
+}
+
+static int check_validity_of_RSV_arg(uint8_t RSV)
+{
+        if (RSV != RSV_ENABLE && RSV != RSV_DISABLE)
+        {
+                return -1;
+        }
+
+        return 0;
+}
+
+static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3)
+{
+        return check_validity_of_RSV_arg(RSV1) + check_validity_of_RSV_arg(RSV2) + check_validity_of_RSV_arg(RSV3);
+}
+
+
+/* If close frame has a payload, the first two bytes in the payload are an unisgned int in network order. This is why we add WS_STATUS_CODE_SIZE_IN_BYTES to the reason_size when checking the size. */
+static int send_close_frame(struct pico_websocket_client* client, uint16_t status_code, void* reason, uint8_t reason_size)
+{
+        int ret;
+        uint32_t masking_key;
+        struct pico_websocket_header* hdr = PICO_ZALLOC(sizeof(struct pico_websocket_header));
+
+        hdr->opcode = WS_CONN_CLOSE;
+        hdr->fin = WS_FIN_ENABLE;
+        hdr->RSV1 = 0;
+        hdr->RSV2 = 0;
+        hdr->RSV3 = 0;
+        hdr->mask = WS_MASK_ENABLE;
+        masking_key = pico_rand();
+
+        if (reason_size + WS_STATUS_CODE_SIZE_IN_BYTES > WS_CONTROL_FRAME_MAX_SIZE)
+        {
+                dbg("Size of reason is too big to fit in close frame.\n");
+                return -1;
+        }
+
+        if (reason && reason_size)
+        {
+                hdr->payload_length = reason_size + WS_STATUS_CODE_SIZE_IN_BYTES;
+        }
+
+        ret = pico_socket_write(client->sck, hdr, sizeof(struct pico_websocket_header));
+
+        if (ret < 0)
+        {
+                dbg("Failed to write header for close frame.\n");
+                return -1;
+        }
+
+        ret = pico_socket_write(client->sck, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES);
+
+        if (ret < 0)
+        {
+                dbg("Failed to write header for close frame.\n");
+                return -1;
+        }
+
+        if (reason && reason_size)
+        {
+                /* When no status code is provided, the server will default to 1005, so not our responsibility */
+                if (status_code)
+                {
+                        status_code = short_be(status_code);
+                        status_code = pico_websocket_mask_data(masking_key, &status_code, WS_STATUS_CODE_SIZE_IN_BYTES );
+                        ret = pico_socket_write(client->sck, &status_code, WS_STATUS_CODE_SIZE_IN_BYTES);
+                }
+                reason = pico_websocket_mask_data(masking_key, reason, reason_size);
+                ret = pico_socket_write(client->sck, reason, reason_size);
+        }
+
+
+        /* client->state = WS_CLOSING; */
+
+        return ret;
+}
+
+
+static int fail_websocket_connection(struct pico_websocket_client* client)
+{
+        switch (client->state)
+        {
+        case WS_CONNECTED:
+                /* I recv a close frame, I should sent one back. Now I am closed*/
+                send_close_frame(client, 0, NULL, 0);
+                client->state = WS_CLOSED;
+                pico_timer_add(0, cleanup_websocket_client, (void*)client);
+                break;
+        case WS_CLOSING:
+                /* I sent a close frame and am waiting for the servers response */
+                pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client);
+                break;
+        case WS_CLOSED:
+                break;
+        default:
+                pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client);
+                break;
+        }
+
+        return 0;
+}
+
+
+
 static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
 {
         struct pico_websocket_client *toBeRemoved = NULL;
-        int ret = -1;
+        int ret;
 
         dbg("Closing the websocket client...\n");
 
@@ -281,17 +480,74 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
 
         if (client->sck)
         {
-                pico_socket_close(client->sck);
+                ret = pico_socket_close(client->sck);
+                if (ret < 0)
+                {
+                        dbg("Unable to close socket of websocket client.\n");
+                        return -1;
+                }
         }
+
+        if (client->options)
+        {
+                if (client->options->extensions)
+                {
+                        PICO_FREE(client->options->extensions);
+                }
+
+                if (client->options->protocols)
+                {
+                        PICO_FREE(client->options->protocols);
+                }
+
+                if (client->options->extension_arguments )
+                {
+                        PICO_FREE(client->options->extension_arguments);
+                }
+        }
+
+        if (client->hdr)
+        {
+                PICO_FREE(client->hdr);
+        }
+
+        if (client->uriKey)
+        {
+                if (client->uriKey->host)
+                {
+                        PICO_FREE(client->uriKey->host);
+                }
+
+                if (client->uriKey->resource)
+                {
+                        PICO_FREE(client->uriKey->resource);
+                }
+                PICO_FREE(client->uriKey);
+        }
+
+        if (client->buffer)
+        {
+                PICO_FREE(client->buffer);
+        }
+
+        PICO_FREE(client);
         return 0;
 }
+
+static void cleanup_websocket_client(pico_time now, void* args)
+{
+        struct pico_websocket_client* client = (struct pico_websocket_client*) args;
+
+        pico_websocket_client_cleanup(client);
+}
+
 
 static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size)
 {
         int i;
         uint8_t mask[4];
 
-        memcpy(mask, &masking_key, sizeof(uint32_t));
+        memcpy(mask, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES);
 
         for( i = 0 ; i < size ; ++i )
         {
@@ -301,148 +557,252 @@ static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int siz
         return i;
 }
 
-static uint32_t determine_masking_key_from_payload_length(uint8_t payload_length, struct pico_websocket_client* client){
-        int ret;
-        uint8_t* payload_length_buffer; /* TODO: store this for later if needed? */
-        uint32_t masking_key;
-
-        if (client == NULL)
-        {
-                goto error;
-        }
-
-        payload_length_buffer = PICO_ZALLOC(PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
-
-        if (!payload_length_buffer)
-        {
-                goto error;
-        }
-
-        switch (payload_length)
-        {
-        case WS_16_BIT_PAYLOAD_LENGTH_INDICATOR:
-                ret = pico_socket_read(client->sck, payload_length_buffer, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
-                break;
-        case WS_64_BIT_PAYLOAD_LENGTH_INDICATOR:
-                ret = pico_socket_read(client->sck, payload_length_buffer, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
-                break;
-        default:
-                /* No extra reading required, size is already known */
-                ret = payload_length;
-                break;
-        }
-
-        if (ret < 0)
-        {
-                goto error;
-        }
-
-        /* Read masking key and store it */
-
-        ret = pico_socket_read(client->sck, &masking_key, MASKING_KEY_SIZE_IN_BYTES);
-
-        if (ret < 0)
-        {
-                goto error;
-        }
-
-        return masking_key;
-
-error:
-        if (payload_length_buffer)
-        {
-                PICO_FREE(payload_length_buffer);
-        }
+static int handle_recv_pong_frame(struct pico_websocket_client* client)
+{
+        /* When a pong frame is received, a reply is not mandatory. */
         return 0;
-
 }
 
-static void wakeup_client_using_opcode(uint8_t opcode, struct pico_websocket_client* client)
+/* We received a ping frame, we should respond with a pong frame (with same payload data if ping frame has payload data) */
+static int handle_recv_ping_frame(struct pico_websocket_client* client)
 {
-        switch(opcode)
+        struct pico_websocket_header* hdr = client->hdr;
+        uint64_t payload_length = determine_payload_length(client);
+        uint8_t* recv_payload;
+
+        if (payload_length > WS_CONTROL_FRAME_MAX_SIZE)
         {
-        case WS_CONTINUATION_FRAME:
-                break;
-        case WS_CONN_CLOSE:
-                break;
-        case WS_PING:
-                break;
-        case WS_PONG:
-                break;
-        case WS_BINARY_FRAME:
-                break;
-        case WS_TEXT_FRAME:
-                /* Wakeup client, unmasking data will be handled in read api */
-                client->wakeup(EV_WS_BODY, client->connectionID);
-                break;
-        default:
-                /*bad message received*/
-                client->wakeup(EV_WS_ERR, client->connectionID);
-                break;
+                /* Received a ping frame with a payload length greater than 125 bytes, fail connection */
+                fail_websocket_connection(client);
+                return -1;
         }
 
+        if ( hdr->mask == WS_MASK_ENABLE )
+        {
+                /* Ping frame from server should not be masked, fail connection */
+                fail_websocket_connection(client);
+                return -1;
+        }
+
+
+        /* struct pico_websocket_header* pong_header= pico_websocket_build_header(); */
+
+
+
+        return 0;
+}
+
+static int handle_recv_close_frame(struct pico_websocket_client* client)
+{
+        struct pico_websocket_header* hdr = client->hdr;
+        uint16_t status_code;
+        int ret;
+        uint8_t* reason = PICO_ZALLOC(WS_CONTROL_FRAME_MAX_SIZE);
+
+        if (hdr->payload_length)
+        {
+                /* Server has supplied a reason for closing the connection */
+
+                /* Check if frame is valid */
+                if (hdr->payload_length > WS_CONTROL_FRAME_MAX_SIZE)
+                {
+                        dbg("Received a close frame that was longer than allowed.\nFailing the conn.\n");
+                        return -1;
+                }
+
+                /* First 2 bytes are an unsigned int in network order that represents the status code */
+                pico_socket_read(client->sck, &status_code, 2);
+                status_code = short_be(status_code);
+
+                dbg("Received close frame with status code : %u\n", status_code);
+
+                /* Extract reason from body */
+                ret = pico_socket_read(client->sck, reason, WS_CONTROL_FRAME_MAX_SIZE);
+
+                if (ret < 0)
+                {
+                        dbg("Reading reason of close frame failed.\n");
+                        return -1;
+                }
+
+                reason[ret]= (char)0;
+                dbg("And reason: %s\n", reason);
+        }
+
+        PICO_FREE(reason);
+
+        fail_websocket_connection(client);
+
+        return 0;
+}
+
+
+static inline int read_char_from_client_socket(struct pico_websocket_client* client, char* output)
+{
+        if (!client)
+        {
+                return -1;
+        }
+        return pico_socket_read(client->sck, output, 1u);
+}
+
+
+static void ws_read_http_header_line(struct pico_websocket_client* client, char *line)
+{
+        char c;
+        uint32_t index = 0;
+
+        while(read_char_from_client_socket(client, &c) > 0 && c != '\r')
+        {
+                line[index++] = c;
+        }
+        line[index] = (char)0;
+        read_char_from_client_socket(client, &c); /* Consume '\n' */
+}
+
+
+static void* allocate_client_buffer(struct pico_websocket_client* client)
+{
+        if (!client->buffer)
+        {
+                client->buffer = PICO_ZALLOC(WS_BUFFER_SIZE);
+                client->next_free_pos_in_buffer = client->buffer;
+        }
+
+        return client->buffer;
+}
+
+static int handle_recv_text_frame(struct pico_websocket_client* client)
+{
+        client->wakeup(EV_WS_BODY, client->connectionID);
+        return 0;
+}
+
+static int frame_is_control_frame(struct pico_websocket_client* client)
+{
+        struct pico_websocket_header* hdr = client->hdr;
+
+        if (hdr->opcode != WS_CONN_CLOSE || hdr->opcode != WS_PING || hdr->opcode != WS_PONG)
+        {
+                return -1;
+        }
+
+        return 0;
+}
+
+static int handle_recv_fragmented_frame(struct pico_websocket_client* client)
+{
+        struct pico_websocket_header* hdr = client->hdr;
+        int ret, remaining_size_buffer;
+
+
+        if (frame_is_control_frame(client) == 0)
+        {
+                /* Control frame should not be fragmented, fail the connection */
+                fail_websocket_connection(client);
+                return -1;
+        }
+
+        payload_length = determine_payload_length(client);
+
+        if (payload_length < 0)
+        {
+                dbg("Could not determine payload length.\n");
+                return -1;
+        }
+
+        allocate_client_buffer(client);
+        remaining_size_buffer = WS_BUFFER_SIZE - (client->next_free_pos_in_buffer - client->buffer);
+
+        if (payload_length > remaining_size_buffer)
+        {
+                /* Message is too big for the remaining buffer, truncate data */
+
+                ret = pico_socket_read(client->sck, client->next_free_pos_in_buffer, remaining_size_buffer);
+
+                uint8_t* throw_away = PICO_ZALLOC(payload_length - remaining_size_buffer);
+                /* Truncate data */
+                pico_socket_read(client->sck, throw_away, payload_length - remaining_size_buffer);
+
+                PICO_FREE(throw_away);
+
+                /* Update the next free pos, this will be used in readData() */
+                client->next_free_pos_in_buffer += ret;
+
+                /* Wakeup the client to let him consume the fragmented messages */
+                client->wakeup(EV_WS_BODY, client->connectionID);
+        }
+        else
+        {
+                ret = pico_socket_read(client->sck, client->next_free_pos_in_buffer, payload_length);
+
+                if ( hdr->opcode == 0 )
+                {
+                        /* opcode = 0 and fin = 0 mean this is the last packed, so we can free the buffer after delivering the data to the user. */
+                        client->wakeup(EV_WS_BODY, client->connectionID);
+                }
+        }
+
+        if (ret < 0)
+        {
+                /* TODO: free buffer here? */
+                return -1;
+        }
+
+        return ret;
 }
 
 static int parse_websocket_header(struct pico_websocket_client* client)
 {
         int ret;
+        uint8_t opcode;
         uint8_t* start_of_data;
         uint64_t payload_size;
         uint32_t masking_key;
 
         struct pico_websocket_header* hdr = client->hdr;
 
-        /* FIN bit */
-
-        if (hdr->fin)
+        if (hdr->mask == WS_MASK_ENABLE)
         {
-                /*This is the last packet in the message*/
+                /* Server should not mask data, fail the connection */
+                fail_websocket_connection(client);
         }
-        else
+
+        if (hdr->fin == WS_FIN_DISABLE && hdr->payload_length)
         {
-                /*This is part of a bigger message*/
+                /* This is a fragmented message */
+                handle_recv_fragmented_frame(client);
+                return;
         }
 
         /* Opcode */
         switch(hdr->opcode)
         {
         case WS_CONTINUATION_FRAME:
-                ret = WS_CONTINUATION_FRAME;
+                opcode = WS_CONTINUATION_FRAME;
                 break;
         case WS_CONN_CLOSE:
-                ret = WS_CONN_CLOSE;
+                opcode = WS_CONN_CLOSE;
+                handle_recv_close_frame(client);
                 break;
         case WS_PING:
-                ret = WS_PING;
+                opcode = WS_PING;
+                handle_recv_ping_frame(client);
                 break;
         case WS_PONG:
-                ret = WS_PONG;
+                opcode = WS_PONG;
                 break;
         case WS_BINARY_FRAME:
-                ret = WS_BINARY_FRAME;
+                opcode = WS_BINARY_FRAME;
                 break;
         case WS_TEXT_FRAME:
-                ret = WS_TEXT_FRAME;
+                opcode = WS_TEXT_FRAME;
+                handle_recv_text_frame(client);
                 break;
         default:
                 /*bad header*/
-                return -1;
+                ret = -1;
                 break;
-        }
-
-        if (hdr->mask == WS_MASK_ENABLE)
-        {
-                /* Store the masking key for unmasking when client calls readdata */
-                client->current_server_masking_key = determine_masking_key_from_payload_length(hdr->payload_length, client);
-                if (client->current_server_masking_key == 0 )
-                {
-                        dbg("Masking key could not be determined.\n");
-                        return -1;
-                }
-        }
-        else
-        {
-                client->current_server_masking_key = 0;
         }
 
         return ret;
@@ -452,6 +812,7 @@ static void handle_websocket_message(struct pico_websocket_client* client)
 {
         int ret;
 
+        /* Read the comon header part */
         ret = pico_socket_read(client->sck, client->hdr , WEBSOCKET_COMMON_HEADER_SIZE);
         if (ret < 0)
         {
@@ -459,9 +820,8 @@ static void handle_websocket_message(struct pico_websocket_client* client)
                 return;
         }
 
+        /* Parse the header using the common part */
         ret = parse_websocket_header(client);
-
-        wakeup_client_using_opcode(ret, client);
 }
 
 
@@ -545,7 +905,7 @@ static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* cl
         return header;
 }
 
-static struct pico_websocket_header* pico_websocket_client_build_header(int dataSize)
+static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, int dataSize)
 {
         struct pico_websocket_header * header = PICO_ZALLOC(sizeof(struct pico_websocket_header));
 
@@ -556,13 +916,24 @@ static struct pico_websocket_header* pico_websocket_client_build_header(int data
         }
 
 
-        header->fin = WS_FIN_ENABLE; // TODO: dependent of size
-        header->RSV1 = 0; // TODO: define WS_USR_RSV1/2/3?
-        header->RSV2 = 0;
-        header->RSV3 = 0;
-        header->opcode = WS_TEXT_FRAME;
+        if (!rsv)
+        {
+                header->RSV1 = 0;
+                header->RSV2 = 0;
+                header->RSV3 = 0;
+        }
+        else
+        {
+                header->RSV1 = rsv->RSV1;
+                header->RSV2 = rsv->RSV2;
+                header->RSV3 = rsv->RSV3;
+        }
         header->mask = WS_MASK_ENABLE;
 
+        /* Dependent of fragmentation and opcode will have to be provided by user? */
+        header->opcode = WS_TEXT_FRAME;
+
+        header->fin = WS_FIN_ENABLE; // TODO: dependent of size
         header->payload_length = dataSize; // TODO: read up on payload length + implement further
 
         return header;
@@ -592,31 +963,10 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
         return ret;
 }
 
-static inline int read_char_from_client_socket(struct pico_websocket_client* client, char* output)
-{
-        if (!client)
-        {
-                return -1;
-        }
-        return pico_socket_read(client->sck, output, 1u);
-}
-
-static void ws_read_http_header_line(struct pico_websocket_client* client, char *line)
-{
-        char c;
-        uint32_t index = 0;
-
-        while(read_char_from_client_socket(client, &c) > 0 && c != '\r')
-        {
-                line[index++] = c;
-        }
-        line[index] = (char)0;
-        read_char_from_client_socket(client, &c); /* Consume '\n' */
-}
-
 static int parse_server_http_respone_line(char* line, char* colon_ptr)
 {
         /* TODO */
+        /* Don't forgot to check for the pico_websocket_client_handshake options */
         return 0;
 }
 
@@ -682,14 +1032,7 @@ static void ws_treat_read_event(struct pico_websocket_client* client)
         {
                 int ret;
                 dbg("Parse upgrade header sent by back server.\n");
-                client->hdr = PICO_ZALLOC(sizeof(struct pico_websocket_header));
 
-                if(!client->hdr)
-                {
-                        dbg("Out of memory to allocate websocket header.\n");
-                        pico_err = PICO_ERR_ENOMEM;
-                        return;
-                }
                 ret = ws_parse_upgrade_header(client);
 
                 if (ret < 0)
@@ -700,11 +1043,31 @@ static void ws_treat_read_event(struct pico_websocket_client* client)
                 }
 
                 client->state = WS_CONNECTED;
+
+                /* Allocate header for future recv messages */
+                client->hdr = PICO_ZALLOC(sizeof(struct pico_websocket_header));
+
+                if(!client->hdr)
+                {
+                        dbg("Out of memory to allocate websocket header.\n");
+                        pico_err = PICO_ERR_ENOMEM;
+                        return;
+                }
+
+
+                return;
         }
 
         if (client->state == WS_CONNECTED)
         {
+
                 handle_websocket_message(client);
+                return;
+        }
+
+        if (client->state == WS_CLOSING)
+        {
+                return;
         }
 }
 
@@ -716,7 +1079,7 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(!client)
         {
-                dbg("Client not found...Something went wrong !\n");
+                dbg("Client not found in tcp callback...Something went wrong !\n");
                 return;
         }
 
@@ -735,13 +1098,13 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
         if(ev & PICO_SOCK_EV_ERR)
         {
                 dbg("Error happened with socket.\n");
-                pico_websocket_client_close(client->connectionID);
+                fail_websocket_connection(client);
         }
 
         if((ev & PICO_SOCK_EV_CLOSE) || (ev & PICO_SOCK_EV_FIN))
         {
                 dbg("Close/FIN request received.\n");
-                pico_websocket_client_close(client->connectionID);
+                fail_websocket_connection(client);
         }
 
         if(ev & PICO_SOCK_EV_RD)
@@ -874,8 +1237,8 @@ int pico_websocket_client_open(char* uri, void (*wakeup)(uint16_t ev, uint16_t c
  */
 int pico_websocket_client_close(uint16_t connID)
 {
+        int ret;
         struct pico_websocket_client *client;
-        /*  TODO: sent close websocket message!*/
 
         client = retrieve_websocket_client_with_conn_ID(connID);
 
@@ -885,7 +1248,38 @@ int pico_websocket_client_close(uint16_t connID)
                 return -1;
         }
 
-        return pico_websocket_client_cleanup(client);
+        return fail_websocket_connection(client);
+}
+
+static int determine_payload_length(struct pico_websocket_client* client)
+{
+        int ret;
+        uint8_t payload_length = client->hdr->payload_length;
+
+        if (client == NULL)
+        {
+                return -1;
+        }
+
+        switch(payload_length)
+        {
+        case WS_16_BIT_PAYLOAD_LENGTH_INDICATOR:
+                ret = pico_socket_read(client->sck, &payload_length, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
+                break;
+        case WS_64_BIT_PAYLOAD_LENGTH_INDICATOR:
+                ret = pico_socket_read(client->sck, &payload_length, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
+                break;
+        default:
+                /* No extra reading required, size is already known */
+                break;
+        }
+
+        if (ret < 0)
+        {
+                return -1;
+        }
+
+        return payload_length;
 }
 
 /*
@@ -896,19 +1290,58 @@ int pico_websocket_client_close(uint16_t connID)
 int pico_websocket_client_readData(uint16_t connID, void* data, uint16_t size)
 {
         int ret;
+        int payload_length;
+
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
+
         if (!client)
         {
                 dbg("Wrong conn ID for readData!\n");
                 return;
         }
 
-        /* TODO: how to handle multiple frames (FIN bit not set for some messages)? */
+        if (client->buffer)
+        {
+                /* We were called after receiving fragmented frames */
+                int size_of_data_in_buffer = client->next_free_pos_in_buffer - client->buffer;
 
-        ret = pico_socket_read(client->sck, data, size);
+                if (size < size_of_data_in_buffer)
+                {
+                        dbg("User provided a buffer which is too small. Truncate data.\n");
+                        memcpy(data, client->buffer, size);
+                        return size;
+                }
+                memcpy(data, client->buffer, size_of_data_in_buffer);
 
+                /* Free the websocket client buffer */
+                PICO_FREE(client->buffer);
+                /* Reset the next free pos in buffer, just to be sure */
+                client->next_free_pos_in_buffer = NULL;
 
+                return size_of_data_in_buffer;
+        }
 
+        /* We were called after receiving a normal message */
+
+        struct pico_websocket_header* hdr = client->hdr;
+
+        payload_length = determine_payload_length(client);
+
+        if (payload_length < 0)
+        {
+                dbg("Could not determine payload length.\n");
+                return -1;
+        }
+
+        if (payload_length > size)
+        {
+                dbg("Warning, the size you want to read is too small. Data will be truncated.\n");
+                ret = pico_socket_read(client->sck, data, size);
+        }
+        else
+        {
+                ret = pico_socket_read(client->sck, data, payload_length);
+        }
 
         return ret;
 }
@@ -923,7 +1356,7 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
         int ret;
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
         struct pico_socket* socket = client->sck;
-        struct pico_websocket_header* header = pico_websocket_client_build_header(size);
+        struct pico_websocket_header* header = pico_websocket_client_build_header(client->rsv, size);
 
         uint32_t masking_key = pico_rand();
 
@@ -935,25 +1368,14 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
                 return -1;
         }
 
-        //TODO: if not all data can be written immediately, keep writing until all data is written.
+        //TODO: if not all data can be written immediately, keep writing + fragmentation
         ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header));
-        ret = pico_socket_write(socket, &masking_key, sizeof(uint32_t));
+        ret = pico_socket_write(socket, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES );
         ret = pico_socket_write(socket, data, size);
 
+        PICO_FREE(header);
+
         return ret;
-}
-
-/* For the add_*_to_client functions, allocate more memory for new protocol/extension + insert terminator string at the end of the array '\0' */
-static int add_protocol_to_client(struct pico_websocket_client* client, void* protocol)
-{
-        /* TODO */
-        return 0;
-}
-
-static int add_extension_to_client(struct pico_websocket_client* client, void* extension)
-{
-        /* TODO */
-        return 0;
 }
 
 /*
@@ -967,7 +1389,7 @@ int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)
 
         if (!client)
         {
-                dbg("Websocket client cannot be closed, wrong connID provided!");
+                dbg("Websocket client cannot be found, wrong connID provided!");
                 return -1;
         }
 
@@ -977,7 +1399,7 @@ int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)
                 return -1;
         }
 
-        if (add_protocol_to_client(client, protocol) < 0)
+        if (ws_add_protocol_to_client(client, protocol) < 0)
         {
                 dbg("Could not add protol to client.\n");
                 return -1;
@@ -997,7 +1419,7 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 
         if (!client)
         {
-                dbg("Websocket client cannot be closed, wrong connID provided!");
+                dbg("Websocket client cannot be found, wrong connID provided!");
                 return -1;
         }
 
@@ -1007,7 +1429,7 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
                 return -1;
         }
 
-        if (add_extension_to_client(client, extension) < 0)
+        if (ws_add_extension_to_client(client, extension) < 0)
         {
                 dbg("Could not add protol to client.\n");
                 return -1;
@@ -1015,44 +1437,6 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 
         return 0;
 
-}
-
-static int compare_clients_for_same_remote_connection(struct pico_websocket_client* ca, struct pico_websocket_client* cb)
-{
-        if (ca->ip.addr == cb->ip.addr )
-        {
-                if (ca->uriKey->port == cb->uriKey->port)
-                {
-                        return 0;
-                }
-        }
-        return -1;
-}
-
-static int is_duplicate_client(struct pico_websocket_client* client)
-{
-        struct pico_tree_node *index;
-
-        if (!client)
-        {
-                return -1;
-        }
-
-        pico_tree_foreach(index, &pico_websocket_client_list)
-        {
-                if (((struct pico_websocket_client *)index->keyValue) == client)
-                {
-                        continue;
-                }
-
-                if (compare_clients_for_same_remote_connection(client, ((struct pico_websocket_client *)index->keyValue)) == 0)
-                {
-                        return 0;
-                        break;
-                }
-        }
-
-        return -1;
 }
 
 /*
@@ -1099,4 +1483,43 @@ int pico_websocket_client_initiate_connection(uint16_t connID)
         }
 
         client->state = WS_CONNECTING;
+}
+
+
+/*
+ * API for setting the RSV bits
+ *
+ *
+ */
+int pico_websocket_client_set_RSV_bits(uint16_t connID, uint8_t RSV1, uint8_t RSV2, uint8_t RSV3)
+{
+        struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
+        int ret;
+
+        if (!client)
+        {
+                dbg("Websocket client cannot be found, wrong connID provided!");
+                return -1;
+        }
+
+        ret = check_validity_of_RSV_args(RSV1, RSV2, RSV3);
+
+        if (ret < 0)
+        {
+                dbg("One of the provided RSV args is not valid! Please use RSV_ENABLE/DISABLE to set/unset the RSV bit.\n");
+                return -1;
+        }
+
+        client->rsv = PICO_ZALLOC(sizeof(struct pico_websocket_RSV));
+
+        if (!client->rsv)
+        {
+                dbg("Could not allocate rsv struct.\n");
+                return -1;
+        }
+
+        /* Set the RSV args of the new struct */
+        client->rsv->RSV1 = RSV1;
+        client->rsv->RSV2 = RSV2;
+        client->rsv->RSV3 = RSV3;
 }

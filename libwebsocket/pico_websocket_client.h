@@ -13,6 +13,8 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size);
 int pico_websocket_client_add_extension(uint16_t connID, void* extension);
 int pico_websocket_client_add_extension(uint16_t connID, void* extension);
 
+int pico_websocket_client_set_RSV_bits(uint16_t connID, uint8_t RSV1, uint8_t RSV2, uint8_t RSV3);
+
 int pico_websocket_client_initiate_connection(uint16_t connID);
 
 #endif /* PICO_WEBSOCKET_CLIENT_H */

@@ -3,8 +3,8 @@
 
 
 /* FIN bit -- ==1 if this is the last frame in a message */
-#define WS_FIN_ENABLE         1
-#define WS_FIN_DISABLE        0
+#define WS_FIN_ENABLE         1u
+#define WS_FIN_DISABLE        0u
 
 /* RSV1, RSV2, RSV3 -- these are one bit each
  * Must be 0 unless an extension is negotiated that defines meanings for non-zero values.
@@ -14,16 +14,16 @@
 
 /* List of opcodes - defines operation of the payload data */
 
-#define WS_CONTINUATION_FRAME 0
-#define WS_TEXT_FRAME         1
-#define WS_BINARY_FRAME       2
-#define WS_CONN_CLOSE         8
-#define WS_PING               9
-#define WS_PONG               10
+#define WS_CONTINUATION_FRAME 0u
+#define WS_TEXT_FRAME         1u
+#define WS_BINARY_FRAME       2u
+#define WS_CONN_CLOSE         8u
+#define WS_PING               9u
+#define WS_PONG               10u
 
 /* Masking - client has to mask data sent to server */
-#define WS_MASK_ENABLE        1
-#define WS_MASK_DISABLE       0
+#define WS_MASK_ENABLE        1u
+#define WS_MASK_DISABLE       0u
 
 
 /* List of events - shared between client and server */
@@ -31,8 +31,11 @@
 #define EV_WS_BODY            64u
 
 /* Payload lengths, used to determine start of payload data */
-#define WS_16_BIT_PAYLOAD_LENGTH_INDICATOR     126
-#define WS_64_BIT_PAYLOAD_LENGTH_INDICATOR     127
+#define WS_16_BIT_PAYLOAD_LENGTH_INDICATOR     126u
+#define WS_64_BIT_PAYLOAD_LENGTH_INDICATOR     127u
 
+/* Valid RSV values */
+#define RSV_ENABLE            1u
+#define RSV_DISABLE           0u
 
 #endif /* PICO_WEBSOCKET_UTIL_H */
