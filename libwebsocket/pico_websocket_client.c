@@ -105,7 +105,7 @@ static int is_duplicate_client(struct pico_websocket_client* client);
 static int ws_add_protocol_to_client(struct pico_websocket_client* client, void* protocol);
 static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension);
 static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3);
-
+static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize);
 
 PICO_TREE_DECLARE(pico_websocket_client_list, compare_ws_with_connID);
 
@@ -569,6 +569,8 @@ static int handle_recv_ping_frame(struct pico_websocket_client* client)
         struct pico_websocket_header* hdr = client->hdr;
         uint64_t payload_length = determine_payload_length(client);
         uint8_t* recv_payload;
+        uint32_t masking_key;
+        int ret;
 
         if (payload_length > WS_CONTROL_FRAME_MAX_SIZE)
         {
@@ -584,12 +586,28 @@ static int handle_recv_ping_frame(struct pico_websocket_client* client)
                 return -1;
         }
 
+        struct pico_websocket_header* pong_header= pico_websocket_client_build_header(NULL, WS_PONG, WS_FIN_ENABLE, payload_length);
+        masking_key = pico_rand();
 
-        /* struct pico_websocket_header* pong_header= pico_websocket_build_header(); */
+        recv_payload = PICO_ZALLOC(payload_length);
 
+        ret = pico_socket_read(client->sck, recv_payload, payload_length);
 
+        pico_websocket_mask_data(masking_key, recv_payload, payload_length);
 
-        return 0;
+        ret = pico_socket_write(client->sck, pong_header, sizeof(struct pico_websocket_header))
+                + pico_socket_write(client->sck, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES )
+                + pico_socket_write(client->sck, recv_payload, payload_length);
+
+        if (ret < 0)
+        {
+                dbg("Failed to sent pong frame in response to ping frame.\n");
+
+        }
+
+        PICO_FREE(recv_payload);
+
+        return ret;
 }
 
 static int handle_recv_close_frame(struct pico_websocket_client* client)
@@ -694,6 +712,7 @@ static int handle_recv_fragmented_frame(struct pico_websocket_client* client)
 {
         struct pico_websocket_header* hdr = client->hdr;
         int ret, remaining_size_buffer;
+        uint64_t payload_length;
 
 
         if (frame_is_control_frame(client) == 0)
@@ -905,7 +924,8 @@ static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* cl
         return header;
 }
 
-static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, int dataSize)
+/* Mask bit is not in parameter list because client always has to mask */
+static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize)
 {
         struct pico_websocket_header * header = PICO_ZALLOC(sizeof(struct pico_websocket_header));
 
@@ -930,11 +950,10 @@ static struct pico_websocket_header* pico_websocket_client_build_header(struct p
         }
         header->mask = WS_MASK_ENABLE;
 
-        /* Dependent of fragmentation and opcode will have to be provided by user? */
-        header->opcode = WS_TEXT_FRAME;
+        header->opcode = opcode;
 
-        header->fin = WS_FIN_ENABLE; // TODO: dependent of size
-        header->payload_length = dataSize; // TODO: read up on payload length + implement further
+        header->fin = fin;
+        header->payload_length = dataSize;
 
         return header;
 }
@@ -1356,7 +1375,7 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
         int ret;
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
         struct pico_socket* socket = client->sck;
-        struct pico_websocket_header* header = pico_websocket_client_build_header(client->rsv, size);
+        struct pico_websocket_header* header = pico_websocket_client_build_header(client->rsv, WS_TEXT_FRAME, WS_FIN_ENABLE, size);
 
         uint32_t masking_key = pico_rand();
 
