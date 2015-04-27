@@ -1,0 +1,117 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_PROGRAM_AUTHOR	Darren Hiebert	/dhiebert@users.sourceforge.net/
+!_TAG_PROGRAM_NAME	Exuberant Ctags	//
+!_TAG_PROGRAM_URL	http://ctags.sourceforge.net	/official site/
+!_TAG_PROGRAM_VERSION	5.9~svn20110310	//
+CC	./Makefile	/^CC?=gcc$/;"	m
+CFLAGS	./Makefile	/^CFLAGS=-Iconfig $(EXTRA_CFLAGS) $(PLATFORM_CFLAGS) -I $(PREFIX)\/include$/;"	m
+CROSS_COMPILE	./Makefile	/^CROSS_COMPILE?=arm-none-eabi-$/;"	m
+EV_WS_BODY	./pico_websocket_util.h	31;"	d
+EV_WS_ERR	./pico_websocket_util.h	30;"	d
+GlobalWebSocketConnectionID	./pico_websocket_client.c	/^static uint16_t GlobalWebSocketConnectionID = 0;$/;"	v	file:
+HTTP_HEADER_LINE_SIZE	./pico_websocket_client.c	16;"	d	file:
+HTTP_RESPONSE_CODE_INDEX	./pico_websocket_client.c	17;"	d	file:
+OBJS	./Makefile	/^OBJS:=pico_websocket_client.o$/;"	m
+PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES	./pico_websocket_client.c	20;"	d	file:
+PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES	./pico_websocket_client.c	21;"	d	file:
+PICO_WEBSOCKET_CLIENT_H	./pico_websocket_client.h	2;"	d
+PICO_WEBSOCKET_UTIL_H	./pico_websocket_util.h	2;"	d
+PREFIX	./Makefile	/^PREFIX?=$(PWD)\/out$/;"	m
+RSV1	./pico_websocket_client.c	/^        uint8_t RSV1 : 1;$/;"	m	struct:pico_websocket_RSV	file:
+RSV2	./pico_websocket_client.c	/^        uint8_t RSV2 : 1;$/;"	m	struct:pico_websocket_RSV	file:
+RSV3	./pico_websocket_client.c	/^        uint8_t RSV3 : 1;$/;"	m	struct:pico_websocket_RSV	file:
+RSV_DISABLE	./pico_websocket_util.h	40;"	d
+RSV_ENABLE	./pico_websocket_util.h	39;"	d
+WEBSOCKET_COMMON_HEADER_SIZE	./pico_websocket_client.c	18;"	d	file:
+WS_16_BIT_PAYLOAD_LENGTH_INDICATOR	./pico_websocket_util.h	35;"	d
+WS_64_BIT_PAYLOAD_LENGTH_INDICATOR	./pico_websocket_util.h	36;"	d
+WS_7_BIT_PAYLOAD_LENGTH_LIMIT	./pico_websocket_util.h	34;"	d
+WS_BINARY_FRAME	./pico_websocket_util.h	19;"	d
+WS_BUFFER_SIZE	./pico_websocket_client.c	25;"	d	file:
+WS_CLOSED	./pico_websocket_client.c	45;"	d	file:
+WS_CLOSING	./pico_websocket_client.c	42;"	d	file:
+WS_CLOSING_WAIT_TIME_IN_MS	./pico_websocket_client.c	30;"	d	file:
+WS_CONNECTED	./pico_websocket_client.c	40;"	d	file:
+WS_CONNECTING	./pico_websocket_client.c	38;"	d	file:
+WS_CONN_CLOSE	./pico_websocket_util.h	20;"	d
+WS_CONTINUATION_FRAME	./pico_websocket_util.h	17;"	d
+WS_CONTROL_FRAME_MAX_SIZE	./pico_websocket_client.c	28;"	d	file:
+WS_DEFAULT_STATUS_CODE	./pico_websocket_client.c	33;"	d	file:
+WS_FIN_DISABLE	./pico_websocket_util.h	7;"	d
+WS_FIN_ENABLE	./pico_websocket_util.h	6;"	d
+WS_FRAME_SIZE	./pico_websocket_client.c	26;"	d	file:
+WS_INIT	./pico_websocket_client.c	36;"	d	file:
+WS_MASKING_KEY_SIZE_IN_BYTES	./pico_websocket_client.c	23;"	d	file:
+WS_MASK_DISABLE	./pico_websocket_util.h	26;"	d
+WS_MASK_ENABLE	./pico_websocket_util.h	25;"	d
+WS_PING	./pico_websocket_util.h	21;"	d
+WS_PONG	./pico_websocket_util.h	22;"	d
+WS_PROTO_LEN	./pico_websocket_client.c	14;"	d	file:
+WS_PROTO_TOK	./pico_websocket_client.c	13;"	d	file:
+WS_STATUS_CODE_SIZE_IN_BYTES	./pico_websocket_client.c	32;"	d	file:
+WS_TEXT_FRAME	./pico_websocket_util.h	18;"	d
+add_extensions_to_header	./pico_websocket_client.c	/^static void add_extensions_to_header(char* header, char* extensions)$/;"	f	file:
+add_protocols_to_header	./pico_websocket_client.c	/^static void add_protocols_to_header(char* header, char* protocols)$/;"	f	file:
+allocate_client_buffer	./pico_websocket_client.c	/^static void* allocate_client_buffer(struct pico_websocket_client* client)$/;"	f	file:
+buffer	./pico_websocket_client.c	/^        void* buffer;$/;"	m	struct:pico_websocket_client	file:
+build_pico_websocket_client_with_callback	./pico_websocket_client.c	/^static struct pico_websocket_client* build_pico_websocket_client_with_callback(void(*wakeup)(uint16_t ev, uint16_t conn))$/;"	f	file:
+build_pico_websocket_upgradeHeader	./pico_websocket_client.c	/^static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* client)$/;"	f	file:
+check_validity_of_RSV_arg	./pico_websocket_client.c	/^static int check_validity_of_RSV_arg(uint8_t RSV)$/;"	f	file:
+check_validity_of_RSV_args	./pico_websocket_client.c	/^static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3)$/;"	f	file:
+cleanup_websocket_client	./pico_websocket_client.c	/^static void cleanup_websocket_client(pico_time now, void* args)$/;"	f	file:
+compare_clients_for_same_remote_connection	./pico_websocket_client.c	/^static int compare_clients_for_same_remote_connection(struct pico_websocket_client* ca, struct pico_websocket_client* cb)$/;"	f	file:
+compare_ws_with_connID	./pico_websocket_client.c	/^static int compare_ws_with_connID(void *ka, void *kb)$/;"	f	file:
+connectionID	./pico_websocket_client.c	/^        uint16_t connectionID;$/;"	m	struct:pico_websocket_client	file:
+determine_payload_length	./pico_websocket_client.c	/^static int determine_payload_length(struct pico_websocket_client* client)$/;"	f	file:
+dnsCallback	./pico_websocket_client.c	/^static void dnsCallback(char *ip, void *ptr)$/;"	f	file:
+extension_arguments	./pico_websocket_client.c	/^        char* extension_arguments; \/* TODO: not yet implemented *\/$/;"	m	struct:pico_websocket_client_handshake_options	file:
+extensions	./pico_websocket_client.c	/^        char* extensions;$/;"	m	struct:pico_websocket_client_handshake_options	file:
+fail_websocket_connection	./pico_websocket_client.c	/^static int fail_websocket_connection(struct pico_websocket_client* client)$/;"	f	file:
+find_websocket_client_with_socket	./pico_websocket_client.c	/^static struct pico_websocket_client* find_websocket_client_with_socket(struct pico_socket* s)$/;"	f	file:
+frame_is_control_frame	./pico_websocket_client.c	/^static int frame_is_control_frame(struct pico_websocket_client* client)$/;"	f	file:
+handle_recv_close_frame	./pico_websocket_client.c	/^static int handle_recv_close_frame(struct pico_websocket_client* client)$/;"	f	file:
+handle_recv_fragmented_frame	./pico_websocket_client.c	/^static int handle_recv_fragmented_frame(struct pico_websocket_client* client)$/;"	f	file:
+handle_recv_ping_frame	./pico_websocket_client.c	/^static int handle_recv_ping_frame(struct pico_websocket_client* client)$/;"	f	file:
+handle_recv_pong_frame	./pico_websocket_client.c	/^static int handle_recv_pong_frame(struct pico_websocket_client* client)$/;"	f	file:
+handle_recv_text_frame	./pico_websocket_client.c	/^static int handle_recv_text_frame(struct pico_websocket_client* client)$/;"	f	file:
+handle_websocket_message	./pico_websocket_client.c	/^static void handle_websocket_message(struct pico_websocket_client* client)$/;"	f	file:
+hdr	./pico_websocket_client.c	/^        struct pico_websocket_header* hdr; \/* This is the header of the last received frame *\/$/;"	m	struct:pico_websocket_client	typeref:struct:pico_websocket_client::pico_websocket_header	file:
+ip	./pico_websocket_client.c	/^        struct pico_ip4 ip;$/;"	m	struct:pico_websocket_client	typeref:struct:pico_websocket_client::pico_ip4	file:
+is_duplicate_client	./pico_websocket_client.c	/^static int is_duplicate_client(struct pico_websocket_client* client)$/;"	f	file:
+next_free_pos_in_buffer	./pico_websocket_client.c	/^        void* next_free_pos_in_buffer;$/;"	m	struct:pico_websocket_client	file:
+options	./pico_websocket_client.c	/^        struct pico_websocket_client_handshake_options* options;$/;"	m	struct:pico_websocket_client	typeref:struct:pico_websocket_client::pico_websocket_client_handshake_options	file:
+parse_server_http_respone_line	./pico_websocket_client.c	/^static int parse_server_http_respone_line(char* line, char* colon_ptr)$/;"	f	file:
+parse_websocket_header	./pico_websocket_client.c	/^static int parse_websocket_header(struct pico_websocket_client* client)$/;"	f	file:
+pico_itoa	./pico_websocket_client.c	/^uint32_t pico_itoa(uint32_t port, char *ptr)$/;"	f
+pico_process_URI	./pico_websocket_client.c	/^static int8_t pico_process_URI(const char *uri, struct pico_http_uri *urikey)$/;"	f	file:
+pico_websocket_RSV	./pico_websocket_client.c	/^struct pico_websocket_RSV$/;"	s	file:
+pico_websocket_client	./pico_websocket_client.c	/^struct pico_websocket_client$/;"	s	file:
+pico_websocket_client_add_extension	./pico_websocket_client.c	/^int pico_websocket_client_add_extension(uint16_t connID, void* extension)$/;"	f
+pico_websocket_client_add_protocol	./pico_websocket_client.c	/^int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)$/;"	f
+pico_websocket_client_build_header	./pico_websocket_client.c	/^static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize)$/;"	f	file:
+pico_websocket_client_cleanup	./pico_websocket_client.c	/^static int pico_websocket_client_cleanup(struct pico_websocket_client* client)$/;"	f	file:
+pico_websocket_client_close	./pico_websocket_client.c	/^int pico_websocket_client_close(uint16_t connID)$/;"	f
+pico_websocket_client_handshake_options	./pico_websocket_client.c	/^struct pico_websocket_client_handshake_options$/;"	s	file:
+pico_websocket_client_initiate_connection	./pico_websocket_client.c	/^int pico_websocket_client_initiate_connection(uint16_t connID)$/;"	f
+pico_websocket_client_open	./pico_websocket_client.c	/^int pico_websocket_client_open(char* uri, void (*wakeup)(uint16_t ev, uint16_t conn))$/;"	f
+pico_websocket_client_readData	./pico_websocket_client.c	/^int pico_websocket_client_readData(uint16_t connID, void* data, uint16_t size)$/;"	f
+pico_websocket_client_send_upgrade_header	./pico_websocket_client.c	/^static int pico_websocket_client_send_upgrade_header(struct pico_websocket_client* client)$/;"	f	file:
+pico_websocket_client_set_RSV_bits	./pico_websocket_client.c	/^int pico_websocket_client_set_RSV_bits(uint16_t connID, uint8_t RSV1, uint8_t RSV2, uint8_t RSV3)$/;"	f
+pico_websocket_client_writeData	./pico_websocket_client.c	/^int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)$/;"	f
+pico_websocket_mask_data	./pico_websocket_client.c	/^static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size)$/;"	f	file:
+protocols	./pico_websocket_client.c	/^        char* protocols;$/;"	m	struct:pico_websocket_client_handshake_options	file:
+read_char_from_client_socket	./pico_websocket_client.c	/^static inline int read_char_from_client_socket(struct pico_websocket_client* client, char* output)$/;"	f	file:
+retrieve_websocket_client_with_conn_ID	./pico_websocket_client.c	/^static struct pico_websocket_client* retrieve_websocket_client_with_conn_ID(uint16_t wsConnID)$/;"	f	file:
+rsv	./pico_websocket_client.c	/^        struct pico_websocket_RSV* rsv;$/;"	m	struct:pico_websocket_client	typeref:struct:pico_websocket_client::pico_websocket_RSV	file:
+sck	./pico_websocket_client.c	/^        struct pico_socket *sck;$/;"	m	struct:pico_websocket_client	typeref:struct:pico_websocket_client::pico_socket	file:
+send_close_frame	./pico_websocket_client.c	/^static int send_close_frame(struct pico_websocket_client* client, uint16_t status_code, void* reason, uint8_t reason_size)$/;"	f	file:
+state	./pico_websocket_client.c	/^        uint8_t state;$/;"	m	struct:pico_websocket_client	file:
+uriKey	./pico_websocket_client.c	/^        struct pico_http_uri* uriKey;$/;"	m	struct:pico_websocket_client	typeref:struct:pico_websocket_client::pico_http_uri	file:
+wakeup	./pico_websocket_client.c	/^        void (*wakeup)(uint16_t ev, uint16_t conn);$/;"	m	struct:pico_websocket_client	file:
+ws_add_extension_to_client	./pico_websocket_client.c	/^static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension)$/;"	f	file:
+ws_add_protocol_to_client	./pico_websocket_client.c	/^static int ws_add_protocol_to_client(struct pico_websocket_client* client, void* protocol)$/;"	f	file:
+ws_parse_upgrade_header	./pico_websocket_client.c	/^static int ws_parse_upgrade_header(struct pico_websocket_client* client)$/;"	f	file:
+ws_read_http_header_line	./pico_websocket_client.c	/^static void ws_read_http_header_line(struct pico_websocket_client* client, char *line)$/;"	f	file:
+ws_tcp_callback	./pico_websocket_client.c	/^static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)$/;"	f	file:
+ws_treat_read_event	./pico_websocket_client.c	/^static void ws_treat_read_event(struct pico_websocket_client* client)$/;"	f	file:
