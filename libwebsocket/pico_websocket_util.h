@@ -31,6 +31,7 @@
 #define EV_WS_BODY            64u
 
 /* Payload lengths, used to determine start of payload data */
+#define WS_7_BIT_PAYLOAD_LENGTH_LIMIT          125u
 #define WS_16_BIT_PAYLOAD_LENGTH_INDICATOR     126u
 #define WS_64_BIT_PAYLOAD_LENGTH_INDICATOR     127u
 

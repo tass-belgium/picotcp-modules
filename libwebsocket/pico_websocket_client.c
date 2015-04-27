@@ -78,7 +78,6 @@ PACKED_STRUCT_DEF pico_websocket_header
         uint8_t mask : 1;
 };
 
-/* This structure can be passed to pico_websocket_client_writeData if you use certain special protocols and extensions */
 struct pico_websocket_client_handshake_options
 {
         /* These members are dynamically allocated and are user-terminated by a '\0' */
@@ -106,6 +105,7 @@ static int ws_add_protocol_to_client(struct pico_websocket_client* client, void*
 static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension);
 static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3);
 static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize);
+static int handle_recv_fragmented_frame(struct pico_websocket_client* client);
 
 PICO_TREE_DECLARE(pico_websocket_client_list, compare_ws_with_connID);
 
@@ -692,7 +692,14 @@ static void* allocate_client_buffer(struct pico_websocket_client* client)
 
 static int handle_recv_text_frame(struct pico_websocket_client* client)
 {
-        client->wakeup(EV_WS_BODY, client->connectionID);
+        if ( client->hdr->fin == WS_FIN_DISABLE )
+        {
+                handle_recv_fragmented_frame(client);
+        }
+        else
+        {
+                client->wakeup(EV_WS_BODY, client->connectionID);
+        }
         return 0;
 }
 
@@ -708,6 +715,7 @@ static int frame_is_control_frame(struct pico_websocket_client* client)
         return 0;
 }
 
+/* TODO: handle buffer overflow better, maybe let client consume what we can store and clear it afterwards, then receive the rest */
 static int handle_recv_fragmented_frame(struct pico_websocket_client* client)
 {
         struct pico_websocket_header* hdr = client->hdr;
@@ -740,7 +748,7 @@ static int handle_recv_fragmented_frame(struct pico_websocket_client* client)
                 ret = pico_socket_read(client->sck, client->next_free_pos_in_buffer, remaining_size_buffer);
 
                 uint8_t* throw_away = PICO_ZALLOC(payload_length - remaining_size_buffer);
-                /* Truncate data */
+                /* Truncate data (find better way, see todo above)*/
                 pico_socket_read(client->sck, throw_away, payload_length - remaining_size_buffer);
 
                 PICO_FREE(throw_away);
@@ -754,12 +762,16 @@ static int handle_recv_fragmented_frame(struct pico_websocket_client* client)
         else
         {
                 ret = pico_socket_read(client->sck, client->next_free_pos_in_buffer, payload_length);
-
-                if ( hdr->opcode == 0 )
+                if ( hdr->opcode == 0 && hdr->fin == WS_FIN_ENABLE )
                 {
-                        /* opcode = 0 and fin = 0 mean this is the last packed, so we can free the buffer after delivering the data to the user. */
+                        /* opcode = 0 and fin = 1 mean this is the last packed, so we can fr
+                           ee the buffer after delivering the data to the user. */
                         client->wakeup(EV_WS_BODY, client->connectionID);
+
+                        PICO_FREE(client->buffer);
+                        client->next_free_pos_in_buffer = NULL;
                 }
+
         }
 
         if (ret < 0)
@@ -787,18 +799,12 @@ static int parse_websocket_header(struct pico_websocket_client* client)
                 fail_websocket_connection(client);
         }
 
-        if (hdr->fin == WS_FIN_DISABLE && hdr->payload_length)
-        {
-                /* This is a fragmented message */
-                handle_recv_fragmented_frame(client);
-                return;
-        }
-
         /* Opcode */
         switch(hdr->opcode)
         {
         case WS_CONTINUATION_FRAME:
                 opcode = WS_CONTINUATION_FRAME;
+                /* handle_recv_fragmented_frame(client); */
                 break;
         case WS_CONN_CLOSE:
                 opcode = WS_CONN_CLOSE;
@@ -995,7 +1001,6 @@ static int ws_parse_upgrade_header(struct pico_websocket_client* client)
         char* colon_ptr;
         uint16_t responseCode = -1;
         int ret;
-        char c;
 
         ws_read_http_header_line(client, line);
 
@@ -1365,6 +1370,7 @@ int pico_websocket_client_readData(uint16_t connID, void* data, uint16_t size)
         return ret;
 }
 
+/* TODO: provide extra parameter for opcdoe */
 /*
  * API for sending data to the websocket server
  *
@@ -1375,22 +1381,84 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
         int ret;
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
         struct pico_socket* socket = client->sck;
-        struct pico_websocket_header* header = pico_websocket_client_build_header(client->rsv, WS_TEXT_FRAME, WS_FIN_ENABLE, size);
-
         uint32_t masking_key = pico_rand();
+        struct pico_websocket_header* header;
+        uint8_t header_payload_indicator;
 
-        ret = pico_websocket_mask_data(masking_key, (uint8_t*)data, size);
-
-        if (ret != size)
+        if (!client)
         {
-                dbg("Error masking data.\n");
+                dbg("Wrong connID provided to writeData.\n");
                 return -1;
         }
 
-        //TODO: if not all data can be written immediately, keep writing + fragmentation
-        ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header));
-        ret = pico_socket_write(socket, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES );
-        ret = pico_socket_write(socket, data, size);
+        /* Data will fit in one frame */
+        if ( size <= WS_FRAME_SIZE)
+        {
+                if (size > WS_7_BIT_PAYLOAD_LENGTH_LIMIT)
+                {
+                        header_payload_indicator = WS_16_BIT_PAYLOAD_LENGTH_INDICATOR;
+                }
+                else
+                {
+                        header_payload_indicator = size;
+                }
+
+                header = pico_websocket_client_build_header(client->rsv, WS_TEXT_FRAME, WS_FIN_ENABLE, header_payload_indicator);
+                masking_key = pico_rand();
+                pico_websocket_mask_data(masking_key, (uint8_t*)data, size);
+
+                ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header));
+                ret = header_payload_indicator == size ? 0 : pico_socket_write(socket, &size, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
+                ret = pico_socket_write(socket, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES);
+                ret = pico_socket_write(socket, data, size);
+
+                PICO_FREE(header);
+                return ret;
+        }
+
+        /* Data will not fit in one frame, fragment it */
+        while(1)
+        {
+                /* TODO: what to do with RSV bits? and extension data*/
+                header = pico_websocket_client_build_header(client->rsv, WS_TEXT_FRAME, WS_FIN_DISABLE, WS_FRAME_SIZE);
+                masking_key = pico_rand();
+                pico_websocket_mask_data(masking_key, (uint8_t*)data, WS_FRAME_SIZE);
+
+                ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header))
+                        + pico_socket_write(socket, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES )
+                        + pico_socket_write(socket, data, size);
+
+                if (ret < 0 )
+                {
+                        return ret;
+                }
+
+                data += WS_FRAME_SIZE;
+                size -= WS_FRAME_SIZE;
+
+                /* Is size an exact multiple of WS_FRAME_SIZE? If so, we need another header, see below */
+                if (size == WS_FRAME_SIZE)
+                {
+                        break;
+                }
+
+                /* Will size fit in one packet? if so, we need another header, see below */
+                if (size < WS_FRAME_SIZE)
+                {
+                        break;
+                }
+
+                PICO_FREE(header);
+        }
+
+        /* Send out last packet*/
+        header = pico_websocket_client_build_header(client->rsv, WS_CONTINUATION_FRAME, WS_FIN_ENABLE, size);
+        masking_key = pico_rand();
+        pico_websocket_mask_data(masking_key, (uint8_t*)data, size);
+
+        ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header))
+                + pico_socket_write(socket, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES )
+                + pico_socket_write(socket, data, size);
 
         PICO_FREE(header);
 
