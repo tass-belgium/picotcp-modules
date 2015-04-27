@@ -668,7 +668,7 @@ static inline int read_char_from_client_socket(struct pico_websocket_client* cli
         return pico_socket_read(client->sck, output, 1u);
 }
 
-
+/* Note: "\r\n" is not considered a line, so the last line of a http message will give back strlen(line) == 0 */
 static void ws_read_http_header_line(struct pico_websocket_client* client, char *line)
 {
         char c;
@@ -808,6 +808,7 @@ static int parse_websocket_header(struct pico_websocket_client* client)
         {
         case WS_CONTINUATION_FRAME:
                 opcode = WS_CONTINUATION_FRAME;
+                /* TODO: reenable */
                 /* handle_recv_fragmented_frame(client); */
                 break;
         case WS_CONN_CLOSE:
@@ -846,6 +847,12 @@ static void handle_websocket_message(struct pico_websocket_client* client)
         if (ret < 0)
         {
                 client->wakeup(EV_WS_ERR, client->connectionID);
+                return;
+        }
+
+        if (ret == 0)
+        {
+                /* Nothing received, so nothing to parse */
                 return;
         }
 
@@ -1456,7 +1463,7 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
                 PICO_FREE(header);
         }
 
-        /* Send out last packet*/
+        /* Send out last packet, it has to have a different header compared to the previous fragmented ones*/
         header = pico_websocket_client_build_header(client->rsv, WS_CONTINUATION_FRAME, WS_FIN_ENABLE, size);
         masking_key = pico_rand();
         pico_websocket_mask_data(masking_key, (uint8_t*)data, size);
