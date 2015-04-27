@@ -105,6 +105,7 @@ static int ws_add_extension_to_client(struct pico_websocket_client* client, void
 static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3);
 static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize);
 static int handle_recv_fragmented_frame(struct pico_websocket_client* client);
+static int determine_payload_length(struct pico_websocket_client* client);
 
 PICO_TREE_DECLARE(pico_websocket_client_list, compare_ws_with_connID);
 
@@ -998,6 +999,7 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
         return ret;
 }
 
+
 static int parse_server_http_respone_line(char* line, char* colon_ptr)
 {
         /* TODO */
@@ -1226,10 +1228,48 @@ static struct pico_websocket_client* build_pico_websocket_client_with_callback(v
         return client;
 }
 
-/*
- * API for opening a new websocket client
+
+static int determine_payload_length(struct pico_websocket_client* client)
+{
+        int ret;
+        uint8_t payload_length = client->hdr->payload_length;
+
+        if (client == NULL)
+        {
+                return -1;
+        }
+
+        switch(payload_length)
+        {
+        case WS_16_BIT_PAYLOAD_LENGTH_INDICATOR:
+                ret = pico_socket_read(client->sck, &payload_length, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
+                break;
+        case WS_64_BIT_PAYLOAD_LENGTH_INDICATOR:
+                ret = pico_socket_read(client->sck, &payload_length, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
+                break;
+        default:
+                /* No extra reading required, size is already known */
+                break;
+        }
+
+        if (ret < 0)
+        {
+                return -1;
+        }
+
+        return payload_length;
+}
+
+
+/**
+ * This function will open a new websocket client.
+ * To contact the websocket server, you have to call pico_websocket_client_initiate_connection().
+ * Format of the uri must be the following: "ws:" "//" host [ ":" port ] path [ "?" query ] .
+ * Events that can occur: EV_WS_ERR and EV_WS_BODY.
  *
- * returns the connection ID of the websocket client
+ * @param uri This is uri of the server you want to contact.
+ * @param wakeup This is the callback function which will be called if an event occurs.
+ * @return Will return < 0 if an error occured. Will return the connection ID of the client if succesfull.
  */
 int pico_websocket_client_open(char* uri, void (*wakeup)(uint16_t ev, uint16_t conn))
 {
@@ -1268,11 +1308,12 @@ int pico_websocket_client_open(char* uri, void (*wakeup)(uint16_t ev, uint16_t c
         return client->connectionID;
 }
 
-/*
- * API for closing a websocket client
- * The argument connID can be a http client connection ID associated with a websocket client or
- * a websocket client connection ID.
- * returns 0 on success, < 0 if something went wrong
+/**
+ * This function will close the websocket client.
+ * Close messages will be sent before cleaning up the client.
+ *
+ * @param connID This is the connection ID of the websocket client.
+ * @return Will return < 0 if an error occured. Will return 0 if succesfull.
  */
 int pico_websocket_client_close(uint16_t connID)
 {
@@ -1290,41 +1331,15 @@ int pico_websocket_client_close(uint16_t connID)
         return fail_websocket_connection(client);
 }
 
-static int determine_payload_length(struct pico_websocket_client* client)
-{
-        int ret;
-        uint8_t payload_length = client->hdr->payload_length;
-
-        if (client == NULL)
-        {
-                return -1;
-        }
-
-        switch(payload_length)
-        {
-        case WS_16_BIT_PAYLOAD_LENGTH_INDICATOR:
-                ret = pico_socket_read(client->sck, &payload_length, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
-                break;
-        case WS_64_BIT_PAYLOAD_LENGTH_INDICATOR:
-                ret = pico_socket_read(client->sck, &payload_length, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
-                break;
-        default:
-                /* No extra reading required, size is already known */
-                break;
-        }
-
-        if (ret < 0)
-        {
-                return -1;
-        }
-
-        return payload_length;
-}
-
-/*
- * API for reading data sent by the websocket server
+/**
+ * This function will read data received from the websocket server.
+ * This function can be called after receiving a WS_EV_BODY in your callback provided in pico_websocket_client_open().
+ * If size is smaller than the data received, the data will be truncated.
  *
- *
+ * @param connID This is the connection ID of the websocket client.
+ * @param data This is the buffer that will be used to hold your data.
+ * @param size This is the size of the data you want to read.
+ * @return Will return < 0 if an error occured. Will return number of bytes read if succesfull.
  */
 int pico_websocket_client_readData(uint16_t connID, void* data, uint16_t size)
 {
@@ -1385,11 +1400,15 @@ int pico_websocket_client_readData(uint16_t connID, void* data, uint16_t size)
         return ret;
 }
 
-/* TODO: provide extra parameter for opcdoe */
-/*
- * API for sending data to the websocket server
+
+/**
+ * This function will sent data to the websocket server.
+ * If size is greater than 1024 bytes, the message will be fragmented.
  *
- *
+ * @param connID This is the connection ID of the websocket client.
+ * @param data This is the data you want to send.
+ * @param size This is the size of the data you want to send.
+ * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
  */
 int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
 {
@@ -1481,10 +1500,14 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
         return ret;
 }
 
-/*
- * API for adding protocol to client
+/**
+ * This will add a protocol to the websocket client.
+ * This will be added to the upgrade header sent to the server.
+ * If no protocols are provided, we will default to "/chat"
  *
- *
+ * @param connID This is the connection ID of the websocket client.
+ * @param protocol This is the protocol you want to negotiate with the server. This will most likely be a char array describing the extension (for example "/chat")
+ * @return Will return < 0 if an error occured. Will return 0 if succesfull.
  */
 int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)
 {
@@ -1511,10 +1534,14 @@ int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)
         return 0;
 }
 
-/*
- * API for adding extensions to client
+/**
+ * This will add an extension to the websocket client.
+ * This will be added to the upgrade header sent to the server.
+ * If no extensions are provided, we will default to "" (empty string)
  *
- *
+ * @param connID This is the connection ID of the websocket client.
+ * @param extension This is the extension you want to negotiate with the server. This will most likely be a char array describing the extension.
+ * @return Will return < 0 if an error occured. Will return 0 if succesfull.
  */
 int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 {
@@ -1542,10 +1569,11 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 
 }
 
-/*
- * API for initiating connection
+/**
+ * This function will initiate the handshake with the websocket server.
  *
- *
+ * @param connID This is the connection ID you received with pico_websocket_client_open().
+ * @return Will return < 0 if an error occured. Will return 0 if succesfull.
  */
 int pico_websocket_client_initiate_connection(uint16_t connID)
 {
@@ -1587,13 +1615,18 @@ int pico_websocket_client_initiate_connection(uint16_t connID)
         }
 
         client->state = WS_CONNECTING;
+
+        return 0;
 }
 
 
-/*
- * API for setting the RSV bits
+/**
+ * This will set the RSV bits for the following message you send out using pico_websocket_client_writeData(). If you do not provide RSV bits using this function, pico_websocket_client_writeData() will default to RSV1 = RSV2 = RSV3 = 0.
  *
- *
+ * @param RSV1 This is the RSV1 bit in the websocket header
+ * @param RSV2 This is the RSV2 bit in the websocket header
+ * @param RSV3 This is the RSV3 bit in the websocket header
+ * @return Will return < 0 if an error occured. Will return 0 if succesfull.
  */
 int pico_websocket_client_set_RSV_bits(uint16_t connID, uint8_t RSV1, uint8_t RSV2, uint8_t RSV3)
 {
@@ -1626,4 +1659,6 @@ int pico_websocket_client_set_RSV_bits(uint16_t connID, uint8_t RSV1, uint8_t RS
         client->rsv->RSV1 = RSV1;
         client->rsv->RSV2 = RSV2;
         client->rsv->RSV3 = RSV3;
+
+        return 0;
 }
