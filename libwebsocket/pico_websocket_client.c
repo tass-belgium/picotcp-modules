@@ -1,4 +1,3 @@
-#include "pico_websocket_util.h"
 #include "pico_websocket_client.h"
 #include "../libhttp/pico_http_util.h"
 #include <stdint.h>
@@ -446,7 +445,7 @@ static int fail_websocket_connection(struct pico_websocket_client* client)
                 /* I recv a close frame, I should sent one back. Now I am closed*/
                 send_close_frame(client, 0, NULL, 0);
                 client->state = WS_CLOSED;
-                pico_timer_add(0, cleanup_websocket_client, (void*)client);
+                pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client);
                 break;
         case WS_CLOSING:
                 /* I sent a close frame and am waiting for the servers response */
@@ -1114,7 +1113,7 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(!client)
         {
-                /* dbg("Client not found in tcp callback...Something went wrong !\n"); */
+                dbg("Client not found in tcp callback...Something went wrong !\n");
                 return;
         }
 
@@ -1136,10 +1135,15 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
                 fail_websocket_connection(client);
         }
 
-        if((ev & PICO_SOCK_EV_CLOSE) || (ev & PICO_SOCK_EV_FIN))
+        if(ev & PICO_SOCK_EV_CLOSE)
         {
-                dbg("Close/FIN request received.\n");
-                fail_websocket_connection(client);
+                dbg("Close socket received.\n");
+                pico_socket_close(client->sck);
+        }
+
+        if(ev & PICO_SOCK_EV_FIN)
+        {
+                dbg("FIN received.");
         }
 
         if(ev & PICO_SOCK_EV_RD)

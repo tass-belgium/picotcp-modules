@@ -2,6 +2,7 @@
 #define PICO_WEBSOCKET_CLIENT_H
 
 #include <stdint.h>
+#include "pico_websocket_util.h"
 
 int pico_websocket_client_open(char* uri, void (*wakeup)(uint16_t ev, uint16_t conn));
 int pico_websocket_client_close(uint16_t connID);
