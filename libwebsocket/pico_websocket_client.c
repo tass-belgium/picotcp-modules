@@ -11,6 +11,8 @@
 #include "pico_stack.h"
 #include "pico_socket.h"
 
+#define WS_LISTEN_PORT                         8888u
+
 #define WS_PROTO_TOK                           "ws://"
 #define WS_PROTO_LEN                           5u
 
@@ -592,6 +594,8 @@ static int handle_recv_ping_frame(struct pico_websocket_client* client)
         recv_payload = PICO_ZALLOC(payload_length);
 
         ret = pico_socket_read(client->sck, recv_payload, payload_length);
+
+        /* TODO: pass data to user! */
 
         pico_websocket_mask_data(masking_key, recv_payload, payload_length);
 
@@ -1384,6 +1388,7 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
         uint32_t masking_key = pico_rand();
         struct pico_websocket_header* header;
         uint8_t header_payload_indicator;
+        uint16_t size_network_order = short_be(size);
 
         if (!client)
         {
@@ -1408,7 +1413,7 @@ int pico_websocket_client_writeData(uint16_t connID, void* data, uint16_t size)
                 pico_websocket_mask_data(masking_key, (uint8_t*)data, size);
 
                 ret = pico_socket_write(socket, header, sizeof(struct pico_websocket_header));
-                ret = header_payload_indicator == size ? 0 : pico_socket_write(socket, &size, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
+                ret = header_payload_indicator == size ? 0 : pico_socket_write(socket, &size_network_order, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
                 ret = pico_socket_write(socket, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES);
                 ret = pico_socket_write(socket, data, size);
 
@@ -1534,11 +1539,14 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 int pico_websocket_client_initiate_connection(uint16_t connID)
 {
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
+        struct pico_ip4 inaddr_any = { 0 };
+        uint16_t listen_port = short_be(WS_LISTEN_PORT);
         int ret;
+
 
         if (!client)
         {
-                dbg("Websocket client cannot be closed, wrong connID provided!");
+                dbg("Websocket client cannot be initiated, wrong connID provided!");
                 return -1;
         }
 
@@ -1559,6 +1567,13 @@ int pico_websocket_client_initiate_connection(uint16_t connID)
         if(!client->sck)
         {
                 dbg("Failed to open socket.\n");
+                client->wakeup(EV_WS_ERR, client->connectionID);
+                return;
+        }
+
+        if (pico_socket_bind(client->sck, &inaddr_any, &listen_port) < 0)
+        {
+                dbg("failed to bind socket.\n");
                 client->wakeup(EV_WS_ERR, client->connectionID);
                 return;
         }
