@@ -11,8 +11,6 @@
 #include "pico_stack.h"
 #include "pico_socket.h"
 
-#define WS_LISTEN_PORT                         8888u
-
 #define WS_PROTO_TOK                           "ws://"
 #define WS_PROTO_LEN                           5u
 
@@ -533,6 +531,8 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         }
 
         PICO_FREE(client);
+
+        dbg("Client was succesfully closed.\n");
         return 0;
 }
 
@@ -1114,7 +1114,7 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(!client)
         {
-                dbg("Client not found in tcp callback...Something went wrong !\n");
+                /* dbg("Client not found in tcp callback...Something went wrong !\n"); */
                 return;
         }
 
@@ -1546,8 +1546,6 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 int pico_websocket_client_initiate_connection(uint16_t connID)
 {
         struct pico_websocket_client* client = retrieve_websocket_client_with_conn_ID(connID);
-        struct pico_ip4 inaddr_any = { 0 };
-        uint16_t listen_port = short_be(WS_LISTEN_PORT);
         int ret;
 
 
@@ -1574,13 +1572,6 @@ int pico_websocket_client_initiate_connection(uint16_t connID)
         if(!client->sck)
         {
                 dbg("Failed to open socket.\n");
-                client->wakeup(EV_WS_ERR, client->connectionID);
-                return;
-        }
-
-        if (pico_socket_bind(client->sck, &inaddr_any, &listen_port) < 0)
-        {
-                dbg("failed to bind socket.\n");
                 client->wakeup(EV_WS_ERR, client->connectionID);
                 return;
         }
