@@ -474,7 +474,7 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         toBeRemoved = pico_tree_delete(&pico_websocket_client_list, client);
         if(!toBeRemoved)
         {
-                dbg("Warning ! Websocket to be closed not found ...");
+                dbg("Warning ! Websocket to be closed not found ...\n");
                 return -1;
         }
 
@@ -1115,7 +1115,6 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(!client)
         {
-                dbg("Client not found in tcp callback...Something went wrong !\n");
                 return;
         }
 
@@ -1145,7 +1144,7 @@ static void ws_tcp_callback(uint16_t ev, struct pico_socket *s)
 
         if(ev & PICO_SOCK_EV_FIN)
         {
-                dbg("FIN received.");
+                dbg("FIN received.\n");
         }
 
         if(ev & PICO_SOCK_EV_RD)
@@ -1324,7 +1323,7 @@ int pico_websocket_client_close(uint16_t connID)
 
         if (!client)
         {
-                dbg("Websocket client cannot be closed, wrong connID provided!");
+                dbg("Websocket client cannot be closed, wrong connID provided!\n");
                 return -1;
         }
 
@@ -1515,13 +1514,13 @@ int pico_websocket_client_add_protocol(uint16_t connID, void* protocol)
 
         if (!client)
         {
-                dbg("Websocket client cannot be found, wrong connID provided!");
+                dbg("Websocket client cannot be found, wrong connID provided!\n");
                 return -1;
         }
 
         if (client->state != WS_INIT)
         {
-                dbg("Protocols have to be added before initiating handshake!");
+                dbg("Protocols have to be added before initiating handshake!\n");
                 return -1;
         }
 
@@ -1549,13 +1548,13 @@ int pico_websocket_client_add_extension(uint16_t connID, void* extension)
 
         if (!client)
         {
-                dbg("Websocket client cannot be found, wrong connID provided!");
+                dbg("Websocket client cannot be found, wrong connID provided!\n");
                 return -1;
         }
 
         if (client->state != WS_INIT)
         {
-                dbg("Extensions have to be added before initiating handshake!");
+                dbg("Extensions have to be added before initiating handshake!\n");
                 return -1;
         }
 
@@ -1583,7 +1582,7 @@ int pico_websocket_client_initiate_connection(uint16_t connID)
 
         if (!client)
         {
-                dbg("Websocket client cannot be initiated, wrong connID provided!");
+                dbg("Websocket client cannot be initiated, wrong connID provided!\n");
                 return -1;
         }
 
@@ -1591,7 +1590,7 @@ int pico_websocket_client_initiate_connection(uint16_t connID)
 
         if (is_duplicate_client(client) == 0)
         {
-                dbg("You can only open one websocket connection to the same IP adress.");
+                dbg("You can only open one websocket connection to the same IP adress.\n");
                 return -1;
         }
 
@@ -1635,7 +1634,7 @@ int pico_websocket_client_set_RSV_bits(uint16_t connID, uint8_t RSV1, uint8_t RS
 
         if (!client)
         {
-                dbg("Websocket client cannot be found, wrong connID provided!");
+                dbg("Websocket client cannot be found, wrong connID provided!\n");
                 return -1;
         }
 
