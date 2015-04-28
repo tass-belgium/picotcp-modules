@@ -716,7 +716,6 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                 return NULL;
         }
 
-        client->addr.sin_port = client->uriKey.port;
 
        if (pico_getaddrinfo(client->uriKey.host, NULL, NULL, &res) < 0) {
                 dbg("Cannot resolve URI.\n");
@@ -724,7 +723,9 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
        }
        memcpy(&client->addr, res->ai_addr, sizeof(struct sockaddr_in));
        freeaddrinfo(res);
-       
+
+       client->addr.sin_port = htons(client->uriKey.port);
+
        client->fd = pico_newsocket(AF_INET, SOCK_STREAM, 0);
        if (client->fd < 0) {
             err = pico_err;
@@ -732,7 +733,7 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
             pico_err = err;
             return NULL;
        }
-       
+
        if (proto) {
            client->protocol = PICO_ZALLOC(strlen(proto));
            if (!client->protocol) {
@@ -754,20 +755,28 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
        /* TODO: if one of the next steps fail, put a timer to retry the connection
         * instead of destroying everything. That's why we still have a WS_CONNECTING state.
         */
-       if (0 != pico_connect(client->fd, (struct sockaddr *)&client->addr, sizeof(struct sockaddr))) {
+       if (0 != pico_connect(client->fd, (struct sockaddr *)&client->addr, sizeof(struct sockaddr_in))) {
             err = pico_err;
             pico_websocket_client_cleanup(client);
             pico_err = err;
             return NULL;
        }
 
-       if (0 != pico_websocket_client_send_upgrade_header(client)) {
+       if (pico_websocket_client_send_upgrade_header(client) <= 0) {
             err = pico_err;
             pico_websocket_client_cleanup(client);
             pico_err = err;
             return NULL;
        }
-       
+
+       if (ws_parse_upgrade_header(client) < 0)
+       {
+               err = pico_err;
+               pico_websocket_client_cleanup(client);
+               pico_err = err;
+               return NULL;
+       }
+
        client->state = WS_CONNECTED;
        return client;
 }
