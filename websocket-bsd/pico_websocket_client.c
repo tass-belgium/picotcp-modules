@@ -789,7 +789,6 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
  */
 int ws_close(WSocket ws)
 {
-    /* TODO: Send close */
     return fail_websocket_connection(ws);
 }
 
@@ -890,6 +889,14 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
     {
         pico_err = PICO_ERR_EINVAL;
         return -1;
+    }
+
+    if (ws->state != WS_CONNECTED)
+    {
+            /* We are either not fully initialized, or we are closing our connection.
+             * do not send out packets!
+             */
+            return -1;
     }
 
     memset(&hdr, 0, sizeof(struct pico_websocket_header));
