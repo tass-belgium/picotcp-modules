@@ -11,6 +11,12 @@
 #include "pico_socket.h"
 #include "pico_bsd_sockets.h"
 
+#ifdef SSL_WEBSOCKET
+#include "wolfssl/ssl.h"
+extern unsigned char *ssl_cert_pem;
+extern unsigned int *ssl_cert_pem_len;
+#endif
+
 #define WS_PROTO_TOK                           "ws://"
 #define WS_PROTO_LEN                           5u
 
@@ -41,8 +47,6 @@
 #define WS_CLOSED                              4u
 
 
-static uint16_t GlobalWebSocketConnectionID = 0;
-
 /* 
  * client could be recv fragmented message and sending fragmented message at the same time
  */
@@ -58,6 +62,8 @@ struct pico_websocket_client
         char* extensions;
         char* extension_arguments;
         int state;
+        void *ssl_ctx;
+        void *ssl;
 };
 
 PACKED_STRUCT_DEF pico_websocket_header
@@ -82,14 +88,6 @@ struct pico_websocket_RSV
 
 static void cleanup_websocket_client(pico_time now, void* args);
 static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size);
-static int compare_clients_for_same_remote_connection(struct pico_websocket_client* ca, struct pico_websocket_client* cb);
-static int compare_ws_with_connID(void *ka, void *kb);
-static int is_duplicate_client(struct pico_websocket_client* client);
-static int ws_add_protocol_to_client(struct pico_websocket_client* client, void* protocol);
-static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension);
-static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3);
-static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize);
-static int handle_recv_fragmented_frame(struct pico_websocket_client* client);
 
 /* TODO: move to pico_http_util */
 static int8_t pico_process_URI(const char *uri, struct pico_http_uri *urikey)
@@ -236,36 +234,6 @@ uint32_t pico_itoa(uint32_t port, char *ptr)
         return size;
 }
 
-
-/* For the add_*_to_client functions, allocate more memory for new protocol/extension + insert terminator string at the end of the array '\0' */
-static int ws_add_protocol_to_client(struct pico_websocket_client* client, void* protocol)
-{
-        /* TODO */
-        return 0;
-}
-
-static int ws_add_extension_to_client(struct pico_websocket_client* client, void* extension)
-{
-        /* TODO */
-        return 0;
-}
-
-static int check_validity_of_RSV_arg(uint8_t RSV)
-{
-        if (RSV != RSV_ENABLE && RSV != RSV_DISABLE)
-        {
-                return -1;
-        }
-
-        return 0;
-}
-
-static int check_validity_of_RSV_args(uint8_t RSV1, uint8_t RSV2, uint8_t RSV3)
-{
-        return check_validity_of_RSV_arg(RSV1) + check_validity_of_RSV_arg(RSV2) + check_validity_of_RSV_arg(RSV3);
-}
-
-
 /* If close frame has a payload, the first two bytes in the payload are an unisgned int in network order. This is why we add WS_STATUS_CODE_SIZE_IN_BYTES to the reason_size when checking the size. */
 static int send_close_frame(struct pico_websocket_client* client, uint16_t status_code, void* reason, uint8_t reason_size)
 {
@@ -356,9 +324,6 @@ static int fail_websocket_connection(struct pico_websocket_client* client)
 
 static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
 {
-        struct pico_websocket_client *toBeRemoved = NULL;
-        int ret;
-
         dbg("Closing the websocket client...\n");
 
         if (client->fd > 0) {
@@ -370,6 +335,12 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         {
                 PICO_FREE(client->buffer);
         }
+#ifdef SSL_WEBSOCKET
+        if (client->ssl)
+            PICO_FREE(client->ssl);
+        if (client->ssl_ctx)
+            PICO_FREE(client->ssl_ctx);
+#endif
 
         PICO_FREE(client);
 
@@ -417,18 +388,6 @@ static void ws_read_http_header_line(struct pico_websocket_client* client, char 
         }
         line[index] = (char)0;
         read_char_from_client_socket(client, &c); /* Consume '\n' */
-}
-
-
-static void* allocate_client_buffer(struct pico_websocket_client* client)
-{
-        if (!client->buffer)
-        {
-                client->buffer = PICO_ZALLOC(WS_BUFFER_SIZE);
-                client->next_free_pos_in_buffer = client->buffer;
-        }
-
-        return client->buffer;
 }
 
 static void add_protocols_to_header(char* header, char* protocol)
@@ -489,40 +448,6 @@ static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* cl
         add_extensions_to_header(header, client->extensions);
         strcat(header, "Sec-WebSocket-Version: 13\r\n");
         strcat(header, "\r\n");
-        return header;
-}
-
-/* Mask bit is not in parameter list because client always has to mask */
-static struct pico_websocket_header* pico_websocket_client_build_header(struct pico_websocket_RSV* rsv, uint8_t opcode, uint8_t fin, int dataSize)
-{
-        struct pico_websocket_header * header = PICO_ZALLOC(sizeof(struct pico_websocket_header));
-
-        if (!header)
-        {
-                dbg("Could not allocate websocket header.\n");
-                return NULL;
-        }
-
-
-        if (!rsv)
-        {
-                header->RSV1 = 0;
-                header->RSV2 = 0;
-                header->RSV3 = 0;
-        }
-        else
-        {
-                header->RSV1 = rsv->RSV1;
-                header->RSV2 = rsv->RSV2;
-                header->RSV3 = rsv->RSV3;
-        }
-        header->mask = WS_MASK_ENABLE;
-
-        header->opcode = opcode;
-
-        header->fin = fin;
-        header->payload_length = dataSize;
-
         return header;
 }
 
@@ -689,7 +614,6 @@ static int determine_payload_length(struct pico_websocket_client* client, struct
 
 WSocket ws_connect(char *uri, char *proto, char *ext)
 {
-        uint32_t ip = 0;
         int ret;
         WSocket client;
         struct addrinfo *res, hint;
@@ -778,6 +702,27 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
        }
 
        client->state = WS_CONNECTED;
+#ifdef SSL_WEBSOCKET
+       client->ssl_ctx = wolfSSL_CTX_new(wolfSSLv3_client_method());
+       if (!client->ssl_ctx) {
+            printf("Failed to create TLS context!\n");
+            pico_websocket_client_cleanup(client);
+            return NULL;
+       }
+       if ((wolfSSL_CTX_use_certificate_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) ||
+               wolfSSL_CTX_use_PrivateKey_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) {
+            printf("Failed to load TLS certificate or private key!\n");
+            pico_websocket_client_cleanup(client);
+            return NULL;
+       }
+       client->ssl = wolfSSL_new(client->ssl_ctx);
+       if (client->ssl == NULL) {
+            printf("Failed to enable SSL!\n");
+            pico_websocket_client_cleanup(client);
+            return NULL;
+       }
+       wolfSSL_set_fd(client->ssl, client->fd);
+#endif
        return client;
 }
 
