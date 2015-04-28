@@ -15,6 +15,11 @@
 #include "wolfssl/ssl.h"
 extern unsigned char *ssl_cert_pem;
 extern unsigned int *ssl_cert_pem_len;
+#define backend_read wolfSSL_read
+#define backend_write wolfSSL_write
+#else
+#define backend_read pico_read
+#define backend_write pico_write 
 #endif
 
 #define WS_PROTO_TOK                           "ws://"
@@ -260,7 +265,7 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
                 hdr->payload_length = reason_size + WS_STATUS_CODE_SIZE_IN_BYTES;
         }
 
-        ret = pico_write(client->fd, hdr, sizeof(struct pico_websocket_header));
+        ret = backend_write(client->fd, hdr, sizeof(struct pico_websocket_header));
 
         if (ret < 0)
         {
@@ -268,7 +273,7 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
                 return -1;
         }
 
-        ret = pico_write(client->fd, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES);
+        ret = backend_write(client->fd, &masking_key, WS_MASKING_KEY_SIZE_IN_BYTES);
 
         if (ret < 0)
         {
@@ -283,10 +288,10 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
                 {
                         status_code = short_be(status_code);
                         status_code = pico_websocket_mask_data(masking_key, (uint8_t *)&status_code, WS_STATUS_CODE_SIZE_IN_BYTES );
-                        ret = pico_write(client->fd, &status_code, WS_STATUS_CODE_SIZE_IN_BYTES);
+                        ret = backend_write(client->fd, &status_code, WS_STATUS_CODE_SIZE_IN_BYTES);
                 }
                 pico_websocket_mask_data(masking_key, reason, reason_size);
-                ret = pico_write(client->fd, reason, reason_size);
+                ret = backend_write(client->fd, reason, reason_size);
         }
 
 
@@ -373,7 +378,7 @@ static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int siz
 
 static int read_char_from_client_socket(WSocket ws, char *c)
 {
-    return pico_read(ws->fd, c, 1);
+    return backend_read(ws->fd, c, 1);
 }
 
 /* Note: "\r\n" is not considered a line, so the last line of a http message will give back strlen(line) == 0 */
@@ -463,7 +468,7 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
                 return -1;
         }
 
-        ret = pico_write(client->fd, header, strlen(header));
+        ret = backend_write(client->fd, header, strlen(header));
 
         if(ret < 0)
         {
@@ -555,11 +560,11 @@ static void pico_websocket_client_send_pong(WSocket ws, struct pico_websocket_he
     uint32_t masking_key = pico_rand();
     hdr->opcode = WS_PONG;
     hdr->mask = WS_MASK_ENABLE;
-    pico_write(ws->fd, hdr, sizeof(struct pico_websocket_header));
-    pico_write(ws->fd, &masking_key, sizeof(uint32_t));
+    backend_write(ws->fd, hdr, sizeof(struct pico_websocket_header));
+    backend_write(ws->fd, &masking_key, sizeof(uint32_t));
     if (size > 0) {
         pico_websocket_mask_data(masking_key, data, size);
-        pico_write(ws->fd, data, size);
+        backend_write(ws->fd, data, size);
         pico_websocket_mask_data(masking_key, data, size); /* Unmask data in place, that's going back to user! */
     }
 }
@@ -586,10 +591,10 @@ static int determine_payload_length(struct pico_websocket_client* client, struct
         switch(payload_length)
         {
         case WS_16_BIT_PAYLOAD_LENGTH_INDICATOR:
-                ret = pico_read(client->fd, &payload_length, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
+                ret = backend_read(client->fd, &payload_length, PAYLOAD_LENGTH_SIZE_16_BIT_IN_BYTES);
                 break;
         case WS_64_BIT_PAYLOAD_LENGTH_INDICATOR:
-                ret = pico_read(client->fd, &payload_length, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
+                ret = backend_read(client->fd, &payload_length, PAYLOAD_LENGTH_SIZE_64_BIT_IN_BYTES);
                 break;
         default:
                 /* No extra reading required, size is already known */
@@ -760,8 +765,8 @@ int ws_read(WSocket ws, void *data, int size)
         }
 
         while (1 < 2) {
-            while (WEBSOCKET_COMMON_HEADER_SIZE != pico_read(ws->fd, &hdr, WEBSOCKET_COMMON_HEADER_SIZE)) { 
-                /* Busy loop: actually blocking on pico_read */
+            while (WEBSOCKET_COMMON_HEADER_SIZE != backend_read(ws->fd, &hdr, WEBSOCKET_COMMON_HEADER_SIZE)) { 
+                /* Busy loop: actually blocking on backend_read */
             }
     
             payload_length = determine_payload_length(ws, &hdr);
@@ -785,7 +790,7 @@ int ws_read(WSocket ws, void *data, int size)
             /* TODO: Handle continuation correctly. */ 
 
             while (len < size) {
-                ret = pico_read(ws->fd, data + len, size - len);
+                ret = backend_read(ws->fd, data + len, size - len);
                 if (ret < 0)
                     return -1;
                 len += ret;
@@ -796,7 +801,7 @@ int ws_read(WSocket ws, void *data, int size)
                 /* Msg had to be truncated due to short usr buffer size.
                  * read out remainings from the TCP buffer. 
                  */
-                if (pico_read(ws->fd, &c, 1) < 0)
+                if (backend_read(ws->fd, &c, 1) < 0)
                     break;
                 size++;
             }
@@ -858,18 +863,18 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
     if (size > WS_7_BIT_PAYLOAD_LENGTH_LIMIT) {
         hdr.payload_length = WS_16_BIT_PAYLOAD_LENGTH_INDICATOR;
     }
-    if ( pico_write(ws->fd, &hdr, sizeof(hdr)) < 0)
+    if ( backend_write(ws->fd, &hdr, sizeof(hdr)) < 0)
         return -1;
     if (hdr.payload_length == WS_16_BIT_PAYLOAD_LENGTH_INDICATOR) {
         uint16_t p_size = htons(size);
-        if (pico_write(ws->fd, &p_size, sizeof(uint16_t)) < 0)
+        if (backend_write(ws->fd, &p_size, sizeof(uint16_t)) < 0)
             return -1;
     }
-    if (pico_write(ws->fd, &masking_key, sizeof(uint32_t)) < 0)
+    if (backend_write(ws->fd, &masking_key, sizeof(uint32_t)) < 0)
         return -1;
 
     pico_websocket_mask_data(masking_key, data, size);
-    return pico_write(ws->fd, data, size);
+    return backend_write(ws->fd, data, size);
 }
 
 int ws_write(WSocket ws, void *data, int size)
