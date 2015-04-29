@@ -93,8 +93,8 @@ static void cleanup_websocket_client(pico_time now, void* args);
 static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size);
 
 #ifdef SSL_WEBSOCKET
-extern unsigned char *ssl_cert_pem;
-extern unsigned int *ssl_cert_pem_len;
+extern unsigned char ssl_cert_pem[];
+extern unsigned int ssl_cert_pem_len;
 
 static int backend_read(WSocket s, void *data, int len)
 {
@@ -727,19 +727,19 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
 #ifdef SSL_WEBSOCKET
        client->ssl_ctx = wolfSSL_CTX_new(wolfSSLv3_client_method());
        if (!client->ssl_ctx) {
-               printf("Failed to create TLS context!\n");
+               dbg("Failed to create TLS context!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
        if ((wolfSSL_CTX_use_certificate_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) ||
            wolfSSL_CTX_use_PrivateKey_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) {
-               printf("Failed to load TLS certificate or private key!\n");
+               dbg("Failed to load TLS certificate or private key!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
        client->ssl = wolfSSL_new(client->ssl_ctx);
        if (client->ssl == NULL) {
-               printf("Failed to enable SSL!\n");
+               dbg("Failed to enable SSL!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
