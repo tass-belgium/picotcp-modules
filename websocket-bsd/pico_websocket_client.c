@@ -19,8 +19,8 @@
 #define WS_PROTO_TOK                           "ws://"
 #define WS_PROTO_LEN                           5u
 
-#define WSS_PROTO_TOK                           "wss://"
-#define WSS_PROTO_LEN                           6u
+#define WSS_PROTO_TOK                          "wss://"
+#define WSS_PROTO_LEN                          6u
 
 
 #define HTTP_HEADER_LINE_SIZE                  50u
@@ -50,7 +50,7 @@
 #define WS_CLOSED                              4u
 
 
-/* 
+/*
  * client could be recv fragmented message and sending fragmented message at the same time
  */
 struct pico_websocket_client
@@ -95,6 +95,8 @@ static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int siz
 #ifdef SSL_WEBSOCKET
 extern unsigned char ssl_cert_pem[];
 extern unsigned int ssl_cert_pem_len;
+extern unsigned char ca_pem[];
+extern unsigned int ca_pem_len;
 
 static int backend_read(WSocket s, void *data, int len)
 {
@@ -643,11 +645,15 @@ static int determine_payload_length(struct pico_websocket_client* client, struct
 
 /**
  * This function will open a new websocket client.
- * To contact the websocket server, you have to call pico_websocket_client_initiate_connection().
- * Format of the uri must be the following: "ws:" "//" host [ ":" port ] path [ "?" query ] .
- * Events that can occur: EV_WS_ERR and EV_WS_BODY.
+ * Format of the uri must be the following: "ws:" "//" host [ ":" port ] path [ "?" query ] or
+ * "wss:" "//" host [ ":" port ] path [ "?" query ] for secure connections.
  *
  * @param uri This is uri of the server you want to contact.
+ * @param proto This is a comma-separated list that will be used in the upgrade header to negotiate
+ * protocols. If no protocols are given, this will default to chat and superchat.
+ * @param ext This is a comma-separated list that will be used in the upgrade header to negotiate
+ * extensions on the websocket protocol. If no extensions are given, this will default to NULL
+ * @return Will return a WSocket client or NULL if something went wrong.
  */
 
 WSocket ws_connect(char *uri, char *proto, char *ext)
@@ -731,12 +737,23 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                pico_websocket_client_cleanup(client);
                return NULL;
        }
+
+       if (wolfSSL_CTX_use_certificate_chain_buffer(client->ssl_ctx, ca_pem, ca_pem_len) != SSL_SUCCESS)
+       {
+               dbg("Failed to load TLS certificate or private key!\n");
+               pico_websocket_client_cleanup(client);
+               return NULL;
+       }
+
        if ((wolfSSL_CTX_use_certificate_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) ||
            wolfSSL_CTX_use_PrivateKey_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) {
                dbg("Failed to load TLS certificate or private key!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
+
+       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_NONE, NULL);
+
        client->ssl = wolfSSL_new(client->ssl_ctx);
        if (client->ssl == NULL) {
                dbg("Failed to enable SSL!\n");
@@ -768,6 +785,7 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
 /**
  * This function will close the websocket client.
  * Close messages will be sent before cleaning up the client.
+ * @param ws This is the websocket client returned by ws_connect()
  *
  * @return Will return < 0 if an error occured. Will return 0 if succesfull.
  */
@@ -778,9 +796,9 @@ int ws_close(WSocket ws)
 
 /**
  * This function will read data received from the websocket server.
- * This function can be called after receiving a WS_EV_BODY in your callback provided in pico_websocket_client_open().
  * If size is smaller than the data received, the data will be truncated.
  *
+ * @param ws This is the websocket client returned by ws_connect()
  * @param data This is the buffer that will be used to hold your data.
  * @param size This is the size of the data you want to read.
  * @return Will return < 0 if an error occured. Will return number of bytes read if succesfull.
@@ -851,11 +869,14 @@ int ws_read(WSocket ws, void *data, int size)
 
 /**
  * This function will sent data to the websocket server.
- * If size is greater than 1024 bytes, the message will be fragmented.
- *
- * @param connID This is the connection ID of the websocket client.
+ * The difference between this function and ws_write() is that you can provide values for the rsv bits
+ * used in the header sent to the server.
+ * @param ws This is the websocket returned by ws_connect()
  * @param data This is the data you want to send.
  * @param size This is the size of the data you want to send.
+ * @param rsv These are the values of the rsv bits. This is an 3-element array laid out like this:
+ * rsv = [ rsv1, rsv2, rsv3 ].
+ * The only valid values for rsv bits are RSV_ENABLE (1) and RSV_DISABLE (0).
  * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
  */
 
@@ -910,6 +931,17 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
     pico_websocket_mask_data(masking_key, data, size);
     return backend_write(ws, data, size);
 }
+
+
+/**
+ * This function will sent data to the websocket server.
+ * The difference between this function and ws_write_rsv() is that you can't provide values for the rsv bits used in the header sent to the server.
+ * The RSV bits in the header will be zero.
+ * @param ws This is the websocket returned by ws_connect()
+ * @param data This is the data you want to send.
+ * @param size This is the size of the data you want to send.
+ * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
+ */
 
 int ws_write(WSocket ws, void *data, int size)
 {
