@@ -37,7 +37,7 @@
 
 #define WS_CONTROL_FRAME_MAX_SIZE              125u
 
-#define WS_CLOSING_WAIT_TIME_IN_MS             5000u
+#define WS_CLOSING_WAIT_TIME_IN_MS             2000u
 
 #define WS_STATUS_CODE_SIZE_IN_BYTES           2u
 #define WS_DEFAULT_STATUS_CODE                 1005u
@@ -91,6 +91,7 @@ struct pico_websocket_RSV
 
 static void cleanup_websocket_client(pico_time now, void* args);
 static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int size);
+static int pico_websocket_client_cleanup(struct pico_websocket_client* client);
 
 #ifdef SSL_WEBSOCKET
 extern unsigned char ssl_cert_pem[];
@@ -329,13 +330,11 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
                 ret = backend_write(client, reason, reason_size);
         }
 
-
-        /* client->state = WS_CLOSING; */
-
         return ret;
 }
 
 
+/* TODO: normally when you sent a close frame you have to wait a reasonable amount of time for the server to send you a close frame as well. For now, we close the connection immediately.*/
 static int fail_websocket_connection(struct pico_websocket_client* client)
 {
         switch (client->state)
@@ -344,16 +343,19 @@ static int fail_websocket_connection(struct pico_websocket_client* client)
                 /* I recv a close frame, I should sent one back. Now I am closed*/
                 send_close_frame(client, 0, NULL, 0);
                 client->state = WS_CLOSED;
-                pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client);
+                pico_websocket_client_cleanup(client);
+                /* pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client); */
                 break;
         case WS_CLOSING:
                 /* I sent a close frame and am waiting for the servers response */
-                pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client);
+                /* pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client); */
+                pico_websocket_client_cleanup(client);
                 break;
         case WS_CLOSED:
                 break;
         default:
-                pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client);
+                /* pico_timer_add(WS_CLOSING_WAIT_TIME_IN_MS, cleanup_websocket_client, (void*)client); */
+                pico_websocket_client_cleanup(client);
                 break;
         }
 
@@ -366,14 +368,9 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
 {
         dbg("Closing the websocket client...\n");
 
-        if (client->fd > 0) {
+        if (client->fd >= 0) {
             pico_close(client->fd);
             client->fd = -1;
-        }
-
-        if (client->buffer)
-        {
-                PICO_FREE(client->buffer);
         }
 #ifdef SSL_WEBSOCKET
         if (client->ssl)
@@ -879,7 +876,6 @@ int ws_read(WSocket ws, void *data, int size)
  * The only valid values for rsv bits are RSV_ENABLE (1) and RSV_DISABLE (0).
  * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
  */
-
 int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
 {
     struct pico_websocket_header hdr;
