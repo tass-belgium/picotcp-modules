@@ -280,8 +280,15 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
 {
         int ret;
         uint32_t masking_key;
-        struct pico_websocket_header* hdr = PICO_ZALLOC(sizeof(struct pico_websocket_header));
+        struct pico_websocket_header* hdr;
 
+        if (reason_size + WS_STATUS_CODE_SIZE_IN_BYTES > WS_CONTROL_FRAME_MAX_SIZE)
+        {
+                dbg("Size of reason is too big to fit in close frame.\n");
+                return -1;
+        }
+
+        hdr = PICO_ZALLOC(sizeof(struct pico_websocket_header));
         hdr->opcode = WS_CONN_CLOSE;
         hdr->fin = WS_FIN_ENABLE;
         hdr->RSV1 = 0;
@@ -289,12 +296,6 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
         hdr->RSV3 = 0;
         hdr->mask = WS_MASK_ENABLE;
         masking_key = pico_rand();
-
-        if (reason_size + WS_STATUS_CODE_SIZE_IN_BYTES > WS_CONTROL_FRAME_MAX_SIZE)
-        {
-                dbg("Size of reason is too big to fit in close frame.\n");
-                return -1;
-        }
 
         if (reason && reason_size)
         {
@@ -306,6 +307,7 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
         if (ret < 0)
         {
                 dbg("Failed to write header for close frame.\n");
+                free(hdr);
                 return -1;
         }
 
@@ -314,6 +316,7 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
         if (ret < 0)
         {
                 dbg("Failed to write header for close frame.\n");
+                free(hdr);
                 return -1;
         }
 
@@ -330,6 +333,7 @@ static int send_close_frame(struct pico_websocket_client* client, uint16_t statu
                 ret = backend_write(client, reason, reason_size);
         }
 
+        free(hdr);
         return ret;
 }
 
@@ -378,6 +382,16 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         if (client->ssl_ctx)
             PICO_FREE(client->ssl_ctx);
 #endif
+
+        if (client->extensions)
+        {
+                PICO_FREE(client->extensions);
+        }
+
+        if (client->extension_arguments)
+        {
+                PICO_FREE(client->extension_arguments);
+        }
 
         PICO_FREE(client);
 
@@ -460,7 +474,6 @@ static void add_extensions_to_header(char* header, char* extensions)
 
 static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* client)
 {
-        /* TODO: review this building process */
         char* header;
         int header_size = 256;
 
@@ -505,8 +518,10 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
         if(ret < 0)
         {
                 dbg("Failed to send upgrade header.\n");
-                return -1;
+                ret = -1;
         }
+
+        free(header);
 
         return ret;
 }
@@ -539,8 +554,10 @@ static int ws_parse_upgrade_header(struct pico_websocket_client* client)
                 break;
         case HTTP_UNAUTH:
                 /* TODO */
+                free(line);
                 return -1;
         default:
+                free(line);
                 if (responseCode >= HTTP_MULTI_CHOICE && responseCode < HTTP_BAD_REQUEST)
                 {
                         /* REDIRECTION */
@@ -564,6 +581,7 @@ static int ws_parse_upgrade_header(struct pico_websocket_client* client)
                 }
         } while ( strlen(line) != 0 );
 
+        free(line);
         return 0;
 }
 
@@ -603,7 +621,6 @@ static void pico_websocket_client_send_pong(WSocket ws, struct pico_websocket_he
 
 static WSocket build_pico_websocket_client(void)
 {
-        /* TODO: solve memory leaks with a cleanup function */
         struct pico_websocket_client *client = PICO_ZALLOC(sizeof(struct pico_websocket_client));
 
         if (!client)
