@@ -377,14 +377,14 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
             client->fd = -1;
         }
 #ifdef SSL_WEBSOCKET
+        if (client->ssl_ctx)
+                wolfSSL_CTX_free(client->ssl_ctx);
+
         if (client->ssl)
         {
                 wolfSSL_shutdown(client->ssl);
                 wolfSSL_free(client->ssl);
         }
-
-        if (client->ssl_ctx)
-            wolfSSL_CTX_free(client->ssl_ctx);
 #endif
 
         if (client->extensions)
