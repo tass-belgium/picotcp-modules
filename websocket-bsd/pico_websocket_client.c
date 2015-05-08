@@ -652,12 +652,15 @@ static int determine_payload_length(struct pico_websocket_client* client, struct
                 break;
         default:
                 /* No extra reading required, size is already known */
+                ret = 1; /* Just so ret is not zero */
                 break;
         }
+
         if (ret < 0)
         {
                 return -1;
         }
+
         return payload_length;
 }
 
