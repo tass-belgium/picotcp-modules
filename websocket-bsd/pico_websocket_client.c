@@ -23,7 +23,7 @@
 #define WSS_PROTO_LEN                          6u
 
 
-#define HTTP_HEADER_LINE_SIZE                  50u
+#define HTTP_HEADER_LINE_SIZE                 64u 
 #define HTTP_RESPONSE_CODE_INDEX               9u
 #define WEBSOCKET_COMMON_HEADER_SIZE           (sizeof(struct pico_websocket_header))
 
@@ -380,11 +380,11 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
         if (client->ssl)
         {
                 wolfSSL_shutdown(client->ssl);
-                PICO_FREE(client->ssl);
+                wolfSSL_free(client->ssl);
         }
 
         if (client->ssl_ctx)
-            PICO_FREE(client->ssl_ctx);
+            wolfSSL_CTX_free(client->ssl_ctx);
 #endif
 
         if (client->extensions)
