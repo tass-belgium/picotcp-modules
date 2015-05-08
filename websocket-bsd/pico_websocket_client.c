@@ -393,6 +393,11 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client)
                 PICO_FREE(client->extension_arguments);
         }
 
+        if (client->uriKey.host)
+                PICO_FREE(client->uriKey.host);
+        if (client->uriKey.resource)
+                PICO_FREE(client->uriKey.resource);
+
         PICO_FREE(client);
 
         dbg("Client was succesfully closed.\n");
@@ -634,7 +639,7 @@ static WSocket build_pico_websocket_client(void)
 
 static int determine_payload_length(struct pico_websocket_client* client, struct pico_websocket_header *hdr)
 {
-        int ret;
+        int ret = -1;
         uint8_t payload_length = hdr->payload_length;
 
         switch(payload_length)
