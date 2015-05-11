@@ -764,9 +764,9 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                return NULL;
        }
 
-       if (wolfSSL_CTX_use_certificate_chain_buffer(client->ssl_ctx, ca_pem, ca_pem_len) != SSL_SUCCESS)
+       if (wolfSSL_CTX_load_verify_buffer(client->ssl_ctx, ca_pem, ca_pem_len, SSL_FILETYPE_PEM) != SSL_SUCCESS)
        {
-               dbg("Failed to load TLS certificate or private key!\n");
+               dbg("failed to load verify buffer!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
@@ -778,8 +778,6 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                return NULL;
        }
 
-       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_NONE, NULL);
-
        client->ssl = wolfSSL_new(client->ssl_ctx);
        if (client->ssl == NULL) {
                dbg("Failed to enable SSL!\n");
@@ -787,6 +785,9 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                return NULL;
        }
        wolfSSL_set_fd(client->ssl, client->fd);
+
+       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
+
 #endif
 
        if (pico_websocket_client_send_upgrade_header(client) <= 0) {
