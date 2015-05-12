@@ -757,7 +757,7 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
        }
 
 #ifdef SSL_WEBSOCKET
-       client->ssl_ctx = wolfSSL_CTX_new(wolfSSLv3_client_method());
+       client->ssl_ctx = wolfSSL_CTX_new(wolfTLSv1_2_client_method());
        if (!client->ssl_ctx) {
                dbg("Failed to create TLS context!\n");
                pico_websocket_client_cleanup(client);
@@ -787,6 +787,8 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
        wolfSSL_set_fd(client->ssl, client->fd);
 
        wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
+       /* The line below is needed for ECC keys using the secp256r1, development on this has been delayed */
+       /* wolfSSL_UseSupportedCurve(client->ssl, WOLFSSL_ECC_SECP256R1); */
 
 #endif
 
