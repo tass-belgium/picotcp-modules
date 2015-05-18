@@ -251,30 +251,6 @@ error:
         return -1;
 }
 
-/* TODO: this function is copied from pico_http_util.c, make http_util.c a common library or something to avoid code duplication */
-uint32_t pico_itoa(uint32_t port, char *ptr)
-{
-        uint32_t size = 0;
-        uint32_t index;
-
-        /* transform to from number to string [ in backwards ] */
-        while(port)
-        {
-                ptr[size] = (char)(port % 10 + '0');
-                port = port / 10;
-                size++;
-        }
-        /* invert positions */
-        for(index = 0; index < (size >> 1u); index++)
-        {
-                char c = ptr[index];
-                ptr[index] = ptr[size - index - 1];
-                ptr[size - index - 1] = c;
-        }
-        ptr[size] = '\0';
-        return size;
-}
-
 /* If close frame has a payload, the first two bytes in the payload are an unisgned int in network order. This is why we add WS_STATUS_CODE_SIZE_IN_BYTES to the reason_size when checking the size. */
 static int send_close_frame(struct pico_websocket_client* client, uint16_t status_code, void* reason, uint8_t reason_size)
 {
