@@ -5,12 +5,13 @@
 static int pico_rand_extract_seed(uint8_t* seed_buffer, int buffer_size);
 static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size);
 static int pico_rand_generate_block (uint8_t* buffer, int buffer_size);
+struct pico_rand_generator_state pico_rand_generator;
 
 /* Sets up the generator, loading the seed from persistent storage if possible*/
 int pico_rand_init(void) {
     int i = 0;
 
-    pico_rand_generator.key = PICO_ZALLOC(sizeof(uint8_t) * 32);
+    pico_rand_generator.key = PICO_ZALLOC(sizeof(uint8_t) * PICO_RAND_ENCRYPT_KEY_SIZE);
     pico_rand_generator.pool = PICO_ZALLOC(sizeof(Sha256) * PICO_RAND_POOL_COUNT); /* n pools of strings; in practice, hashes iteratively updated */
     pico_rand_generator.counter = PICO_ZALLOC(sizeof(struct pico_rand_counter_fortuna));
 
@@ -30,7 +31,6 @@ int pico_rand_init(void) {
 
     for (i = 0; i < PICO_RAND_POOL_COUNT; i++) {
         wc_InitSha256(&(pico_rand_generator.pool[i])); /* TODO right? What does this look like in assembly? */
-
     }
 
 	#ifdef PICO_RAND_SEED_PERSISTENT
