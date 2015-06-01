@@ -41,6 +41,7 @@ struct pico_rand_generator_state {
     Sha256* sha;
 
 };
+extern struct pico_rand_generator_state pico_rand_generator;
 
 /* For setting up the generator and feeding entropy */
 int pico_rand_init(void);

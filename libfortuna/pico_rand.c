@@ -7,6 +7,8 @@ static int pico_rand_reseed(uint8_t* seed, uint8_t seed_size);
 static int pico_rand_generate_block (uint8_t* buffer, int buffer_size);
 struct pico_rand_generator_state pico_rand_generator;
 
+struct pico_rand_generator_state pico_rand_generator = {};
+
 /* Sets up the generator, loading the seed from persistent storage if possible*/
 int pico_rand_init(void) {
     int i = 0;
