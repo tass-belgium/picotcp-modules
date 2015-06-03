@@ -196,13 +196,18 @@ void httpsServerCbk(uint16_t ev, struct pico_socket *s)
         }
     }
 
-    if((ev & PICO_SOCK_EV_CLOSE) || (ev & PICO_SOCK_EV_FIN))
+    if (ev & PICO_SOCK_EV_FIN) 
     {
-        server.wakeup(EV_HTTPS_CLOSE, (uint16_t)(serverEvent ? HTTPS_SERVER_ID : (client->connectionID)));
 		if (client && client->ssl_obj){ 
 			SSL_FREE(client->ssl_obj);
 			client->ssl_obj = NULL;
 		}
+    }
+
+    if(ev & PICO_SOCK_EV_CLOSE)
+    {
+        if (client)
+            server.wakeup(EV_HTTPS_CLOSE, (uint16_t)(serverEvent ? HTTPS_SERVER_ID : (client->connectionID)));
     }
 
     if(ev & PICO_SOCK_EV_ERR)
@@ -597,8 +602,10 @@ int pico_https_close(uint16_t conn)
 			client->ssl_obj=NULL;
 		}
 
-        if(client->state != HTTPS_CLOSED || !client->sck)
+        if(client->state != HTTPS_CLOSED || !client->sck) {
             pico_socket_close(client->sck);
+            client->sck = NULL;
+        }
 
         PICO_FREE(client);
         return HTTPS_RETURN_OK;
