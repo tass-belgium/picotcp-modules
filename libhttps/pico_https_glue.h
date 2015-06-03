@@ -16,11 +16,11 @@
 #include "pico_tree.h"
 
 // Check configuration sanity. Warn where appropriate
-#if !(defined(LIBHTTPS_USE_POLARSSL) || defined(LIBHTTPS_USE_CYASSL))
-    #error "Please define either LIBHTTPS_USE_POLARSSL or LIBHTTPS_USE_CYASSL"
-#elif (defined(LIBHTTPS_USE_POLARSSL) && defined(LIBHTTPS_USE_CYASSL))
-    #warning "Both LIBHTTPS_USE_POLARSSL and LIBHTTPS_USE_CYASSL are defined. Defaulting to PolarSSL!"
-    #undef LIBHTTPS_USE_CYASSL
+#if !(defined(LIBHTTPS_USE_POLARSSL) || defined(LIBHTTPS_USE_WOLFSSL))
+    #error "Please define either LIBHTTPS_USE_POLARSSL or LIBHTTPS_USE_WOLFSSL"
+#elif (defined(LIBHTTPS_USE_POLARSSL) && defined(LIBHTTPS_USE_WOLFSSL))
+    #warning "Both LIBHTTPS_USE_POLARSSL and LIBHTTPS_USE_WOLFSSL are defined. Defaulting to PolarSSL!"
+    #undef LIBHTTPS_USE_WOLFSSL
 #endif
 
 #if defined(LIBHTTPS_USE_POLARSSL)
@@ -47,21 +47,21 @@
     int pico_polar_recv(void * pico_sock, unsigned char * buf, size_t sz);         
     int pico_polar_send(void * pico_sock, const unsigned char * buf, size_t sz);
 
-#elif defined(LIBHTTPS_USE_CYASSL)
-    // Includes for CyaSSL
-    #include "cyassl/ssl.h"
+#elif defined(LIBHTTPS_USE_WOLFSSL)
+    // Includes for wolfSSL
+    #include "wolfssl/ssl.h"
 
-    // Function bindings for CyaSSL
-    #define SSL_CONTEXT     CYASSL
-    #define SSL_WRITE       CyaSSL_write
-    #define SSL_READ        CyaSSL_read
-    int SSL_HANDSHAKE(CYASSL* ssl); // We need to tweak retvals, can't directly map
-    #define SSL_FREE        CyaSSL_free
-    #define SSL_SHUTDOWN    CyaSSL_shutdown
+    // Function bindings for wolfSSL
+    #define SSL_CONTEXT     WOLFSSL
+    #define SSL_WRITE       wolfSSL_write
+    #define SSL_READ        wolfSSL_read
+    int SSL_HANDSHAKE(WOLFSSL* ssl); // We need to tweak retvals, can't directly map
+    #define SSL_FREE        wolfSSL_free
+    #define SSL_SHUTDOWN    wolfSSL_shutdown
 
-    // Callback signatures specific to CyaSSL
-    int pico_cyassl_recv(CYASSL *ssl, char *buf, int sz, void *ctx);
-    int pico_cyassl_send(CYASSL *ssl, char *buf, int sz, void *ctx);
+    // Callback signatures specific to wolfSSL
+    int pico_wolfssl_recv(WOLFSSL *ssl, char *buf, int sz, void *ctx);
+    int pico_wolfssl_send(WOLFSSL *ssl, char *buf, int sz, void *ctx);
 
 #endif
 

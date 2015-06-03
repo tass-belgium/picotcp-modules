@@ -12,12 +12,12 @@ ifeq ($(UNIT_TEST),1)
   CFLAGS+=-DUNIT_TEST
 endif
 
-all: $(PREFIX)/lib/libwebsocket.a
+all: $(PREFIX)/lib/libpicowebsocket.a
 
 %.o: %.c
 	$(CC) -c $(CFLAGS) -o $@ $<
 
-$(PREFIX)/lib/libwebsocket.a: $(OBJS)
+$(PREFIX)/lib/libpicowebsocket.a: $(OBJS)
 	cp *.h $(PREFIX)/include
 	@$(CROSS_COMPILE)ar cru $@ $(OBJS)
 	@$(CROSS_COMPILE)ranlib $@
