@@ -96,8 +96,10 @@ static int pico_websocket_client_cleanup(struct pico_websocket_client* client);
 #ifdef SSL_WEBSOCKET
 extern unsigned char ssl_cert_pem[];
 extern unsigned int ssl_cert_pem_len;
+/*
 extern unsigned char ca_pem[];
 extern unsigned int ca_pem_len;
+*/
 
 static int backend_read(WSocket s, void *data, int len)
 {
@@ -463,7 +465,7 @@ static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* cl
         int header_size = 256;
 
         header = PICO_ZALLOC(header_size);
-        strcpy(header, "GET /chat HTTP/1.1\r\n");
+        strcpy(header, "GET / HTTP/1.1\r\n");
         strcat(header, "Host: ");
         strcat(header, client->uriKey.host);
 
@@ -739,13 +741,15 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                pico_websocket_client_cleanup(client);
                return NULL;
        }
-
+       
+       /*
        if (wolfSSL_CTX_load_verify_buffer(client->ssl_ctx, ca_pem, ca_pem_len, SSL_FILETYPE_PEM) != SSL_SUCCESS)
        {
                dbg("failed to load verify buffer!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
+       */
 
        if ((wolfSSL_CTX_use_certificate_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) ||
            wolfSSL_CTX_use_PrivateKey_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) {
@@ -753,6 +757,9 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                pico_websocket_client_cleanup(client);
                return NULL;
        }
+       
+       //wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
+       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_NONE, NULL);
 
        client->ssl = wolfSSL_new(client->ssl_ctx);
        if (client->ssl == NULL) {
@@ -762,9 +769,8 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
        }
        wolfSSL_set_fd(client->ssl, client->fd);
 
-       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
-       /* The line below is needed for ECC keys using the secp256r1, development on this has been delayed */
-       /* wolfSSL_UseSupportedCurve(client->ssl, WOLFSSL_ECC_SECP256R1); */
+       /* The line below is needed for ECC keys using the secp256r1 */
+       wolfSSL_UseSupportedCurve(client->ssl, WOLFSSL_ECC_SECP256R1);
 
 #endif
 
@@ -884,7 +890,7 @@ int ws_read(WSocket ws, void *data, int size)
  * The only valid values for rsv bits are RSV_ENABLE (1) and RSV_DISABLE (0).
  * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
  */
-int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
+int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv, uint8_t opcode)
 {
     struct pico_websocket_header hdr;
     uint32_t masking_key = pico_rand();
@@ -915,7 +921,7 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
         hdr.RSV2 = rsv[1];
         hdr.RSV3 = rsv[2];
     }
-    hdr.opcode = WS_TEXT_FRAME;
+    hdr.opcode = opcode;
     hdr.mask = WS_MASK_ENABLE;
     hdr.fin = WS_FIN_ENABLE;
     hdr.payload_length = size;
@@ -949,6 +955,11 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv)
 
 int ws_write(WSocket ws, void *data, int size)
 {
-    return ws_write_rsv(ws, data, size, NULL);
+    return ws_write_rsv(ws, data, size, NULL, WS_TEXT_FRAME);
+}
+
+int ws_write_data(WSocket ws, void *data, int size)
+{
+    return ws_write_rsv(ws, data, size, NULL, WS_BINARY_FRAME);
 }
 
