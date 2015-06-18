@@ -881,6 +881,7 @@ int ws_read(WSocket ws, void *data, int size)
 
 /**
  * This function will sent data to the websocket server.
+ * What kind of data is being sent, can be selected with the opcode parameter.
  * The difference between this function and ws_write() is that you can provide values for the rsv bits
  * used in the header sent to the server.
  * @param ws This is the websocket returned by ws_connect()
@@ -889,6 +890,7 @@ int ws_read(WSocket ws, void *data, int size)
  * @param rsv These are the values of the rsv bits. This is an 3-element array laid out like this:
  * rsv = [ rsv1, rsv2, rsv3 ].
  * The only valid values for rsv bits are RSV_ENABLE (1) and RSV_DISABLE (0).
+ * @param opcode This is the opcode you want to send with the websocket header. This can be one of the opcodes found in pico_websocket_util.h . Normally you want WS_TEXT_FRAME or WS_BINARY_FRAME.
  * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
  */
 int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv, uint8_t opcode)
@@ -945,7 +947,7 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv, uint8_t opcode)
 
 
 /**
- * This function will sent data to the websocket server.
+ * This function will sent text data to the websocket server.
  * The difference between this function and ws_write_rsv() is that you can't provide values for the rsv bits used in the header sent to the server.
  * The RSV bits in the header will be zero.
  * @param ws This is the websocket returned by ws_connect()
@@ -953,12 +955,20 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv, uint8_t opcode)
  * @param size This is the size of the data you want to send.
  * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
  */
-
 int ws_write(WSocket ws, void *data, int size)
 {
     return ws_write_rsv(ws, data, size, NULL, WS_TEXT_FRAME);
 }
 
+/**
+ * This function will sent binary data to the websocket server.
+ * The difference between this function and ws_write_rsv() is that you can't provide values for the rsv bits used in the header sent to the server.
+ * The RSV bits in the header will be zero.
+ * @param ws This is the websocket returned by ws_connect()
+ * @param data This is the data you want to send.
+ * @param size This is the size of the data you want to send.
+ * @return Will return < 0 if an error occured. Will return number of bytes sent if succesfull.
+ */
 int ws_write_data(WSocket ws, void *data, int size)
 {
     return ws_write_rsv(ws, data, size, NULL, WS_BINARY_FRAME);
