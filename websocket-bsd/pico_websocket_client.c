@@ -465,7 +465,9 @@ static char* build_pico_websocket_upgradeHeader(struct pico_websocket_client* cl
         int header_size = 256;
 
         header = PICO_ZALLOC(header_size);
-        strcpy(header, "GET / HTTP/1.1\r\n");
+        strcpy(header, "GET ");
+        strcat(header, client->uriKey.resource);
+        strcat(header, " HTTP/1.1\r\n");
         strcat(header, "Host: ");
         strcat(header, client->uriKey.host);
 
