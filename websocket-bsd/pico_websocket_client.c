@@ -828,8 +828,9 @@ int ws_read(WSocket ws, void *data, int size)
         }
 
         while (1 < 2) {
-            while (WEBSOCKET_COMMON_HEADER_SIZE != backend_read(ws, &hdr, WEBSOCKET_COMMON_HEADER_SIZE)) { 
-                /* Busy loop: actually blocking on backend_read */
+            if (WEBSOCKET_COMMON_HEADER_SIZE != backend_read(ws, &hdr, WEBSOCKET_COMMON_HEADER_SIZE)) {
+                    /* Websocket header could not be read */
+                    return -1;
             }
     
             payload_length = determine_payload_length(ws, &hdr);
