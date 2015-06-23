@@ -94,12 +94,8 @@ static int pico_websocket_mask_data(uint32_t masking_key, uint8_t* data, int siz
 static int pico_websocket_client_cleanup(struct pico_websocket_client* client);
 
 #ifdef SSL_WEBSOCKET
-extern unsigned char ssl_cert_pem[];
-extern unsigned int ssl_cert_pem_len;
-/*
 extern unsigned char ca_pem[];
 extern unsigned int ca_pem_len;
-*/
 
 static int backend_read(WSocket s, void *data, int len)
 {
@@ -744,24 +740,14 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
                return NULL;
        }
        
-       /*
        if (wolfSSL_CTX_load_verify_buffer(client->ssl_ctx, ca_pem, ca_pem_len, SSL_FILETYPE_PEM) != SSL_SUCCESS)
        {
                dbg("failed to load verify buffer!\n");
                pico_websocket_client_cleanup(client);
                return NULL;
        }
-       */
-
-       if ((wolfSSL_CTX_use_certificate_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) ||
-           wolfSSL_CTX_use_PrivateKey_buffer(client->ssl_ctx, ssl_cert_pem, ssl_cert_pem_len, SSL_FILETYPE_PEM) == 0) {
-               dbg("Failed to load TLS certificate or private key!\n");
-               pico_websocket_client_cleanup(client);
-               return NULL;
-       }
        
-       //wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
-       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_NONE, NULL);
+       wolfSSL_CTX_set_verify(client->ssl_ctx, SSL_VERIFY_PEER, NULL);
 
        client->ssl = wolfSSL_new(client->ssl_ctx);
        if (client->ssl == NULL) {
