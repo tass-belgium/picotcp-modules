@@ -16,7 +16,7 @@ x509_crt srvcert;
 pk_context pkey;
 
 // GLOBAL init
-void pico_https_ssl_init(const unsigned char* certificate_buffer,
+int pico_https_ssl_init(const unsigned char* certificate_buffer,
                          const unsigned int   certificate_buffer_size,
                          const unsigned char* privkey_buffer,
                          const unsigned int   privkey_buffer_size){
@@ -32,6 +32,8 @@ void pico_https_ssl_init(const unsigned char* certificate_buffer,
     // This isn't how entropy works. This isn't how any of this works.
     ctr_drbg_init( &ctr_drbg, entropy_func, &entropy, (const unsigned char *) "lalala", 6 );
 
+    // TODO: actually check the return values of all above functions!
+    return 0;
 }
 
 /* PER-CONNECTION initialisation */

@@ -70,7 +70,7 @@
  */
 
 // General setup (initialize entropy, load certs, called ONCE)
-void pico_https_ssl_init(const unsigned char* certificate_buffer,
+int pico_https_ssl_init(const unsigned char* certificate_buffer,
                          const unsigned int   certificate_buffer_size,
                          const unsigned char* privkey_buffer,
                          const unsigned int   privkey_buffer_size);

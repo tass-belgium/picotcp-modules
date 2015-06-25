@@ -6,6 +6,7 @@
 */
 
 #include "pico_https_glue.h" // Generic config
+#include "wolfssl/ssl.h"
 
 #ifdef LIBHTTPS_USE_WOLFSSL // This all makes no sense otherwise
 
@@ -13,17 +14,24 @@
 WOLFSSL_CTX* SSL_Context;
 
 // GLOBAL init
-void pico_https_ssl_init(const unsigned char* certificate_buffer,
+int pico_https_ssl_init(const unsigned char* certificate_buffer,
                          const unsigned int   certificate_buffer_size,
                          const unsigned char* privkey_buffer,
                          const unsigned int   privkey_buffer_size){
     wolfSSL_Init();
 
     SSL_Context = wolfSSL_CTX_new( wolfTLSv1_server_method() );
+    if (!SSL_Context)
+        return -1;
+
     wolfSSL_SetIORecv(SSL_Context, pico_wolfssl_recv);
     wolfSSL_SetIOSend(SSL_Context, pico_wolfssl_send);
-    wolfSSL_CTX_use_certificate_buffer( SSL_Context, certificate_buffer, certificate_buffer_size, SSL_FILETYPE_PEM );
-    wolfSSL_CTX_use_PrivateKey_buffer( SSL_Context, privkey_buffer, privkey_buffer_size, SSL_FILETYPE_PEM );
+    if (wolfSSL_CTX_use_certificate_buffer( SSL_Context, certificate_buffer, certificate_buffer_size, SSL_FILETYPE_PEM ) != SSL_SUCCESS)
+        return -1;
+    if (wolfSSL_CTX_use_PrivateKey_buffer( SSL_Context, privkey_buffer, privkey_buffer_size, SSL_FILETYPE_PEM ) != SSL_SUCCESS)
+        return -1;
+
+    return 0;
 }
 
 /* PER-CONNECTION initialisation */
