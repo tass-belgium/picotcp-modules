@@ -23,7 +23,7 @@
 #define WSS_PROTO_LEN                          6u
 
 
-#define HTTP_HEADER_LINE_SIZE                 64u 
+#define HTTP_HEADER_LINE_SIZE                  128u
 #define HTTP_RESPONSE_CODE_INDEX               9u
 #define WEBSOCKET_COMMON_HEADER_SIZE           (sizeof(struct pico_websocket_header))
 
@@ -416,7 +416,7 @@ static void ws_read_http_header_line(struct pico_websocket_client* client, char 
         char c;
         uint32_t index = 0;
 
-        while(read_char_from_client_socket(client, &c) > 0 && c != '\r' && index < line_len)
+        while(read_char_from_client_socket(client, &c) > 0 && c != '\r' && index < (line_len - 1))
         {
                 line[index++] = c;
         }
