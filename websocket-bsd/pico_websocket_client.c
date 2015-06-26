@@ -660,6 +660,7 @@ static int determine_payload_length(struct pico_websocket_client* client, struct
 
 WSocket ws_connect(char *uri, char *proto, char *ext)
 {
+
         int ret;
         WSocket client;
         struct addrinfo *res, hint;
@@ -688,13 +689,14 @@ WSocket ws_connect(char *uri, char *proto, char *ext)
 
 
        if (pico_getaddrinfo(client->uriKey.host, NULL, NULL, &res) < 0) {
+                pico_websocket_client_cleanup(client);
                 dbg("Cannot resolve URI.\n");
                 return NULL;
        }
        memcpy(&client->addr, res->ai_addr, sizeof(struct sockaddr_in));
-       freeaddrinfo(res);
+       pico_freeaddrinfo(res);
 
-       client->addr.sin_port = htons(client->uriKey.port);
+       client->addr.sin_port = short_be(client->uriKey.port);
 
        client->fd = pico_newsocket(AF_INET, SOCK_STREAM, 0);
        if (client->fd < 0) {
@@ -922,7 +924,7 @@ int ws_write_rsv(WSocket ws, void *data, int size, uint8_t *rsv, uint8_t opcode)
     if ( backend_write(ws, &hdr, sizeof(hdr)) < 0)
         return -1;
     if (hdr.payload_length == WS_16_BIT_PAYLOAD_LENGTH_INDICATOR) {
-        uint16_t p_size = htons(size);
+        uint16_t p_size = short_be(size);
         if (backend_write(ws, &p_size, sizeof(uint16_t)) < 0)
             return -1;
     }
