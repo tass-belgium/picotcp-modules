@@ -411,12 +411,12 @@ static int read_char_from_client_socket(WSocket ws, char *c)
 }
 
 /* Note: "\r\n" is not considered a line, so the last line of a http message will give back strlen(line) == 0 */
-static void ws_read_http_header_line(struct pico_websocket_client* client, char *line)
+static void ws_read_http_header_line(struct pico_websocket_client* client, char *line, int line_len)
 {
         char c;
         uint32_t index = 0;
 
-        while(read_char_from_client_socket(client, &c) > 0 && c != '\r')
+        while(read_char_from_client_socket(client, &c) > 0 && c != '\r' && index < line_len)
         {
                 line[index++] = c;
         }
@@ -512,7 +512,7 @@ static int pico_websocket_client_send_upgrade_header(struct pico_websocket_clien
 }
 
 
-static int parse_server_http_respone_line(char* line, char* colon_ptr)
+static int parse_server_http_response_line(char* line, char* colon_ptr)
 {
         /* TODO */
         /* Don't forgot to check for the pico_websocket_client_handshake options */
@@ -526,7 +526,7 @@ static int ws_parse_upgrade_header(struct pico_websocket_client* client)
         uint16_t responseCode = -1;
         int ret;
 
-        ws_read_http_header_line(client, line);
+        ws_read_http_header_line(client, line, HTTP_HEADER_LINE_SIZE);
 
         responseCode = (uint16_t)((line[HTTP_RESPONSE_CODE_INDEX] - '0') * 100 +
                                   (line[HTTP_RESPONSE_CODE_INDEX + 1] - '0') * 10 +
@@ -554,11 +554,11 @@ static int ws_parse_upgrade_header(struct pico_websocket_client* client)
 
         /* Response code was OK, validate rest of the response */
         do{
-                ws_read_http_header_line(client, line);
+                ws_read_http_header_line(client, line, HTTP_HEADER_LINE_SIZE);
                 colon_ptr = strstr(line, ":");
                 if (colon_ptr != NULL)
                 {
-                        ret = parse_server_http_respone_line(line, colon_ptr);
+                        ret = parse_server_http_response_line(line, colon_ptr);
                         if (ret < 0)
                         {
                                 /* TODO: cancel everything */
