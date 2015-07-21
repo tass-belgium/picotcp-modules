@@ -614,6 +614,9 @@ static WSocket build_pico_websocket_client(void)
                 return NULL;
         }
 
+        /* Set fd to an invalid value, no socket opened yet */
+        client->fd = -1;
+
         return client;
 }
 
