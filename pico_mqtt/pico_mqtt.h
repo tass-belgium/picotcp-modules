@@ -46,15 +46,10 @@ void pico_mqtt_unsubscribe(struct pico_mqtt* const mqtt, const char* topic, cons
 // free custom data types
 void pico_mqtt_free_message(struct pico_mqtt_message * const message);
 void pico_mqtt_free_data(struct pico_mqtt_data * const data);
-void pico_mqtt_free_string(struct pico_mqtt_string * const string);
 
 // create and destroy custom data types
-pico_mqtt_string pico_mqtt_create_string(const char* string);
-void pico_mqtt_destroy_string(pico_mqtt_string string);
 pico_mqtt_data pico_mqtt_create_data(const void* data, const uint16_t length);
-void pico_mqtt_destroy_data(pico_mqtt_data data);
-pico_mqtt_message pico_mqtt_create_message(const char* topic, const uint8_t* data, const uint16_t length);
-void pico_mqtt_destroy_message(pico_mqtt_message message);
+pico_mqtt_message pico_mqtt_create_message(const char* topic, const void* data, const uint16_t length);
 
 // get the last error according to the documentation (MQTT specification)
 const char* pico_mqtt_get_normative_error( const struct pico_mqtt* mqtt);
@@ -74,11 +69,6 @@ struct pico_mqtt_message{
 	uint8_t quality_of_service	: 2;
 	uint8_t retain				: 1;
 	uint16_t message_id;
-};
-
-struct pico_mqtt_string{
-	uint16_t length;
-	char * string;
 };
 
 struct pico_mqtt_data{
