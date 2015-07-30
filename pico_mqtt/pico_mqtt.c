@@ -73,7 +73,9 @@ static struct pico_mqtt_topic{
 };
 
 static struct pico_mqtt{
-	struct pico_socket * tcp_socket;
+	int socket;
+	uint8_t tls_connections;
+	char * URI;
 	???* queue topics;
 	struct pico_mqtt* this;
 
