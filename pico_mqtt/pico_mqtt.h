@@ -13,6 +13,7 @@
 #define MAXIMUM_MESSAGE_SIZE 500
 #define MAXIMUM_TOPIC_SUBSCRIPTIONS 10
 #define MAXIMUM_ACTIVE_MESSAGES 10
+// the memory used as a buffer, not for storing internal state or sockets
 #define MAXIMUM_MEMORY_USE 2048
 
 /**
@@ -20,7 +21,7 @@
 **/
 
 // allocate memory for the pico_mqtt object and freeing it
-struct pico_mqtt* pico_mqtt_create( const char* uri);
+struct pico_mqtt* pico_mqtt_create( const char* uri, uint32_t timeout);
 void pico_mqtt_destory(struct pico_mqtt** const mqtt);
 
 // connect to the server and disconnect again
