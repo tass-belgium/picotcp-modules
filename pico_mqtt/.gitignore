@@ -1,0 +1,4 @@
+*.out
+*.o
+./tests/check/*/
+./tests/check/*.*
