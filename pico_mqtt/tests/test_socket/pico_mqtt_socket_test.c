@@ -6,6 +6,8 @@
 
 START_TEST(tcp_socket_create)
 {
+	struct pico_mqtt_socket* dummy = pico_mqtt_connection_open( NULL, 0);
+	((int)dummy->descriptor)++;
 	int socketfd = socket(AF_INET, SOCK_STREAM, 0);
 	ck_assert_msg(socketfd != -1, "Error while creating the socket");
 }
