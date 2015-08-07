@@ -24,6 +24,7 @@ static struct addrinfo lookup_configuration( void );
 /* create pico mqtt socket and connect to the URI, returns NULL on error*/
 struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, uint32_t timeout){
 	return connection_open( URI );
+	timeout++;
 }
 
 /* read data from the socket, return the number of bytes read */
@@ -33,7 +34,15 @@ int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffe
 int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, uint16_t count, uint32_t timeout);
 
 /* close pico mqtt socket, return -1 on error */
-int pico_mqtt_connection_close( struct pico_mqtt_socket* socket);
+int pico_mqtt_connection_close( struct pico_mqtt_socket* socket){
+	int error = 0;
+	if( socket == NULL )
+		return -1;
+	
+	error =  close(socket->descriptor);
+	free(socket);
+	return error;
+}
 
 /**
 * private function implementation
@@ -41,12 +50,15 @@ int pico_mqtt_connection_close( struct pico_mqtt_socket* socket);
 
 static struct pico_mqtt_socket* connection_open( const char* URI ){
 	const struct addrinfo* addres = resolve_URI( URI );
+	struct pico_mqtt_socket* socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
+
 	if(addres == NULL){
 		return 0;
 	}
 
-	struct pico_mqtt_socket* socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
 	socket->descriptor = socket_connect (addres);
+
+	freeaddrinfo((struct addrinfo*) addres); /* check if this is the correct way todo this */
 
 	if(socket->descriptor == -1){
 		free(socket);
@@ -58,11 +70,11 @@ static struct pico_mqtt_socket* connection_open( const char* URI ){
 
 /* return the socket file descriptor */
 static int socket_connect( const struct addrinfo* addres ){
-	struct addrinfo current_addres;
+	const struct addrinfo *current_addres;
 	int socket_descriptor;
 	int result = 0;
 
-	for (current_addres = *addres; current_addres != NULL; current_addres = current_addres->ai_next) {
+	for (current_addres = addres; current_addres != NULL; current_addres = current_addres->ai_next) {
 		socket_descriptor = socket(current_addres->ai_family, current_addres->ai_socktype, current_addres->ai_protocol);
 	
 		if (socket_descriptor == -1)
@@ -104,20 +116,20 @@ static struct addrinfo lookup_configuration( void ){
 	hints.ai_protocol = 0; /*allow any protocol //TODO check for restrictions */
 	
 	/* clear the flags before setting them*/
-	flags = 0;
+	*flags = 0;
 
 	/* set the appropriate flags*/
 #if (PICO_MQTT_DNS_LOOKUP == 1)
-	flags |= AI_NUMERICHOST;
+	*flags |= AI_NUMERICHOST;
 #endif /*(PICO_MQTT_DNS_LOOKUP = 1)*/
 	/* AI_PASSIVE unsed, intend to use address for a connect*/
 	/* AI_NUMERICSERV unsed, //TODO check for this restriction*/
 #if (PICO_MQTT_HOSTNAME_LOOKUP ==1)
-	flags |= IA_CANONNAME;
+	*flags |= IA_CANONNAME;
 #endif /*(PICO_MQTT_HOSTNAME_LOOKUP ==1)*/
 	/*AI_ADDRCONFIG unsed, intedded to use IPv6 of mapped IPv4 addresses*/
-	flags |= AI_V4MAPPED; /* map IPv4 addresses to IPv6 addresses*/
-	flags |= AI_ALL; /* return both IPv4 and IPv6 addresses*/
+	*flags |= AI_V4MAPPED; /* map IPv4 addresses to IPv6 addresses*/
+	*flags |= AI_ALL; /* return both IPv4 and IPv6 addresses*/
 
 	/* set the unused variables to 0 */
 	hints.ai_addrlen = 0;
