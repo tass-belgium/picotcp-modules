@@ -8,22 +8,23 @@
 #include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <poll.h>
 
 /* enable dns lookup or only allow IP addresses*/
 #define PICO_MQTT_DNS_LOOKUP 1
 
 struct pico_mqtt_socket;
 
-/* create pico mqtt socket and connect to the URI, returns -1 on error */
-struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, uint32_t timeout);
+/* create pico mqtt socket and connect to the URI, returns NULL on error*/ 
+struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, int timeout);
 
-/* read data from the socket, return the number of bytes read */
-int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffer, uint16_t count, uint32_t timeout);
+/* read data from the socket, return the number of bytes read */ 
+int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count, int timeout);
 
-/* write data to the socket, return the number of bytes written */
-int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, uint16_t count, uint32_t timeout);
+/* write data to the socket, return the number of bytes written*/ 
+int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, const uint32_t count, int timeout); 
 
-/* close pico mqtt socket, return -1 on error*/
-int pico_mqtt_connection_close( struct pico_mqtt_socket* socket );
+/* close pico mqtt socket, return -1 on error */ 
+int pico_mqtt_connection_close( struct pico_mqtt_socket* socket);
 
 #endif
