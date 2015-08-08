@@ -13,6 +13,7 @@ struct pico_mqtt_socket{
 **/
 
 static struct pico_mqtt_socket* connection_open( const char* URI );
+static int connection_read(struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count);
 static const struct addrinfo* resolve_URI( const char* URI );
 static int socket_connect( const struct addrinfo* addresses );
 static struct addrinfo lookup_configuration( void );
@@ -22,16 +23,46 @@ static struct addrinfo lookup_configuration( void );
 **/
 
 /* create pico mqtt socket and connect to the URI, returns NULL on error*/
-struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, uint32_t timeout){
+struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, int timeout){
+	uint32_t temp = timeout;
+	temp++;
 	return connection_open( URI );
-	timeout++;
 }
 
 /* read data from the socket, return the number of bytes read */
-int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffer, uint16_t count, uint32_t timeout);
+int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count, int timeout){
+	struct pollfd poll_options;
+	int result;
+	
+	if(socket == NULL){
+		return -1; /*//TODO set errno */
+	}
+
+	poll_options.fd = socket->descriptor;
+	poll_options.events = 0;
+	poll_options.events |= POLLIN; /* wait until their is data to read*/
+	poll_options.events |= POLLPRI; /* wait until their is urgent data to read*/
+	poll_options.revents = 0;
+
+	result = poll(&poll_options, 1, timeout);
+	if(result < 0){ /* error */
+		return -1;
+	}
+
+	if(result == 0){ /* timeout */
+		return 0;
+	}
+
+	if(result > 1){ /* implementation error, only 1 fd was passed*/
+		return -1;
+	}
+
+	result =  connection_read(socket, read_buffer, count);
+	return result;
+}
 
 /* write data to the socket, return the number of bytes written*/
-int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, uint16_t count, uint32_t timeout);
+int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, const uint32_t count, int timeout);
 
 /* close pico mqtt socket, return -1 on error */
 int pico_mqtt_connection_close( struct pico_mqtt_socket* socket){
@@ -138,4 +169,8 @@ static struct addrinfo lookup_configuration( void ){
 	hints.ai_next = NULL;
 
 	return hints;
+}
+
+static int connection_read(struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count){
+	return read(socket->descriptor, read_buffer, count);
 }
