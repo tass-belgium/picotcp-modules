@@ -62,7 +62,10 @@ int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffe
 }
 
 /* write data to the socket, return the number of bytes written*/
-int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, const uint32_t count, int timeout);
+int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, const uint32_t count, int timeout){
+	timeout++; /* to avoid unused error */
+	return write(socket->descriptor, write_buffer, count);
+}
 
 /* close pico mqtt socket, return -1 on error */
 int pico_mqtt_connection_close( struct pico_mqtt_socket* socket){
