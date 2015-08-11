@@ -1,0 +1,3 @@
+[submodule "pico_mqtt/tests/test_servers/paho_conformance_testing"]
+	path = pico_mqtt/tests/test_servers/paho_conformance_testing
+	url = git://git.eclipse.org/gitroot/paho/org.eclipse.paho.mqtt.testing.git
