@@ -29,21 +29,21 @@
 
 struct pico_http_header
 {
-    uint16_t responseCode;                  /* http response */
+    uint16_t response_code;                  /* http response */
     char *location;                                     /* if redirect is reported */
-    uint32_t contentLengthOrChunk;    /* size of the message */
-    uint8_t transferCoding;                 /* chunked or full */
+    uint32_t content_length_or_chunk;    /* size of the message */
+    uint8_t transfer_coding;                 /* chunked or full */
 
 };
 
 int pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
-int32_t pico_http_client_sendHeader(uint16_t conn, char *header, uint8_t hdr);
+int32_t pico_http_client_send_header(uint16_t conn, char *header, uint8_t hdr);
 
-struct pico_http_header *pico_http_client_readHeader(uint16_t conn);
-struct pico_http_uri *pico_http_client_readUriData(uint16_t conn);
-char *pico_http_client_buildHeader(const struct pico_http_uri *uriData);
+struct pico_http_header *pico_http_client_read_header(uint16_t conn);
+struct pico_http_uri *pico_http_client_read_uri_data(uint16_t conn);
+char *pico_http_client_build_header(const struct pico_http_uri *uriData);
 
-int32_t pico_http_client_readData(uint16_t conn, char *data, uint16_t size);
+int32_t pico_http_client_read_data(uint16_t conn, char *data, uint16_t size);
 int pico_http_client_close(uint16_t conn);
 
 #endif /* PICO_HTTP_CLIENT_H_ */
