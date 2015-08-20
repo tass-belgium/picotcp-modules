@@ -1,3 +1,7 @@
+#include <sys/time.h>
+#include <stdint.h>
+#include <stdlib.h>
+
 /**
 * Program settings
 **/
@@ -17,6 +21,24 @@
 #define MAXIMUM_MEMORY_USE 2048
 
 /**
+* Data Structures
+**/
+
+struct pico_mqtt_data{
+	uint32_t length;
+	void * data;
+};
+
+struct pico_mqtt_message{
+	struct pico_mqtt_data data;
+	char * topic;
+	uint8_t duplicate			: 1;
+	uint8_t quality_of_service	: 2;
+	uint8_t retain				: 1;
+	uint16_t message_id;
+};
+
+/**
 * Public Function Prototypes
 **/
 
@@ -34,10 +56,10 @@ int pico_mqtt_ping( struct pico_mqtt* const mqtt, const uint32_t timeout );
 
 // receive one or multiple messages or publis a message
 int pico_mqtt_receive(struct pico_mqtt* const mqtt, uint32_t timeout);
-void pico_mqtt_publish(struct pico_mqtt* const mqtt, const pico_mqtt_message message, const uint8_t quality_of_service, const uint32_t timeout);
+void pico_mqtt_publish(struct pico_mqtt* const mqtt, const struct pico_mqtt_message message, const uint8_t quality_of_service, const uint32_t timeout);
 
 //subscribe to a topic (or multiple topics) and unsubscribe
-int pico_mqtt_subscribe(struct pico_mqtt* const mqtt, const char* topic, const uint8_t quality_of_service, const uint32_t timeout, const void (*callback)(struct pico_mqtt_message)); //return errors, qos is provided in message upon receive
+int pico_mqtt_subscribe(struct pico_mqtt* const mqtt, const char* topic, const uint8_t quality_of_service, const uint32_t timeout); //return errors, qos is provided in message upon receive
 void pico_mqtt_unsubscribe(struct pico_mqtt* const mqtt, const char* topic, const uint32_t timeout);
 
 /**
@@ -49,30 +71,14 @@ void pico_mqtt_free_message(struct pico_mqtt_message * const message);
 void pico_mqtt_free_data(struct pico_mqtt_data * const data);
 
 // create and destroy custom data types
-pico_mqtt_data pico_mqtt_create_data(const void* data, const uint16_t length);
-pico_mqtt_message pico_mqtt_create_message(const char* topic, const void* data, const uint16_t length);
+struct pico_mqtt_data pico_mqtt_create_data(const void* data, const uint16_t length);
+struct pico_mqtt_message pico_mqtt_create_message(const char* topic, const void* data, const uint16_t length);
 
 // get the last error according to the documentation (MQTT specification)
-const char* pico_mqtt_get_normative_error( const struct pico_mqtt* mqtt);
-const uint32_t pico_mqtt_get_error_documentation_line( const struct pico_mqtt* mqtt);
+char* pico_mqtt_get_normative_error( const struct pico_mqtt* mqtt);
+uint32_t pico_mqtt_get_error_documentation_line( const struct pico_mqtt* mqtt);
 
 // get the protocol version
 const char* pico_mqtt_get_protocol_version( void );
 
-/**
-* Data Structures
-**/
 
-struct pico_mqtt_message{
-	struct pico_mqtt_data data;
-	char * topic;
-	uint8_t duplicate			: 1;
-	uint8_t quality_of_service	: 2;
-	uint8_t retain				: 1;
-	uint16_t message_id;
-};
-
-struct pico_mqtt_data{
-	uint16_t length;
-	void * data;
-}
