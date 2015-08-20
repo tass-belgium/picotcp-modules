@@ -10,6 +10,13 @@
 #include <unistd.h>
 #include <poll.h>
 
+#include <errno.h>
+#include <stdio.h>
+#include <string.h>
+
+#include <arpa/inet.h>
+#include <netinet/in.h>
+
 /* enable dns lookup or only allow IP addresses*/
 #define PICO_MQTT_DNS_LOOKUP 1
 

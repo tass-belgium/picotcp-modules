@@ -128,13 +128,22 @@ static int socket_connect( const struct addrinfo* addres ){
 static const struct addrinfo* resolve_URI( const char* URI ){
 	struct addrinfo * res;
 	const struct addrinfo hints =  lookup_configuration();
+	char* addres_string = (char*) malloc(100);
+
 
 	/* //TODO specify the service, no hardcoded ports.*/
 	int result = getaddrinfo( URI, "1883", &hints, &res );
+	printf("resolving the uri \n");
 	if(result != 0){
+		printf("error %d: %s\n", errno, strerror(errno)); 
 		return NULL;
 	}
-	
+
+	inet_ntop (res->ai_family, &((struct sockaddr_in6*)res->ai_addr)->sin6_addr ,addres_string, 100);
+	printf("resolved URI (%s) to addres: %s\n",URI, addres_string);
+
+	free((void*) addres_string);
+
 	return res;
 }
 
