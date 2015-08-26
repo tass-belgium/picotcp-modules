@@ -56,7 +56,7 @@ struct pico_mqtt_topic{
 };
 
 struct pico_mqtt{
-	int socket;
+	struct pico_mqtt_socket* socket;
 	uint8_t tls_connections;
 	char * URI;
 	struct pico_mqtt* this;
@@ -75,9 +75,7 @@ struct pico_mqtt{
 	struct pico_mqtt_string user_name;
 	struct pico_mqtt_data password;
 
-	// socket write status
-	uint32_t output_message_next_byte;
-	const struct pico_mqtt_data* output_message;
+	uint32_t bytes_used;
 };
 
 /**
@@ -85,8 +83,8 @@ struct pico_mqtt{
 **/
 
 static inline void initialize(struct pico_mqtt* const mqtt);
-static inline uint8_t is_time_left(const struct timeval* const time_left);
-static inline uint8_t is_output_ready(const struct pico_mqtt* mqtt);
+static inline void clear_fixed_header(struct pico_mqtt* const mqtt);
+static inline uint8_t is_output_message_set(const struct pico_mqtt* mqtt);
 static int set_output_message( struct pico_mqtt * mqtt, const struct pico_mqtt_data* serialized_message);
 static uint32_t encode_variable_length( const uint32_t length );
 static uint32_t decode_variable_length( const uint32_t length );
@@ -115,16 +113,28 @@ struct pico_mqtt* pico_mqtt_create( const char* uri, uint32_t timeout){
 static inline void initialize(struct pico_mqtt* const mqtt){
 	*mqtt = (struct pico_mqtt) {
 		.output_message_next_byte = 0,
-		.output_message = NULL
+		.output_message = NULL,
+		.input_message_next_byte = 0,
+		.input_message = NULL
 	};
+	
+	clear_fixed_header(mqtt);
+}
+
+static inline void clear_fixed_header(struct pico_mqtt* const mqtt){
+	mqtt->input_message_fixed_header_next_byte = 0;
+	mqtt->input_message_fixed_header = {0, 0, 0, 0};
 }
 
 static inline uint8_t is_time_left(const struct timeval* const time_left){
-	return (time_left->tv_sec > 0) || (time_left->tv_usec > 0);
+	if(time_left == NULL)
+		return 1;
+
+	return  (time_left->tv_sec > 0) || (time_left->tv_usec > 0);
 }
 
-static inline uint8_t is_output_ready(const struct pico_mqtt* mqtt){
-	return mqtt->output_message == NULL;
+static inline uint8_t is_output_message_set(const struct pico_mqtt* mqtt){
+	return mqtt->output_message != NULL;
 }
 
 /**
@@ -151,21 +161,52 @@ static int set_output_message( struct pico_mqtt * mqtt, const struct pico_mqtt_d
 **/
 
 static int read_write_messages( struct pico_mqtt* mqtt, struct timeval* time_left){
-/*	while(*next_byte < message->length){
-		if(time_left != NULL){
-			if( !is_time_left(time_left) )
-				return 0;
+	uint32_t* out_next_byte = &(mqtt->output_message_next_byte);
+	const struct pico_mqtt_data* out_message = &(mqtt->output_message);
+	uint32_t* in_next_byte = &(mqtt->input_message_next_byte);
+	const struct pico_mqtt_data* in_message = &(mqtt->input_message);
+	uint8_t* fixed_header_next_byte = &(mqtt->input_message_fixed_header_next_byte);
+	uint8_t* fixed_header = &(mqtt->input_message_fixed_header);
+	int32_t result = 0;
+
+	while(is_time_left(time_left)){
+		if(*in_message == NULL){
+			if(*out_message == NULL){
+				result = pico_mqtt_connection_send_receive( /* read 1 byte of fixed header */
+					mqtt->socket,
+					NULL,
+					0,
+					(void*) fixed_header + *fixed_header_next_byte,
+					1);
+			} else {
+				result = pico_mqtt_connection_send_receive( /* read 1 byte of fixed header and write message */
+					mqtt->socket,
+					(*out_message)->data + *out_next_byte,
+					(*out_message)->length - *out_next_byte,
+					(void*) fixed_header + *fixed_header_next_byte,
+					1);
+			}
+		} else {
+			if(*out_message == NULL){
+				result = pico_mqtt_connection_send_receive( /* read the input message */
+					mqtt->socket,
+					NULL,
+					0,
+					(*in_message)->data + *in_next_byte,
+					(*in_message)->length - *in_next_byte);
+			} else {
+				result = pico_mqtt_connection_send_receive( /* read and write messages */
+					mqtt->socket,
+					(*out_message)->data + *out_next_byte,
+					(*out_message)->length - *out_next_byte,
+					(*in_message)->data + *in_next_byte,
+					(*in_message)->length - *in_next_byte);
+			}
 		}
-		
-//		result = pico_mqtt_connection_read_write( mqtt->socket, message->data + *next_byte, message->length - *next_byte, time_left);
 
-		if( result < 0 )
-			return -1;
-
-		*next_byte += result;
+		if(result == -1)
+			
 	}
 
-	return 1;
-*/
-return 1;
 }
+
