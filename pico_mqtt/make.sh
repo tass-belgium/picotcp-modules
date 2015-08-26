@@ -4,5 +4,5 @@ clear
 #gcc -o pico_mqtt_socket_test.out pico_mqtt_socket.o pico_mqtt_socket_test.o -lcheck -lpthread -lm -lrt
 #./pico_mqtt_socket_test.out
 
-make pico_mqtt_test
+make pico_mqtt_test.out
 ./pico_mqtt_test.out
