@@ -4,7 +4,6 @@
 
    Author: Andrei Carp <andrei.carp@tass.be>
  *********************************************************************/
-
 #include "pico_stack.h"
 #include "pico_http_server.h"
 #include "pico_tcp.h"
@@ -17,10 +16,11 @@
 #define HTTP_SERVER_LISTEN      1
 
 #define HTTP_HEADER_MAX_LINE    256u
+#define HTTP_OK_HEADER_FIXED    160u
 
 #define consume_char(c) (pico_socket_read(client->sck, &c, 1u))
 
-//TODO: check in rfc wich to add
+//TODO: check in rfc what to add
 
 static const char return_fail_header[] =
     "HTTP/1.1 404 Not Found\r\n\
@@ -351,17 +351,28 @@ int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetyp
         if (code & HTTP_RESOURCE_FOUND)
         {
             client->state = (code & HTTP_STATIC_RESOURCE) ? HTTP_WAIT_STATIC_DATA : HTTP_WAIT_DATA;
-            char retheader[256];//not done: on heap in construct_return_ok_header
-            memset(retheader, 0, 256);
+            uint16_t len = HTTP_OK_HEADER_FIXED;
+            if (mimetype != NULL)
+                len += (uint16_t)strlen(mimetype);
+            char *retheader = PICO_ZALLOC(len);
+            if (!retheader)
+            {
+                pico_err = PICO_ERR_ENOMEM;
+                return HTTP_RETURN_ERROR;
+            }
             if (code & HTTP_CACHEABLE_RESOURCE)
             {
                 int length = construct_return_ok_header(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
-                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                PICO_FREE(retheader);
+                return rv;
             }
             else
             {
                 int length = construct_return_ok_header(retheader, HTTP_STATIC_RESOURCE, mimetype);
-                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                PICO_FREE(retheader);
+                return rv;
             }
         }
         else
@@ -395,7 +406,7 @@ int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetyp
  * will be closed , otherwise the 200 header is sent and the user should
  * immediately submit (static) data.
  *
- */
+*/
 int pico_http_respond(uint16_t conn, uint16_t code)
 {
     struct http_client *client = find_client(conn);
@@ -411,21 +422,35 @@ int pico_http_respond(uint16_t conn, uint16_t code)
         if (code & HTTP_RESOURCE_FOUND)
         {
             client->state = (code & HTTP_STATIC_RESOURCE) ? HTTP_WAIT_STATIC_DATA : HTTP_WAIT_DATA;
-            char retheader[256];//TODO rework
-            memset(retheader, 0, 256);
 
             /* Try to guess MIME type */
             const char* mimetype = pico_http_get_mimetype(client->resource);
 
+            uint16_t len = HTTP_OK_HEADER_FIXED;
+            if (mimetype != NULL)
+                len += (uint16_t)strlen(mimetype);
+            char *retheader = PICO_ZALLOC(len);
+            if (!retheader)
+            {
+                pico_err = PICO_ERR_ENOMEM;
+                return HTTP_RETURN_ERROR;
+            }
+
             if (code & HTTP_CACHEABLE_RESOURCE)
             {
                 int length = construct_return_ok_header(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
-                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                PICO_FREE(retheader);
+                retheader = NULL;
+                return rv;
             }
             else
             {
                 int length = construct_return_ok_header(retheader, HTTP_STATIC_RESOURCE, mimetype);
-                return pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
+                PICO_FREE(retheader);
+                retheader = NULL;
+                return rv;
             }
         }
         else
@@ -729,25 +754,43 @@ static int parse_request_post(struct http_client *client, char *line)
 int parse_request(struct http_client *client)
 {
     char c = 0;
-    char line[HTTP_HEADER_MAX_LINE];
+    uint8_t *line = PICO_ZALLOC(HTTP_HEADER_MAX_LINE);
+    if (!line)
+        {
+            pico_err = PICO_ERR_ENOMEM;
+            return HTTP_RETURN_ERROR;
+        }
+
     /* read first line */
     consume_char(c);
     line[0] = c;
     if (c == 'G')
     { /* possible GET */
-        return parse_request_get(client, line);
+        uint8_t rv = parse_request_get(client, line);
+        PICO_FREE(line);
+        line = NULL;
+        return rv;
     }
     else if (c == 'P')
     { /* possible POST */
-        return parse_request_post(client, line);
+        uint8_t rv = parse_request_post(client, line);
+        PICO_FREE(line);
+        line = NULL;
+        return rv;
     }
-
+    PICO_FREE(line);
+    line = NULL;
     return HTTP_RETURN_ERROR;
 }
 
 int read_remaining_header(struct http_client *client)
 {
-    char line[1000];
+    uint8_t *line = PICO_ZALLOC(1000u);
+    if (!line)
+        {
+            pico_err = PICO_ERR_ENOMEM;
+            return HTTP_RETURN_ERROR;
+        }
     int count = 0;
     int len;
 
@@ -780,6 +823,8 @@ int read_remaining_header(struct http_client *client)
                         }
                         else
                         {
+                            PICO_FREE(line);
+                            line = NULL;
                             return HTTP_RETURN_ERROR;
                         }
                     }
@@ -792,6 +837,8 @@ int read_remaining_header(struct http_client *client)
             }
         }
     }
+    PICO_FREE(line);
+    line = NULL;
     return HTTP_RETURN_OK;
 }
 
