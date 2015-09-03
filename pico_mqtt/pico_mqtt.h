@@ -29,13 +29,19 @@ struct pico_mqtt_data{
 	void * data;
 };
 
-struct pico_mqtt_message{
-	struct pico_mqtt_data data;
-	char * topic;
-	uint8_t duplicate			: 1;
+struct pico_mqtt_fixed_header{
+	uint8_t type			: 4;
+	uint8_t duplicate		: 1;
 	uint8_t quality_of_service	: 2;
-	uint8_t retain				: 1;
+	uint8_t retain			: 1;
+
+};
+
+struct pico_mqtt_message{
+	struct pico_mqtt_fixed_header header;
 	uint16_t message_id;
+	struct pico_mqtt_data topic;
+	struct pico_mqtt_data data;
 };
 
 /**

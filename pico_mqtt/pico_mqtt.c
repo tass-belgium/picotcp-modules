@@ -67,6 +67,10 @@ struct pico_mqtt{
 	uint32_t documentation_reference;
 	uint16_t next_packet_id;
 
+	// serializer
+	struct pico_mqtt_serializer* serializer;
+	uint16_t next_message_id;
+
 	// connection related
 	uint16_t keep_alive_time;
 	struct pico_mqtt_string client_id;
@@ -75,6 +79,9 @@ struct pico_mqtt{
 	struct pico_mqtt_string user_name;
 	struct pico_mqtt_data password;
 
+	// memory
+	int (malloc*)(struct pico_mqtt*, void**, size_t);
+	int (free*)(struct pico_mqtt*, void*, size_t);
 	uint32_t bytes_used;
 };
 
