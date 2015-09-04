@@ -331,6 +331,8 @@ int pico_mqtt_list_destroy(struct pico_mqtt_list** list_ptr)
 		}
 		current = next;
 	}
+	
+	free(list_ptr);
 	*list_ptr = NULL;
 	return SUCCES;	
 }
