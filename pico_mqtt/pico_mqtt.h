@@ -1,3 +1,6 @@
+#ifndef PICO_MQTT_H
+#define PICO_MQTT_H
+
 #include <sys/time.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -28,17 +31,17 @@ struct pico_mqtt_data{
 	uint32_t length;
 	void * data;
 };
-
-struct pico_mqtt_fixed_header{
+/*
+__attribute__((packed)) struct pico_mqtt_fixed_header{
 	uint8_t type			: 4;
 	uint8_t duplicate		: 1;
 	uint8_t quality_of_service	: 2;
 	uint8_t retain			: 1;
 
 };
-
+*/
 struct pico_mqtt_message{
-	struct pico_mqtt_fixed_header header;
+	uint8_t header;
 	uint16_t message_id;
 	struct pico_mqtt_data topic;
 	struct pico_mqtt_data data;
@@ -87,4 +90,4 @@ uint32_t pico_mqtt_get_error_documentation_line( const struct pico_mqtt* mqtt);
 // get the protocol version
 const char* pico_mqtt_get_protocol_version( void );
 
-
+#endif
