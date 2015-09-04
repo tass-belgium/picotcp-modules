@@ -5,7 +5,7 @@
 **/
 
 #define SUCCES 0
-#define FAIL -1
+#define ERROR -1
 
 /**
 * Lengths
@@ -17,6 +17,7 @@
 #define FLAG_SIZE 1
 #define RETURN_CODE_SIZE 1
 #define QUALITY_OF_SERVICE_SIZE 1
+#define MESSAGE_ID_SIZE 2
 
 /**
 * Fixed header flags
@@ -116,7 +117,7 @@ static void add_data_stream(void** stream, void* data, uint32_t length);
 * Message types
 **/
 
-__atribute__((packet)) struct connect{
+__attribute__((packet)) struct connect{
 	uint16_t length;
 	char protocol[4];
 	uint8_t version;
@@ -124,14 +125,14 @@ __atribute__((packet)) struct connect{
 	uint16_t keep_alive;
 };
 
-__atribute__((packed)) struct acknowledge{
+__attribute__((packed)) struct acknowledge{
 	uint8_t fixed_header;
-	uint8_t length;
+	uint8_t remaining_length;
 	uint16_t packet_id;
 };
 
 #ifdef DEBUG
-__atribute__((packed)) struct connack{
+__attribute__((packed)) struct connack{
 	uint8_t fixed_header;
 	uint8_t length;
 	uint8_t flag;
@@ -140,7 +141,7 @@ __atribute__((packed)) struct connack{
 #endif
 
 #ifdef DEBUG
-__atribute__((packed)) struct suback{
+__attribute__((packed)) struct suback{
 	uint8_t fixed_header;
 	uint8_t length;
 	uint16_t packet_id;
@@ -148,14 +149,14 @@ __atribute__((packed)) struct suback{
 };
 #endif
 
-__atribute__((packed)) struct header{
+__attribute__((packed)) struct header{
 	uint8_t fixed_header;
 	uint8_t length;
 };
 
 int pico_mqtt_serializer_create_connect( 
 	struct pico_mqtt* mqtt, 
-	struct pico_mqtt_message** return_message, 
+	struct pico_mqtt_message** result, 
 	uint16_t keep_alive_time,
 	uint8_t retain,
 	uint8_t quality_of_service,
@@ -191,7 +192,7 @@ int pico_mqtt_serializer_create_connect(
 		((topic == NULL) && (message != NULL)) ||
 		((topic != NULL) && (message == NULL)))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 
@@ -199,10 +200,10 @@ int pico_mqtt_serializer_create_connect(
 		&(header.flags), 
 		(username != NULL), 
 		(password != NULL), 
-		(retain != NULL), 
+		(retain != 0), 
 		quality_of_service, 
 		(topic != NULL),
-		(clean_session != NULL));
+		(clean_session != 0));
 
 	length += sizeof(struct connect);
 	length += get_buffer_length(client_id);
@@ -213,14 +214,14 @@ int pico_mqtt_serializer_create_connect(
 
 	if(convert_length(&converted_length, length))
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
 	if(create_message(mqtt, result, total_length, &stream, fixed_header, 0) != SUCCES)
 	{
 		destroy_length(converted_length);
-		return FAIL;
+		return ERROR;
 	}
 
 	add_header_stream(&stream, fixed_header, converted_length);
@@ -256,13 +257,13 @@ int pico_mqtt_create_connack(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL) || (session_present > 1) || (return_code > 5))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 
 	if(create_message(mqtt, result, sizeof(struct connack), &stream, message.fixed_header, 0) != SUCCES)
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	add_data_stream(&stream, (void*) &message, sizeof(struct connack));
@@ -272,7 +273,7 @@ int pico_mqtt_create_connack(
 
 int pico_mqtt_create_publish(
 	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** return_message, 
+	struct pico_mqtt_message** result, 
 	uint8_t quality_of_service,
 	uint8_t retain,
 	struct pico_mqtt_data* topic,
@@ -289,7 +290,7 @@ int pico_mqtt_create_publish(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (return_message == NULL) || (topic == NULL) || (quality_of_service > 2) || (retain > 1))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 	set_publish_flags(&fixed_header, retain, quality_of_service);
@@ -304,14 +305,14 @@ int pico_mqtt_create_publish(
 
 	if(convert_length(&converted_length, length))
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
 	if(create_message(mqtt, result, total_length, &stream, fixed_header, message_id) != SUCCES)
 	{
 		destroy_length(converted_length);
-		return FAIL;
+		return ERROR;
 	}
 
 	/* add data to stream */
@@ -382,7 +383,7 @@ int pico_mqtt_create_subscribe(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL) || (topic == NULL) || (quality_of_service > 2))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 	message_id = get_next_message_id(mqtt);
@@ -394,14 +395,14 @@ int pico_mqtt_create_subscribe(
 
 	if(convert_length(&converted_length, length))
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
 	if(create_message(mqtt, result, total_length, &stream, fixed_header, message_id) != SUCCES)
 	{
 		destroy_length(converted_length);
-		return FAIL;
+		return ERROR;
 	}
 
 	add_header_stream(&stream, fixed_header, converted_length);
@@ -435,13 +436,13 @@ int pico_mqtt_create_suback(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL) || ((return_code > 2) && (return_code != 0x80)))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 
 	if(create_message(mqtt, result, sizeof(struct suback), &stream, message.fixed_header, packet_id) != SUCCES)
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	add_data_stream(&stream, (void*) &message, sizeof(struct suback));
@@ -456,7 +457,7 @@ int pico_mqtt_create_unsubscribe(
 	struct pico_mqtt_data* topic
 	)
 {
-	struct pico_mqtt_data* stream = NULL;
+	void* stream = NULL;
 	uint8_t fixed_header = UNSUBSCRIBE | QUALITY_OF_SERVICE_1;
 	struct pico_mqtt_data* converted_length = NULL;
 	uint32_t length = PACKET_ID_SIZE;
@@ -466,7 +467,7 @@ int pico_mqtt_create_unsubscribe(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL) || (topic == NULL))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 	length += get_buffer_length(topic);
@@ -474,14 +475,14 @@ int pico_mqtt_create_unsubscribe(
 
 	if(convert_length(&converted_length, length))
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
 	if(create_message(mqtt, result, total_length, &stream, fixed_header, message_id) != SUCCES)
 	{
 		destroy_length(converted_length);
-		return FAIL;
+		return ERROR;
 	}
 
 	add_header_stream(&stream, fixed_header, converted_length);
@@ -547,13 +548,13 @@ static int create_header(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 
 	if(create_message(mqtt, result, sizeof(struct header), &stream, fixed_header, 0) != SUCCES)
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	add_data_stream(&stream, (void*) &message, sizeof(struct header));
@@ -578,13 +579,13 @@ static int create_acknowledge(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL))
 	{
-		return FAIL;
+		return ERROR;
 	}
 #endif
 
 	if(create_message(mqtt, result, sizeof(struct acknowledge), &stream, fixed_header, 0) != SUCCES)
 	{
-		return FAIL;
+		return ERROR;
 	}
 
 	add_data_stream(&stream, (void*) &message, sizeof(struct acknowledge));
@@ -594,15 +595,16 @@ static int create_acknowledge(
 static int create_message(struct pico_mqtt* mqtt, struct pico_mqtt_message** result, size_t length, void** stream, uint8_t fixed_header, uint16_t message_id)
 {
 	*result = (struct pico_mqtt_message*) malloc(sizeof(struct pico_mqtt_message));
-	*result = {
-		.header = (struct pico_mqtt_fixed_header) fixed_header,
+	**result = (struct pico_mqtt_message) {
 		.message_id = message_id,
 		.topic = {.length = 0, .data = NULL},
 		.data = {.length = 0, .data = NULL}};
 
+	(*result)->header = fixed_header;
+
 	if(mqtt->malloc(mqtt, &((*result)->data.data), length) != SUCCES)
 	{
-		return FAIL;
+		return ERROR;
 	}
 	(*result)->data.length = length;
 	*stream = (*result)->data.data;
@@ -670,44 +672,50 @@ static uint32_t get_buffer_length(struct pico_mqtt_data* data)
 
 static int convert_length(struct pico_mqtt_data** converted, uint32_t length)
 {
-	struct pico_mqtt_data data;
+	struct pico_mqtt_data* data = NULL;
+	data = (struct pico_mqtt_data*) malloc(sizeof(struct pico_mqtt_data));
+	if(data == NULL)
+	{
+		return ERROR;
+	}
 	uint8_t i;
 	uint32_t mask = 0x00200000;
 	uint8_t continue_flag = 0;
 
 	if(converted == NULL)
-		return FAIL;
+		return ERROR;
 
 	if(length >= 0x10000000){
-		return FAIL; /* //TODO set error to long */
+		return ERROR; /* //TODO set error to long */
 	}
 
-	data.length = 0;
+	data->length = 0;
 	for(i = 3; i >=0; --i){
 		if(length >= mask){
-			if(data.length == 0){
-				data.length = i+1;
-				data.data = malloc(data.length); /* //TODO check if allocation worked */
-				if(data.data == NULL)
-					return FAIL;
+			if(data->length == 0){
+				data->length = i+1;
+				data->data = malloc(data->length); /* //TODO check if allocation worked */
+				if(data->data == NULL)
+					return ERROR;
 			}
 			
-			*(((uint8_t*) data.data) + i) = length / mask;
+			*(((uint8_t*) data->data) + i) = length / mask;
 			length = length % mask;
 			if(continue_flag == 1)
-				*(((uint8_t*) data.data) + i) |= 0x80;
+				*(((uint8_t*) data->data) + i) |= 0x80;
 			continue_flag = 1;
 			mask >> 7;
 		}
 	}
 
 	*converted = data;
-	return 0;	
+	return SUCCES;	
 }
 
 static inline void destroy_length(struct pico_mqtt_data* converted_length)
 {
 	free(converted_length->data);
+	free(converted_length);
 }
 
 static inline void add_header_stream(void** stream, uint8_t fixed_header, struct pico_mqtt_data* length)
@@ -750,6 +758,6 @@ static void add_data_stream(void** stream, void* data, uint32_t length)
 	for(i=0; i<length; ++i){
 		**((uint8_t**)stream) = *((uint8_t*)data);
 		(*((uint8_t**)stream))++;
-		((uint8_t*)data)++;
+		++data;
 	}
 }

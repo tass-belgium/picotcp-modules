@@ -3,10 +3,11 @@
 
 #include <stdint.h>
 #include "pico_mqtt.h"
+#include "pico_mqtt_private.h"
 
 int pico_mqtt_serializer_create_connect( 
 	struct pico_mqtt* mqtt, 
-	struct pico_mqtt_message** return_message, 
+	struct pico_mqtt_message** result, 
 	uint16_t keep_alive_time,
 	uint8_t retain,
 	uint8_t quality_of_service,
@@ -29,7 +30,7 @@ int pico_mqtt_create_connack(
 
 int pico_mqtt_create_publish(
 	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** return_message, 
+	struct pico_mqtt_message** result, 
 	uint8_t quality_of_service,
 	uint8_t retain,
 	struct pico_mqtt_data* topic,
