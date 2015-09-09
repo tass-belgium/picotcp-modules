@@ -22,14 +22,14 @@
 
 //TODO: check in rfc what to add
 
-static const char return_fail_header[] =
+static const uint8_t return_fail_header[] =
     "HTTP/1.1 404 Not Found\r\n\
 Host: localhost\r\n\
 Connection: close\r\n\
 \r\n\
 <html><body>The resource you requested cannot be found !</body></html>";
 
-static const char error_header[] =
+static const uint8_t error_header[] =
     "HTTP/1.1 400 Bad Request\r\n\
 Host: localhost\r\n\
 Connection: close\r\n\
@@ -37,7 +37,7 @@ Connection: close\r\n\
 <html><body>There was a problem with your request !</body></html>";
 
 
-int construct_return_ok_header(char* headerstring, int cacheable, const char* contenttype)
+int32_t construct_return_ok_header(uint8_t* headerstring, uint8_t cacheable, const uint8_t* contenttype)
 {
     strcat(headerstring, "HTTP/1.1 200 OK\r\n");
     strcat(headerstring, "Host: localhost\r\n");
@@ -72,10 +72,10 @@ struct http_client
     void *buffer;
     uint16_t buffer_size;
     uint16_t buffer_sent;
-    char *resource;
+    uint8_t *resource;
     uint16_t state;
     uint16_t method;
-    char *body;
+    uint8_t *body;
 };
 
 /* Local states for clients */
@@ -98,16 +98,16 @@ static struct http_server server = {
 /*
  * Private functions
  */
-static int parse_request(struct http_client *client);
+static int16_t parse_request(struct http_client *client);
 static int read_remaining_reader(struct http_client *client);
 static void send_data(struct http_client *client);
 static void send_final(struct http_client *client);
-static inline int read_data(struct http_client *client);  /* used only in a place */
+static inline int32_t read_data(struct http_client *client);  /* used only in a place */
 static inline struct http_client *find_client(uint16_t conn);
 
 
 
-static int compare_clients(void *ka, void *kb)
+static int32_t compare_clients(void *ka, void *kb)
 {
     return ((struct http_client *)ka)->connectionID - ((struct http_client *)kb)->connectionID;
 }
@@ -190,7 +190,7 @@ void http_server_cbk(uint16_t ev, struct pico_socket *s)
  * API for starting the server. If 0 is passed as a port, the port 80
  * will be used.
  */
-int8_t pico_http_server_start(uint16_t port, void (*wakeup)(uint16_t ev, uint16_t conn))
+int16_t pico_http_server_start(uint16_t port, void (*wakeup)(uint16_t ev, uint16_t conn))
 {
     struct pico_ip4 anything = {
         0
@@ -237,7 +237,7 @@ int8_t pico_http_server_start(uint16_t port, void (*wakeup)(uint16_t ev, uint16_
  *
  * Returns the ID of the new connection or a negative value if error.
  */
-int pico_http_server_accept(void)
+int32_t pico_http_server_accept(void)
 {
     struct pico_ip4 orig;
     struct http_client *client;
@@ -279,7 +279,7 @@ int pico_http_server_accept(void)
  * client. It is useful after the request header (EV_HTTP_REQ)
  * from client was received, otherwise NULL is returned.
  */
-char *pico_http_get_resource(uint16_t conn)
+uint8_t *pico_http_get_resource(uint16_t conn)
 {
     struct http_client *client = find_client(conn);
 
@@ -295,7 +295,7 @@ char *pico_http_get_resource(uint16_t conn)
  * Should only be used after header was read (EV_HTTP_REQ)
  */
 
-int pico_http_get_method(uint16_t conn)
+int16_t pico_http_get_method(uint16_t conn)
 {
     struct http_client *client = find_client(conn);
 
@@ -310,7 +310,7 @@ int pico_http_get_method(uint16_t conn)
  * It is useful after a POST request header (EV_HTTP_REQ)
  * from client was received, otherwise NULL is returned.
  */
-char *pico_http_get_body(uint16_t conn)
+uint8_t *pico_http_get_body(uint16_t conn)
 {
     struct http_client *client = find_client(conn);
 
@@ -336,7 +336,7 @@ char *pico_http_get_body(uint16_t conn)
  * immediately submit (static) data.
  *
  */
-int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetype)
+int32_t pico_http_respond_mimetype(uint16_t conn, uint16_t code, const uint8_t* mimetype)
 {
     struct http_client *client = find_client(conn);
 
@@ -354,7 +354,7 @@ int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetyp
             uint16_t len = HTTP_OK_HEADER_FIXED;
             if (mimetype != NULL)
                 len += (uint16_t)strlen(mimetype);
-            char *retheader = PICO_ZALLOC(len);
+            uint8_t *retheader = PICO_ZALLOC(len);
             if (!retheader)
             {
                 pico_err = PICO_ERR_ENOMEM;
@@ -362,14 +362,14 @@ int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetyp
             }
             if (code & HTTP_CACHEABLE_RESOURCE)
             {
-                int length = construct_return_ok_header(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
+                int32_t length = construct_return_ok_header(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
                 uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
                 PICO_FREE(retheader);
                 return rv;
             }
             else
             {
-                int length = construct_return_ok_header(retheader, HTTP_STATIC_RESOURCE, mimetype);
+                int32_t length = construct_return_ok_header(retheader, HTTP_STATIC_RESOURCE, mimetype);
                 uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
                 PICO_FREE(retheader);
                 return rv;
@@ -377,9 +377,8 @@ int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetyp
         }
         else
         {
-            int length;
-
-            length = pico_socket_write(client->sck, (const char *)return_fail_header, sizeof(return_fail_header) - 1); /* remove \0 */
+            int32_t length;
+            length = pico_socket_write(client->sck, (const uint8_t *)return_fail_header, sizeof(return_fail_header) - 1); /* remove \0 */
             pico_socket_close(client->sck);
             client->state = HTTP_CLOSED;
             return length;
@@ -407,7 +406,7 @@ int pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetyp
  * immediately submit (static) data.
  *
 */
-int pico_http_respond(uint16_t conn, uint16_t code)
+int32_t pico_http_respond(uint16_t conn, uint16_t code)
 {
     struct http_client *client = find_client(conn);
 
@@ -424,12 +423,12 @@ int pico_http_respond(uint16_t conn, uint16_t code)
             client->state = (code & HTTP_STATIC_RESOURCE) ? HTTP_WAIT_STATIC_DATA : HTTP_WAIT_DATA;
 
             /* Try to guess MIME type */
-            const char* mimetype = pico_http_get_mimetype(client->resource);
+            const uint8_t* mimetype = pico_http_get_mimetype(client->resource);
 
             uint16_t len = HTTP_OK_HEADER_FIXED;
             if (mimetype != NULL)
                 len += (uint16_t)strlen(mimetype);
-            char *retheader = PICO_ZALLOC(len);
+            uint8_t *retheader = PICO_ZALLOC(len);
             if (!retheader)
             {
                 pico_err = PICO_ERR_ENOMEM;
@@ -438,7 +437,7 @@ int pico_http_respond(uint16_t conn, uint16_t code)
 
             if (code & HTTP_CACHEABLE_RESOURCE)
             {
-                int length = construct_return_ok_header(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
+                int32_t length = construct_return_ok_header(retheader, HTTP_CACHEABLE_RESOURCE, mimetype);
                 uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
                 PICO_FREE(retheader);
                 retheader = NULL;
@@ -446,7 +445,7 @@ int pico_http_respond(uint16_t conn, uint16_t code)
             }
             else
             {
-                int length = construct_return_ok_header(retheader, HTTP_STATIC_RESOURCE, mimetype);
+                int32_t length = construct_return_ok_header(retheader, HTTP_STATIC_RESOURCE, mimetype);
                 uint8_t rv = pico_socket_write(client->sck, retheader, length ); /* remove \0 */
                 PICO_FREE(retheader);
                 retheader = NULL;
@@ -455,9 +454,9 @@ int pico_http_respond(uint16_t conn, uint16_t code)
         }
         else
         {
-            int length;
+            int32_t length;
 
-            length = pico_socket_write(client->sck, (const char *)return_fail_header, sizeof(return_fail_header) - 1); /* remove \0 */
+            length = pico_socket_write(client->sck, (const uint8_t *)return_fail_header, sizeof(return_fail_header) - 1); /* remove \0 */
             pico_socket_close(client->sck);
             client->state = HTTP_CLOSED;
             return length;
@@ -485,12 +484,12 @@ int pico_http_respond(uint16_t conn, uint16_t code)
  * To let the client know this is the last chunk, the user
  * should pass a NULL buffer.
  */
-int8_t pico_http_submit_data(uint16_t conn, void *buffer, uint16_t len)
+int16_t pico_http_submit_data(uint16_t conn, void *buffer, uint16_t len)
 {
 
     struct http_client *client = find_client(conn);
-    char chunk_str[10];
-    int chunk_count;
+    uint8_t chunk_str[10];
+    int16_t chunk_count;
 
     if (!client)
     {
@@ -563,7 +562,7 @@ int8_t pico_http_submit_data(uint16_t conn, void *buffer, uint16_t len)
  * function to check the state of the chunk.
  */
 
-int pico_http_get_progress(uint16_t conn, uint16_t *sent, uint16_t *total)
+int16_t pico_http_get_progress(uint16_t conn, uint16_t *sent, uint16_t *total)
 {
     struct http_client *client = find_client(conn);
 
@@ -583,7 +582,7 @@ int pico_http_get_progress(uint16_t conn, uint16_t *sent, uint16_t *total)
  * This API can be used to close either a client
  * or the server ( if you pass HTTP_SERVER_ID as a connection ID).
  */
-int pico_http_close(uint16_t conn)
+int16_t pico_http_close(uint16_t conn)
 {
     /* close the server */
     if (conn == HTTP_SERVER_ID)
@@ -645,7 +644,7 @@ int pico_http_close(uint16_t conn)
     }
 }
 
-static int parse_request_consume_full_line(struct http_client *client, char *line)
+static int32_t parse_request_consume_full_line(struct http_client *client, uint8_t *line)
 {
     char c = 0;
     uint32_t index = 0;
@@ -662,10 +661,10 @@ static int parse_request_consume_full_line(struct http_client *client, char *lin
             return HTTP_RETURN_ERROR;
         }
     }
-    return (int)index;
+    return (int32_t)index;
 }
 
-static int parse_request_extract_function(char *line, int index, const char *method)
+static uint16_t parse_request_extract_function(uint8_t *line, uint8_t index, const uint8_t *method)
 {
     uint8_t len = (uint8_t)strlen(method);
 
@@ -679,7 +678,7 @@ static int parse_request_extract_function(char *line, int index, const char *met
     return 0;
 }
 
-static int parse_request_read_resource(struct http_client *client, int method_length, char *line)
+static int16_t parse_request_read_resource(struct http_client *client, uint32_t method_length, uint8_t *line)
 {
     uint32_t index;
 
@@ -708,9 +707,9 @@ static int parse_request_read_resource(struct http_client *client, int method_le
     return 0;
 }
 
-static int parse_request_get(struct http_client *client, char *line)
+static int32_t parse_request_get(struct http_client *client, uint8_t *line)
 {
-    int ret;
+    int32_t ret;
 
     ret = parse_request_consume_full_line(client, line);
     if (ret < 0)
@@ -729,9 +728,9 @@ static int parse_request_get(struct http_client *client, char *line)
     return HTTP_RETURN_OK;
 }
 
-static int parse_request_post(struct http_client *client, char *line)
+static int32_t parse_request_post(struct http_client *client, uint8_t *line)
 {
-    int ret;
+    int32_t ret;
 
     ret = parse_request_consume_full_line(client, line);
     if (ret < 0)
@@ -751,9 +750,9 @@ static int parse_request_post(struct http_client *client, char *line)
 }
 
 /* check the integrity of the request */
-int parse_request(struct http_client *client)
+int16_t parse_request(struct http_client *client)
 {
-    char c = 0;
+    uint8_t c = 0;
     uint8_t *line = PICO_ZALLOC(HTTP_HEADER_MAX_LINE);
     if (!line)
         {
@@ -783,7 +782,7 @@ int parse_request(struct http_client *client)
     return HTTP_RETURN_ERROR;
 }
 
-int read_remaining_header(struct http_client *client)
+int16_t read_remaining_header(struct http_client *client)
 {
     uint8_t *line = PICO_ZALLOC(1000u);
     if (!line)
@@ -791,13 +790,13 @@ int read_remaining_header(struct http_client *client)
             pico_err = PICO_ERR_ENOMEM;
             return HTTP_RETURN_ERROR;
         }
-    int count = 0;
-    int len;
+    int32_t count = 0;
+    int32_t len;
 
     while ((len = pico_socket_read(client->sck, line, 1000u)) > 0)
     {
-        char c;
-        int index = 0;
+        uint8_t c;
+        int32_t index = 0;
         uint32_t body_len = 0;
         /* parse the response */
         while (index < len)
@@ -885,7 +884,7 @@ void send_final(struct http_client *client)
     }
 }
 
-int read_data(struct http_client *client)
+int32_t read_data(struct http_client *client)
 {
     if (!client)
     {

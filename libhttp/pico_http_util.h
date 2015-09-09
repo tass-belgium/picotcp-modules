@@ -99,6 +99,9 @@
 #define EV_HTTP_ERROR     32u
 #define EV_HTTP_BODY            64u
 #define EV_HTTP_DNS             128u
+#define EV_HTTP_WRITE_SUCCESS   256u
+#define EV_HTTP_WRITE_FAILED    512u
+#define EV_HTTP_WRITE_PROGRESS_MADE 1024u
 
 struct pico_mime_map {
     const char * extension;
