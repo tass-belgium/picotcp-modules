@@ -23,24 +23,24 @@
  * GET <resource> HTTP/1.1<CRLF>
  * Host: <host>:<port><CRLF>
  * User-Agent: picoTCP<CRLF>
- * Connection: close<CRLF>
+ * Connection: closei/Keep-Alive<CRLF>
  * <CRLF>
  *
  * where <resource>,<host> and <port> will be added later.
  */
 
-#define HTTP_GET_BASIC_SIZE                 63u
+#define HTTP_GET_BASIC_SIZE                 70u
 #define HTTP_POST_BASIC_SIZE                256u
 #define HTTP_POST_MULTIPART_BASIC_SIZE      80u
 #define HTTP_POST_HEADER_BASIC_SIZE         160u
-#define HTTP_DELETE_BASIC_SIZE              65u
+#define HTTP_DELETE_BASIC_SIZE              70u
 #define HTTP_HEADER_LINE_SIZE               50u
 #define HTTP_MAX_FIXED_POST_MULTIPART_CHUNK 100u
 #define RESPONSE_INDEX                      9u
 
 #define HTTP_CHUNK_ERROR    0xFFFFFFFFu
-
-/*#ifdef dbg
+/*
+#ifdef dbg
     #undef dbg
 #endif
 
@@ -72,6 +72,8 @@ struct pico_http_client
 {
     uint16_t connectionID;
     uint8_t state;
+    uint32_t body_read;
+    uint8_t body_read_done;
     struct pico_socket *sck;
     void (*wakeup)(uint16_t ev, uint16_t conn);
     struct pico_ip4 ip;
@@ -84,12 +86,13 @@ struct pico_http_client
 };
 
 /* HTTP Client internal states */
-#define HTTP_START_READING_HEADER       0
-#define HTTP_READING_HEADER             1
-#define HTTP_READING_BODY               2
-#define HTTP_READING_CHUNK_VALUE        3
-#define HTTP_READING_CHUNK_TRAIL        4
-#define HTTP_WRITING_REQUEST            5
+#define HTTP_CONN_IDLE                  0
+#define HTTP_START_READING_HEADER       1
+#define HTTP_READING_HEADER             2
+#define HTTP_READING_BODY               3
+#define HTTP_READING_CHUNK_VALUE        4
+#define HTTP_READING_CHUNK_TRAIL        5
+#define HTTP_WRITING_REQUEST            6
 
 /* MISC */
 #define HTTP_NO_COPY_TO_HEAP    0
@@ -178,6 +181,8 @@ static int32_t socket_write_request_parts(struct pico_http_client *client)
     uint32_t i = 0;
     uint32_t bytes_to_write = 0;
     uint32_t idx = 0;
+
+    client->state = HTTP_WRITING_REQUEST;
     for (i = client->request_parts_len_done; i<client->request_parts_len; i++)
     {
         bytes_to_write = client->request_parts[i]->buf_len - client->request_parts[i]->buf_len_done;
@@ -187,6 +192,7 @@ static int32_t socket_write_request_parts(struct pico_http_client *client)
         if (bytes_written < 0)
         {
             request_parts_destroy(client);
+            client->state = HTTP_CONN_IDLE;
             client->wakeup(EV_HTTP_WRITE_FAILED, client->connectionID);
         }
         else if (bytes_written == bytes_to_write)
@@ -202,6 +208,7 @@ static int32_t socket_write_request_parts(struct pico_http_client *client)
         {
             print_request_part_info(client);
             request_parts_destroy(client);
+            client->state = HTTP_START_READING_HEADER;
             client->wakeup(EV_HTTP_WRITE_SUCCESS, client->connectionID);
         }
     }
@@ -366,6 +373,8 @@ static inline void wait_for_header(struct pico_http_client *client)
     }
     else if (http_ret == HTTP_RETURN_NOT_FOUND)
     {
+        client->state = HTTP_CONN_IDLE;
+        client->body_read = 0;
         client->wakeup(EV_HTTP_REQ, client->connectionID);
     }
     else
@@ -373,11 +382,16 @@ static inline void wait_for_header(struct pico_http_client *client)
         /* call wakeup */
         if (client->header->response_code != HTTP_CONTINUE)
         {
-            client->wakeup(
-                (client->header->response_code == HTTP_OK) ?
-                (EV_HTTP_REQ | EV_HTTP_BODY) :     /* data comes for sure only when 200 is received */
-                EV_HTTP_REQ
-                , client->connectionID);
+            if (client->header->response_code == HTTP_OK)
+            {
+                client->wakeup((EV_HTTP_REQ | EV_HTTP_BODY), client->connectionID);
+            }
+            else
+            {
+                client->state = HTTP_CONN_IDLE;
+                client->body_read = 0;
+                client->wakeup(EV_HTTP_REQ, client->connectionID);
+            }
         }
     }
 }
@@ -471,6 +485,7 @@ static void tcp_callback(uint16_t ev, struct pico_socket *s)
             client->wakeup(EV_HTTP_WRITE_FAILED, client->connectionID);
             r_ev = r_ev | EV_HTTP_WRITE_FAILED;
         }
+        client->state = HTTP_CONN_IDLE;
         client->wakeup(r_ev, client->connectionID);
     }
 
@@ -483,6 +498,7 @@ static void tcp_callback(uint16_t ev, struct pico_socket *s)
             client->wakeup(EV_HTTP_WRITE_FAILED, client->connectionID);
             r_ev = r_ev | EV_HTTP_WRITE_FAILED;
         }
+        client->state = HTTP_CONN_IDLE;
         client->wakeup(r_ev, client->connectionID);
     }
 
@@ -541,7 +557,7 @@ static void dns_callback(uint8_t *ip, void *ptr)
  *
  * Builds a GET request based on the fields on the uri.
  */
-int8_t *pico_http_client_build_get(const struct pico_http_uri *uri_data)
+int8_t *pico_http_client_build_get(const struct pico_http_uri *uri_data, uint8_t connection)
 {
     uint8_t *header;
     uint8_t port[6u]; /* 6 = max length of a uint16 + \0 */
@@ -576,7 +592,15 @@ int8_t *pico_http_client_build_get(const struct pico_http_uri *uri_data)
     strcat(header, ":");
     strcat(header, port);
     strcat(header, "\r\n");
-    strcat(header, "User-Agent: picoTCP\r\nConnection: close\r\n\r\n"); /* ? */
+    strcat(header, "User-Agent: picoTCP\r\n");
+    if (connection == HTTP_CONN_CLOSE)
+    {
+        strcat(header, "Connection: close\r\n\r\n");
+    }
+    else
+    {
+        strcat(header, "Connection: Keep-Alive\r\n\r\n");
+    }
     return header;
 }
 
@@ -584,7 +608,7 @@ int8_t *pico_http_client_build_get(const struct pico_http_uri *uri_data)
 /*
  * Builds a DELETE header based on the fields of the uri
  */
-static int8_t *pico_http_client_build_delete(const struct pico_http_uri *uri_data)
+static int8_t *pico_http_client_build_delete(const struct pico_http_uri *uri_data, uint8_t connection)
 {
     uint8_t *header;
     uint8_t port[6u]; /* 6 = max length of a uint16 + \0 */
@@ -620,6 +644,14 @@ static int8_t *pico_http_client_build_delete(const struct pico_http_uri *uri_dat
     strcat(header, ":");
     strcat(header, port);
     strcat(header, "\r\n");
+    if (connection == HTTP_CONN_CLOSE)
+    {
+        strcat(header, "Connection: close\r\n\r\n");
+    }
+    else
+    {
+        strcat(header, "Connection: Keep-Alive\r\n\r\n");
+    }
     return header;
 }
 
@@ -827,7 +859,7 @@ static int8_t add_multipart_chunks(struct multipart_chunk **post_data, uint16_t 
     return HTTP_RETURN_OK;
 }
 
-static int8_t pico_http_client_build_post_multipart_request(const struct pico_http_uri *uri_data, struct multipart_chunk **post_data, uint16_t len, struct pico_http_client *http)
+static int8_t pico_http_client_build_post_multipart_request(const struct pico_http_uri *uri_data, struct multipart_chunk **post_data, uint16_t len, struct pico_http_client *http, uint8_t connection)
 {
     uint8_t *header = NULL;
     uint32_t content_length = 0;
@@ -877,7 +909,14 @@ static int8_t pico_http_client_build_post_multipart_request(const struct pico_ht
     strcat(header, ":");
     strcat(header, port);
     strcat(header, "\r\n");
-    strcat(header, "Connection: Keep-Alive\r\n");
+    if (connection == HTTP_CONN_CLOSE)
+    {
+        strcat(header, "Connection: Close\r\n");
+    }
+    else
+    {
+        strcat(header, "Connection: Keep-Alive\r\n");
+    }
     strcat(header, "Content-Length: ");
     strcat(header, str_content_length);
     strcat(header, "\r\n");
@@ -1084,7 +1123,7 @@ int32_t MOCKABLE pico_http_client_open(uint8_t *uri, void (*wakeup)(uint16_t ev,
  *  post_data: pointer to multipart_chunk
  *  length_post_data: length of the multipart_chunk array
  */
-int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, struct multipart_chunk **post_data, uint16_t length_post_data)
+int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, struct multipart_chunk **post_data, uint16_t length_post_data, uint8_t connection)
 {
     dbg("POST MULTIPART request\n");
     struct pico_http_client search = {
@@ -1098,6 +1137,10 @@ int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, struct multi
         dbg("Client not found !\n");
         return HTTP_RETURN_ERROR;
     }
+    if (http->state != HTTP_CONN_IDLE)
+    {
+        return HTTP_RETURN_CONN_BUSY;
+    }
     http->request_parts = PICO_ZALLOC((2+length_post_data*2) * sizeof(struct request_part *)); //header + end_boundary + 2*length_post_data
     if (!http->request_parts)
     {
@@ -1109,7 +1152,7 @@ int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, struct multi
 
     /* the api gives the possibility to the user to build the POST multipart header */
     /* based on the uri passed when opening the client, less headache for the user */
-    rv = pico_http_client_build_post_multipart_request(http->urikey, post_data, length_post_data, http);
+    rv = pico_http_client_build_post_multipart_request(http->urikey, post_data, length_post_data, http, connection);
     if (rv == HTTP_RETURN_ERROR)
     {
         pico_err = PICO_ERR_ENOMEM;
@@ -1125,9 +1168,9 @@ int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, struct multi
  *
  * The library will build the request
  * based on the uri passed when opening the client.
- *
+ * Retruns HTTP_RETURN_CONN_BUSY (-3) if the connection is still writing or reading data
  */
-int8_t MOCKABLE pico_http_client_send_delete(uint16_t conn)
+int8_t MOCKABLE pico_http_client_send_delete(uint16_t conn, uint8_t connection)
 {
     dbg("DELETE request\n");
     uint8_t *request = NULL;
@@ -1141,6 +1184,10 @@ int8_t MOCKABLE pico_http_client_send_delete(uint16_t conn)
         dbg("Client not found !\n");
         return HTTP_RETURN_ERROR;
     }
+    if (http->state != HTTP_CONN_IDLE)
+    {
+        return HTTP_RETURN_CONN_BUSY;
+    }
     http->request_parts = PICO_ZALLOC(1 * sizeof(struct request_part *));
     if (!http->request_parts)
     {
@@ -1150,7 +1197,7 @@ int8_t MOCKABLE pico_http_client_send_delete(uint16_t conn)
     http->request_parts_len = 0;
     http->request_parts_len_done = 0;
 
-    request = pico_http_client_build_delete(http->urikey);
+    request = pico_http_client_build_delete(http->urikey, connection);
     dbg("DELETE: request: \n%s\n", request);
     if (!request)
     {
@@ -1198,6 +1245,10 @@ int8_t MOCKABLE pico_http_client_send_post(uint16_t conn, uint8_t *post_data, ui
     {
         dbg("Client not found !\n");
         return HTTP_RETURN_ERROR;
+    }
+    if (http->state != HTTP_CONN_IDLE)
+    {
+        return HTTP_RETURN_CONN_BUSY;
     }
     http->request_parts = PICO_ZALLOC(2 * sizeof(struct request_part *));
     if (!http->request_parts)
@@ -1255,6 +1306,10 @@ int8_t MOCKABLE pico_http_client_send_raw(uint16_t conn, uint8_t *request)
         dbg("Client not found !\n");
         return HTTP_RETURN_ERROR;
     }
+    if (http->state != HTTP_CONN_IDLE)
+    {
+        return HTTP_RETURN_CONN_BUSY;
+    }
     http->request_parts = PICO_ZALLOC(1 * sizeof(struct request_part *));
     if (!http->request_parts)
     {
@@ -1280,7 +1335,7 @@ int8_t MOCKABLE pico_http_client_send_raw(uint16_t conn, uint8_t *request)
  * The library will build the request
  * based on the uri passed when opening the client.
  */
-int8_t MOCKABLE pico_http_client_send_get(uint16_t conn)
+int8_t MOCKABLE pico_http_client_send_get(uint16_t conn, uint8_t connection)
 {
     uint8_t *request = NULL;
     struct pico_http_client search = {
@@ -1293,6 +1348,10 @@ int8_t MOCKABLE pico_http_client_send_get(uint16_t conn)
         dbg("Client not found !\n");
         return HTTP_RETURN_ERROR;
     }
+    if (http->state != HTTP_CONN_IDLE)
+    {
+        return HTTP_RETURN_CONN_BUSY;
+    }
     http->request_parts = PICO_ZALLOC(1 * sizeof(struct request_part *));
     if (!http->request_parts)
     {
@@ -1303,7 +1362,7 @@ int8_t MOCKABLE pico_http_client_send_get(uint16_t conn)
     http->request_parts_len_done = 0;
 
     dbg("GET request\n");
-    request = pico_http_client_build_get(http->urikey);
+    request = pico_http_client_build_get(http->urikey, connection);
     if (!request)
     {
         request_parts_destroy(http);
@@ -1428,7 +1487,6 @@ static inline int32_t read_chunked_data(struct pico_http_client *client, uint8_t
         return HTTP_RETURN_OK;
     }
 
-
     read_small_chunk(client, data, size, &len_read);
     value = read_big_chunk(client, data, size, &len_read);
     if (value)
@@ -1439,15 +1497,17 @@ static inline int32_t read_chunked_data(struct pico_http_client *client, uint8_t
 }
 
 /*
- * API for reading received data.
+ * API for reading received body.
  *
  * This api hides from the user if the transfer-encoding
  * was chunked or a full length was provided, in case of
  * a chunked transfer encoding will "de-chunk" the data
  * and pass it to the user.
+ * Body_read_done will be set to 1 if the body has been read completly.
  */
-int32_t MOCKABLE pico_http_client_read_data(uint16_t conn, uint8_t *data, uint16_t size)
+int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16_t size, uint8_t *body_read_done)
 {
+    uint32_t bytes_read = 0;
     struct pico_http_client dummy = {
         .connectionID = conn
     };
@@ -1463,12 +1523,29 @@ int32_t MOCKABLE pico_http_client_read_data(uint16_t conn, uint8_t *data, uint16
     /* for the moment just read the data, do not care if it's chunked or not */
     if (client->header->transfer_coding == HTTP_TRANSFER_FULL)
     {
-        return pico_socket_read(client->sck, (void *)data, size);
+        bytes_read = pico_socket_read(client->sck, (void *)data, size);
+        //bytes read and content-length are equal
+        if (client->header->content_length_or_chunk == client->body_read)
+        {
+            client->body_read_done = 1;
+        }
     }
     else
     {
-        return read_chunked_data(client, data, size);
+        //client->state will be set to HTTP_READ_BODY_DONE if we reach the ending '0' at the end of the body
+        bytes_read = read_chunked_data(client, data, size);
     }
+    client->body_read += bytes_read;
+
+    if (client->body_read_done)
+    {
+        dbg("Body read finished! %d\n", client->body_read);
+        client->state = HTTP_CONN_IDLE;
+        client->body_read = 0;
+        client->body_read_done = 0;
+        *body_read_done = 1;
+    }
+    return bytes_read;
 }
 
 /*
@@ -1607,7 +1684,6 @@ static inline void start_reading_body(struct pico_http_client *client, struct pi
 
         client->state = HTTP_READING_CHUNK_VALUE;
         read_chunk_line(client);
-
     }
     else
         client->state = HTTP_READING_BODY;
@@ -1797,8 +1873,14 @@ static inline void read_chunk_trail(struct pico_http_client *client)
     if (client->state == HTTP_READING_CHUNK_TRAIL)
     {
 
-        while (consume_char(c) > 0 && c != '\n') nop();
-        if (c == '\n') client->state = HTTP_READING_BODY;
+        while (consume_char(c) > 0 && c != '\n')
+        {
+            nop();
+        }
+        if (c == '\n')
+        {
+            client->state = HTTP_READING_BODY;
+        }
     }
 }
 static inline void read_chunk_value(struct pico_http_client *client)
@@ -1807,10 +1889,22 @@ static inline void read_chunk_value(struct pico_http_client *client)
 
     while (consume_char(c) > 0 && c != '\r' && c != ';')
     {
+        dbg("c: %c\n", c);
         if (is_hex_digit(c))
+        {
             client->header->content_length_or_chunk = (client->header->content_length_or_chunk << 4u) + (uint32_t)hex_digit_to_dec(c);
+        }
+        if (c == '0' && client->header->content_length_or_chunk == 0)
+        {
+            dbg("End of chunked data\n");
+            client->body_read_done = 1;
+        }
     }
-    if (c == '\r' || c == ';') client->state = HTTP_READING_CHUNK_TRAIL;
+
+    if (c == '\r' || c == ';')
+    {
+        client->state = HTTP_READING_CHUNK_TRAIL;
+    }
 }
 
 static int8_t read_chunk_line(struct pico_http_client *client)
