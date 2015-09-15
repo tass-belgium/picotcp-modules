@@ -92,17 +92,18 @@
 #define HTTP_METHOD_POST    2u
 
 /* List of events - shared between client and server */
-#define EV_HTTP_CON         1u
-#define EV_HTTP_REQ       2u
-#define EV_HTTP_PROGRESS  4u
-#define EV_HTTP_SENT          8u
-#define EV_HTTP_CLOSE     16u
-#define EV_HTTP_ERROR     32u
-#define EV_HTTP_BODY            64u
-#define EV_HTTP_DNS             128u
-#define EV_HTTP_WRITE_SUCCESS   256u
-#define EV_HTTP_WRITE_FAILED    512u
-#define EV_HTTP_WRITE_PROGRESS_MADE 1024u
+#define EV_HTTP_CON                     1u
+#define EV_HTTP_REQ                     2u
+#define EV_HTTP_PROGRESS                4u
+#define EV_HTTP_SENT                    8u
+#define EV_HTTP_CLOSE                   16u
+#define EV_HTTP_ERROR                   32u
+#define EV_HTTP_BODY                    64u
+#define EV_HTTP_DNS                     128u
+#define EV_HTTP_WRITE_SUCCESS           256u
+#define EV_HTTP_WRITE_FAILED            512u
+#define EV_HTTP_WRITE_PROGRESS_MADE     1024u
+#define EV_HTTP_LONG_POLL_ERROR         2048u
 
 struct pico_mime_map {
     const char * extension;
@@ -111,6 +112,7 @@ struct pico_mime_map {
 
 struct pico_http_uri
 {
+    uint8_t *raw;
     uint8_t protoHttp; /* is the protocol Http ? */
     char *host;              /* hostname */
     uint16_t port;       /* port if specified */

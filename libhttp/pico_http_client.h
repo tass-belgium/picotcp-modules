@@ -57,6 +57,8 @@ int32_t pico_http_client_get_write_progress(uint16_t conn, uint32_t *total_bytes
 int32_t pico_http_client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
 int8_t pico_http_client_send_raw(uint16_t conn, uint8_t *request);
 int8_t pico_http_client_send_get(uint16_t conn, uint8_t connection);
+int8_t pico_http_client_long_poll_send_get(uint16_t conn, uint8_t connection);
+int8_t pico_http_client_long_poll_cancel(uint16_t conn);
 int8_t pico_http_client_send_post(uint16_t conn, uint8_t *post_data, uint32_t post_data_len, uint8_t connection, uint8_t *content_type, uint8_t *cache_control);
 int8_t pico_http_client_send_delete(uint16_t conn, uint8_t connection);
 int8_t pico_http_client_send_post_multipart(uint16_t conn, struct multipart_chunk **post_data, uint16_t post_data_len, uint8_t connection);
