@@ -1,3 +1,4 @@
+#include "pico_mqtt_error.h"
 #include "pico_mqtt_socket.h"
 
 /**
@@ -14,8 +15,8 @@ struct pico_mqtt_socket{
 
 static struct pico_mqtt_socket* connection_open( const char* URI );
 static int connection_read(struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count);
-static const struct addrinfo* resolve_URI( const char* URI );
-static int socket_connect( const struct addrinfo* addresses );
+static int resolve_URI( struct addrinfo** addresses, const char* URI);
+static int socket_connect( struct pico_mqtt_socket* socket, struct addrinfo* addresses );
 static struct addrinfo lookup_configuration( void );
 
 /**
@@ -23,14 +24,46 @@ static struct addrinfo lookup_configuration( void );
 **/
 
 /* create pico mqtt socket and connect to the URI, returns NULL on error*/
-struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, int timeout){
-	uint32_t temp = timeout;
-	temp++;
-	return connection_open( URI );
+int pico_mqtt_connection_open(struct pico_mqtt_socket** socket, const char* URI, struct timeval* time_left)
+{
+	struct addrinfo* addres = NULL;
+	int result = 0;
+
+#ifdef DEBUG
+	if(socket == NULL)
+	{
+		PERROR("invallid arguments");
+		return ERROR;
+	}
+#endif
+
+	result = resolve_URI( &addres, URI );
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	*socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
+
+	result = socket_connect( *socket, addres );
+	if(result == ERROR)
+	{
+		PTODO("check if this is the correct way to free the address info struct"); /* //TODO */
+		freeaddrinfo((struct addrinfo*) addres);
+		free(*socket);
+		return ERROR;
+	}
+
+	PTODO("check if this is the correct way to free the address info struct"); /* //TODO */
+	freeaddrinfo((struct addrinfo*) addres);
+
+	return SUCCES;
 }
 
 /* read data from the socket, return the number of bytes read */
-int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count, int timeout){
+int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct timeval* time_left)
+{
+	PTODO("refactor this code"); /* //TODO */
 	struct pollfd poll_options;
 	int result;
 	
@@ -41,110 +74,177 @@ int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffe
 	poll_options.fd = socket->descriptor;
 	poll_options.events = 0;
 	poll_options.events |= POLLIN; /* wait until their is data to read*/
-	poll_options.events |= POLLPRI; /* wait until their is urgent data to read*/
 	poll_options.revents = 0;
 
-	result = poll(&poll_options, 1, timeout);
-	if(result < 0){ /* error */
-		return -1;
+/*	result = poll(&poll_options, 1, timeout);
+	if(result < 0){  error */
+/*		return -1;
 	}
 
-	if(result == 0){ /* timeout */
-		return 0;
+	if(result == 0){  timeout */
+/*		return 0;
 	}
 
-	if(result > 1){ /* implementation error, only 1 fd was passed*/
-		return -1;
+	if(result > 1){  implementation error, only 1 fd was passed*/
+/*		return -1;
 	}
 
 	result =  connection_read(socket, read_buffer, count);
-	return result;
+	return result;*/
+	return SUCCES;
 }
 
 /* write data to the socket, return the number of bytes written*/
-int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, const uint32_t count, int timeout){
-	timeout++; /* to avoid unused error */
-	return write(socket->descriptor, write_buffer, count);
+int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* read_buffer, struct pico_mqtt_data* write_buffer, struct timeval* time_left)
+{
+	PTODO("Set the file descriptors for exeptions\n");
+	fd_set write_file_descriptors;
+/*	fd_set exeption_file_descriptors;*/
+	int result = 0;
+#ifdef DEBUG
+	if((connection == NULL) || (write_buffer == NULL) || (time_left == NULL))
+	{
+		PERROR("invallid arugments\n");
+		return ERROR;
+	}
+#endif
+	
+	FD_ZERO(&write_file_descriptors);
+/*	FD_ZERO(&exeption_file_descriptors);*/
+	FD_SET(connection->descriptor, &write_file_descriptors);
+/*	FD_SET(connection->descriptor, &exeption_file_descriptors);*/
+
+	result = select(2, NULL, &write_file_descriptors, NULL, time_left);
+/*	result = select(2, NULL, &write_file_descriptor, &exeption_file_descriptors, time_left);*/
+
+	if(result == -1)
+	{
+		PERROR("Select returned an error: %d - \n", errno, strerror(errno));
+		return ERROR;
+	}
+
+	if(result == 0)
+	{
+		return SUCCES; /* a timeout occurred */
+	}
+
+#ifdef DEBUG
+	if(result > 1)
+	{
+		PERROR("It should not be possible to have more then 1 active file descriptor.\n");
+	}
+
+	if(!FD_ISSET(connection->descriptor, &write_file_descriptors))
+	{
+		PERROR("Select returned without error, a connections should be ready to read\n");
+		return ERROR;
+	}
+#endif
+
+	if(result == 1)
+	{
+		uint32_t bytes_written = 0;
+		bytes_written = write(connection->descriptor, write_buffer->data, write_buffer->length);
+		write_buffer->data += bytes_written;
+		write_buffer->length -= bytes_written;
+	}
+
+	return SUCCES;	
 }
 
 /* close pico mqtt socket, return -1 on error */
-int pico_mqtt_connection_close( struct pico_mqtt_socket* socket){
-	int error = 0;
-	if( socket == NULL )
-		return -1;
-	
-	error =  close(socket->descriptor);
-	free(socket);
-	return error;
+int pico_mqtt_connection_close( struct pico_mqtt_socket** socket)
+{
+	int result = 0;
+#ifdef DEBUG
+	if(socket == NULL)
+	{
+		PERROR("invallid arguments\n");
+		return ERROR;
+	}
+#endif
+	result =  close((*socket)->descriptor);
+	if( result == ERROR)
+	{
+		return ERROR;
+	}
+
+	free(*socket);
+	*socket = NULL;
+
+	return SUCCES;
 }
 
 /**
 * private function implementation
 **/
-
+/*
 static struct pico_mqtt_socket* connection_open( const char* URI ){
-	const struct addrinfo* addres = resolve_URI( URI );
-	struct pico_mqtt_socket* socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
-
-	if(addres == NULL){
-		return 0;
-	}
-
-	socket->descriptor = socket_connect (addres);
-
-	freeaddrinfo((struct addrinfo*) addres); /* check if this is the correct way todo this */
-
-	if(socket->descriptor == -1){
-		free(socket);
-		return NULL;
-	}
-
-	return socket;
 }
-
+*/
 /* return the socket file descriptor */
-static int socket_connect( const struct addrinfo* addres ){
-	const struct addrinfo *current_addres;
-	int socket_descriptor;
+static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres ){
+	struct addrinfo *current_addres = NULL;
 	int result = 0;
+#ifdef DEBUG
+	if((connection == NULL) || (addres == NULL))
+	{
+		return ERROR;
+	}
+#endif
+
+	PTODO("Set the socket descriptor to non blocking.\n");
 
 	for (current_addres = addres; current_addres != NULL; current_addres = current_addres->ai_next) {
-		socket_descriptor = socket(current_addres->ai_family, current_addres->ai_socktype, current_addres->ai_protocol);
+		connection->descriptor = socket(current_addres->ai_family, current_addres->ai_socktype, current_addres->ai_protocol);
 	
-		if (socket_descriptor == -1)
+		if(connection->descriptor == -1)
 			continue;
 		
-		result = connect(socket_descriptor, current_addres->ai_addr, current_addres->ai_addrlen);
-		if ( result != -1)
-			return socket_descriptor; /* succes */
+		result = connect(connection->descriptor, current_addres->ai_addr, current_addres->ai_addrlen);
+		if( result == ERROR )
+		{
+			close(connection->descriptor);
+			continue;
+		} else
+		{
+			return SUCCES;
+		}
 		
-		close(socket_descriptor);
 	}
 	
-	return -1; /* failed */
+	return ERROR;
 }
 
 /* return a list of IPv6 addresses */
-static const struct addrinfo* resolve_URI( const char* URI ){
-	struct addrinfo * res;
+static int resolve_URI( struct addrinfo** addresses, const char* URI ){
 	const struct addrinfo hints =  lookup_configuration();
-	char* addres_string = (char*) malloc(100);
+	int result = 0;
 
+#ifdef DEBUG
+	char addres_string[100];
+#endif
+
+#ifdef DEBUG
+	if( addresses == NULL )
+	{
+		PERROR("invallid arguments");
+		return ERROR;
+	}
+#endif
 
 	/* //TODO specify the service, no hardcoded ports.*/
-	int result = getaddrinfo( URI, "1883", &hints, &res );
-	printf("resolving the uri \n");
+	result = getaddrinfo( URI, "1883", &hints, addresses );
 	if(result != 0){
 		printf("error %d: %s\n", errno, strerror(errno)); 
-		return NULL;
+		return ERROR;
 	}
+#ifdef DEBUG
+	inet_ntop ((*addresses)->ai_family, &((struct sockaddr_in6*)((*addresses)->ai_addr))->sin6_addr ,addres_string, 100);
+	PINFO("resolved URI(%s) to address: %s\n", URI, addres_string);
+#endif
 
-	inet_ntop (res->ai_family, &((struct sockaddr_in6*)res->ai_addr)->sin6_addr ,addres_string, 100);
-	printf("resolved URI (%s) to addres: %s\n",URI, addres_string);
-
-	free((void*) addres_string);
-
-	return res;
+	return SUCCES;
 }
 
 /* return the configuration for the IP lookup*/
