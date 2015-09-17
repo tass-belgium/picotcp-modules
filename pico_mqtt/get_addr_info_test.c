@@ -65,18 +65,7 @@ int lookup_host (const char *host)
   printf ("Host: %s\n", host);
   while (res)
     {
-      inet_ntop (res->ai_family, res->ai_addr->sa_data, addrstr, 100);
-
-      switch (res->ai_family)
-        {
-        case AF_INET:
-          ptr = &((struct sockaddr_in *) res->ai_addr)->sin_addr;
-          break;
-        case AF_INET6:
-          ptr = &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr;
-          break;
-        }
-      inet_ntop (res->ai_family, ptr, addrstr, 100);
+      inet_ntop (res->ai_family, &((struct sockaddr_in6 *) res->ai_addr)->sin6_addr, addrstr, 100);
       printf ("IPv%d address: %s (%s)\n", res->ai_family == PF_INET6 ? 6 : 4,
               addrstr, res->ai_canonname);
       res = res->ai_next;
