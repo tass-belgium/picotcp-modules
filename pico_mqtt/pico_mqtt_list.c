@@ -19,19 +19,22 @@ struct pico_mqtt_list
 	uint32_t length;
 	struct element* first;
 	struct element* last;
-	uint8_t sorted;
 };
 
 /**
 * Private function prototypes
 **/
 
-static inline int create_element(struct element** element);
+static inline int create_element(struct element** element, struct pico_mqtt_message* message);
 static inline int destroy_element(struct element** element);
 static int get_element_by_index(struct pico_mqtt_list* list, struct element** element, uint32_t index);
 static int get_element_by_message(struct pico_mqtt_list* list, struct element** element, struct pico_mqtt_message* message);
 static int get_element_by_message_id(struct pico_mqtt_list* list, struct element** element, uint16_t  message_id);
 static int remove_element(struct pico_mqtt_list* list, struct element* element);
+
+#ifdef DEBUG
+static void print_element(struct element* e);
+#endif
 
 /**
 * Public function declaration
@@ -52,7 +55,7 @@ int pico_mqtt_list_create(struct pico_mqtt_list** list_ptr)
 		return ERROR;
 	}
 
-	**list_ptr = (struct pico_mqtt_list) {.length = 0,.first = NULL, .last = NULL, .sorted = 1};
+	**list_ptr = (struct pico_mqtt_list) {.length = 0,.first = NULL, .last = NULL};
 
 	return SUCCES;
 }
@@ -67,7 +70,7 @@ int pico_mqtt_list_push(struct pico_mqtt_list* list, struct pico_mqtt_message* m
 	}
 #endif
 
-	if(create_element(&element) == ERROR)
+	if(create_element(&element, message) == ERROR)
 	{
 		return ERROR;
 	}
@@ -112,13 +115,12 @@ int pico_mqtt_list_add(struct pico_mqtt_list* list, struct pico_mqtt_message* me
 		return ERROR;
 	}
 
-	if(create_element(&element) == ERROR)
+	if(create_element(&element, message) == ERROR)
 	{
 		return ERROR;
 	}
 
 	list->length += 1;
-	element->message = message;
 	
 	if(list->length == 1)
 	{
@@ -156,7 +158,6 @@ int pico_mqtt_list_add(struct pico_mqtt_list* list, struct pico_mqtt_message* me
 
 int pico_mqtt_list_find(struct pico_mqtt_list* list, struct pico_mqtt_message** message_ptr, uint16_t message_id)
 {
-	uint32_t index = 0;
 	struct element* element = NULL;
 
 #ifdef DEBUG
@@ -247,8 +248,6 @@ int pico_mqtt_list_remove_by_id(struct pico_mqtt_list* list, uint16_t message_id
 
 int pico_mqtt_list_peek(struct pico_mqtt_list* list, struct pico_mqtt_message** message_ptr)
 {
-	struct element* element = NULL;
-
 #ifdef DEBUG
 	if((list == NULL) || (message_ptr == NULL))
 	{
@@ -315,7 +314,7 @@ int pico_mqtt_list_destroy(struct pico_mqtt_list** list_ptr)
 	struct element* current = NULL;
 	struct element* next = NULL;
 #ifdef DEBUG
-	if( list == NULL )
+	if( list_ptr == NULL )
 	{
 		return ERROR;
 	}
@@ -332,7 +331,7 @@ int pico_mqtt_list_destroy(struct pico_mqtt_list** list_ptr)
 		current = next;
 	}
 	
-	free(list_ptr);
+	free(*list_ptr);
 	*list_ptr = NULL;
 	return SUCCES;	
 }
@@ -341,10 +340,10 @@ int pico_mqtt_list_destroy(struct pico_mqtt_list** list_ptr)
 * Private function implementation
 **/
 
-static inline int create_element(struct element** element)
+static inline int create_element(struct element** element, struct pico_mqtt_message* message)
 {
 #ifdef DEBUG
-	if(element == NULL)
+	if((element == NULL) || (message == NULL))
 	{
 		return ERROR;
 	}
@@ -359,6 +358,7 @@ static inline int create_element(struct element** element)
 
 	(*element)->previous = NULL;
 	(*element)->next = NULL;
+	(*element)->message = message;
 
 	return SUCCES;
 }
@@ -382,7 +382,7 @@ static int get_element_by_index(struct pico_mqtt_list* list, struct element** el
 	uint32_t i = 0;
 
 #ifdef DEBUG
-	if((list == NULL) || (element == NULL) || (index >= list->index))
+	if((list == NULL) || (element == NULL) || (index >= list->length))
 	{
 		return ERROR;
 	}
@@ -475,3 +475,42 @@ static int remove_element(struct pico_mqtt_list* list, struct element* element)
 	
 	return destroy_element(&element);
 }
+
+#ifdef DEBUG
+static void print_element(struct element* e)
+{
+	printf("|  +---------------------------+  |\n");
+	printf("|  | list element: %10p  |  |\n", e);
+	printf("|  | previous: %10p      |  |\n", e->previous);
+	printf("|  | next: %10p          |  |\n", e->next);
+	printf("|  | message: %10p       |  |\n", e->message);
+	printf("|  | message_id: %10d    |  |\n", e->message->message_id);
+	printf("|  +---------------------------+  |\n");
+}
+
+void print_list(struct pico_mqtt_list* list)
+{
+	uint32_t i = 0;
+	struct element* current = list->first;
+
+	printf("+---------------------------------+\n");
+	printf("|  list: %10p               |\n", list);
+	printf("|  length: %10d             |\n", list->length);
+	printf("|                                 |\n");
+	printf("|  first: %10p              |\n", list->first);
+	printf("|  last: %10p               |\n", list->last);
+	printf("|                                 |\n");
+	printf("|                                 |\n");
+
+	while( current != NULL )
+	{
+		printf("|  index: %10d              |\n", i++);
+		print_element( current );
+		printf("|                                 |\n");
+		current = current->next;
+	}
+
+	printf("+---------------------------------+\n");
+}
+
+#endif

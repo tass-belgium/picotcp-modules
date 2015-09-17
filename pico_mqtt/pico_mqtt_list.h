@@ -29,4 +29,8 @@ int pico_mqtt_list_length(struct pico_mqtt_list* list, uint32_t* length);
 
 int pico_mqtt_list_destroy(struct pico_mqtt_list** list_ptr);
 
+#ifdef DEBUG
+void print_list(struct pico_mqtt_list* list);
+#endif
+
 #endif
