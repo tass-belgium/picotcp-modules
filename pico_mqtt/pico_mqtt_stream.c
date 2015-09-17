@@ -1,162 +1,357 @@
 #include "pico_mqtt_stream.h"
+#include "pico_mqtt_error.h"
 
 /**
 * Data Types
 **/
 
 struct pico_mqtt_stream{
-	struct pico_mqtt* mqtt;
-	int (*malloc)(struct pico_mqtt*, void**, size_t);
-	int (*free)(struct pico_mqtt*, void*, size_t);
 	struct pico_mqtt_socket* socket;
 
-	struct pico_mqtt_data* output_message;
+	struct pico_mqtt_message* output_message;
 	struct pico_mqtt_data output_message_buffer;
-	struct pico_mqtt_data* input_message;
-	uint8_t input_message_status; /* 0: receive fixed header, 1: receive message, 2: ready */
-	uint8_t input_message_type;
+	struct pico_mqtt_message* input_message;
 	struct pico_mqtt_data input_message_buffer;
+
+	uint8_t input_message_status; /* 0: receive fixed header, 1: receive message, 2: ready */
+
 	uint8_t* fixed_header_next_byte;
 	uint8_t fixed_header[5];
 };
 
-/** Error numbers
-*
-*  0: No Error
-*  -1: Invalid function input
-*  -2: Unable to allocate memory
-*  -3: TCP connection failed
-*  -4: Output message already set
-*  -5: Input message already set
-*  -6: Incomming message to long
-*
-**/
-
 /**
-* Static Function Prototypes
+* Private Function Prototypes
 **/
 
 static int8_t is_time_left(struct timeval* time_left);
-static int try_interpret_fixed_header(struct pico_mqtt_stream* stream, struct pico_mqtt_data* fixed_header);
+static int try_interpret_fixed_header(struct pico_mqtt* mqtt, struct pico_mqtt_data* fixed_header);
+static int send_message(struct pico_mqtt* mqtt, uint8_t* flag, struct timeval* time_left);
+static int receive_message(struct pico_mqtt* mqtt, uint8_t* flag, struct timeva* time_left);
 
 /**
 * Public Function Implementation
 **/
 
-int pico_mqtt_stream_create( struct pico_mqtt* mqtt, struct pico_mqtt_stream** stream, int (*my_malloc)(struct pico_mqtt*, void**, size_t), int (*my_free)(struct pico_mqtt*, void*, size_t)){
-	struct pico_mqtt_stream* result;
-
-	if( stream == NULL || my_malloc == NULL || my_free == NULL )
-		return -1;
-
-	result = (struct pico_mqtt_stream*) malloc(sizeof(struct pico_mqtt_stream));
-	if(result == NULL)
-		return -2;
-
-	*result = ( struct pico_mqtt_stream ) {
-		.mqtt = mqtt,
-		.malloc = my_malloc,
-		.free = my_free,
-		.socket = mqtt->socket
-	};
-
-	*stream = result;
-	return 0;
-}
-
-int pico_mqtt_stream_is_output_message_set( struct pico_mqtt_stream* stream ){
-	if(stream == NULL)
-		return 0;
-
-	if(stream->output_message == NULL)
-		return 0;
-
-	return 1;
-}
-
-int pico_mqtt_stream_is_input_message_set( struct pico_mqtt_stream* stream ){
-	if(stream == NULL)
-		return 0;
-
-	if(stream->input_message == NULL)
-		return 0;
-
-	return 1;
-}
-
-int pico_mqtt_stream_set_message( struct pico_mqtt_stream* stream, struct pico_mqtt_data* message){
-	if(stream == NULL || message == NULL)
-		return -1;
-
-	if(pico_mqtt_stream_is_output_message_set(stream))
-		return -4;
-
-	stream->output_message = message;
-	stream->output_message_buffer = *message;
-	return 0;
-}
-
-void pico_mqtt_stream_destroy( struct pico_mqtt_stream* stream ){
-	free((void*) stream);
-}
-
-int pico_mqtt_stream_get_message( struct pico_mqtt_stream* stream, struct pico_mqtt_data** message_ptr){
-	if(stream == NULL || message_ptr == NULL)
-		return -1;
-
-	*message_ptr = stream->input_message;
-	stream->input_message = NULL; 
-	return 0;
-}
-
-int pico_mqtt_stream_send_receive( struct pico_mqtt_stream* stream, struct timeval* time_left){
-	if(stream == NULL)
-		return -1;
-
-	if(pico_mqtt_stream_is_input_message_set(stream))
-		return -5;
-
+int pico_mqtt_stream_create( struct pico_mqtt* mqtt, const char* uri, uint32_t* time_left){
 	int result;
-	while(is_time_left(time_left) == 1){
-		if(stream->input_message_status == 0){ /*read fixed header*/
-			struct pico_mqtt_data fixed_header = {.length = 1, .data = (void*) (stream->fixed_header_next_byte)};
-			result = pico_mqtt_connection_send_receive(
-				stream->socket, 
-				&(stream->output_message_buffer), 
-				&fixed_header, 
-				time_left);
-			if(result == 1){ /*returned succesfull*/
-				result = try_interpret_fixed_header(stream, &fixed_header);
-				if(result != 1)
-					return result;
-			}
-		} else { /*do read and write*/
-			result = pico_mqtt_connection_send_receive(
-				stream->socket, 
-				&(stream->output_message_buffer), 
-				&(stream->input_message_buffer), 
-				time_left);
-			if(result != 1)
-				return result;
-		}
+	struct timeval timeout = {.tv_usecs = 0, .tv_secs = 0};
+#ifdef DEBUG
+	if( mqtt == NULL )
+	{
+		return ERROR;
+	}
+#endif
 
+	mqtt->stream = (struct pico_mqtt_stream*) malloc(sizeof(struct pico_mqtt_stream));
+	if(mqtt->stream == NULL)
+	{
+		return ERROR;
+	}
+	
+	*(mqtt->stream) = 
+	{
+		.socket = NULL,
+		.output_message = NULL,
+		.output_message_buffer = 
+		{
+			.length = 0,
+			.data = NULL
+		},
+		.input_message = NULL,
+		.input_message_buffer =
+		{
+			.length = 0,
+			.data = NULL
+		},
+		input_message_status = 0,
+		.fixed_header_next_byte = 0,
+		.fixed_header = {0, 0, 0, 0, 0}
+	};
+	
+	result = ms_to_struct_timeval(&timeout, time_left);
+	if(result == ERROR)
+	{
+		return ERRROR;
 	}
 
+	result = pico_mqtt_connection_open(&(mqtt->stream->socket), uri, &timeout);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	return SUCCES;
+}
+
+int pico_mqtt_stream_is_output_message_set( struct pico_mqtt* mqtt, uint8_t* result){
+#ifdef DEBUG
+	if(mqtt == NULL)
+	{
+		return ERROR;
+	}
+
+	if((mqtt->stream == NULL) || (result == NULL))
+	{
+		return ERROR;
+	}
+#endif
+
+	if(mqtt->stream->output_message == NULL)
+	{
+		*result = 0;
+	} else
+	{
+		*result = 1;
+	}
+
+	return SUCCES;
+}
+
+int pico_mqtt_stream_is_input_message_set( struct pico_mqtt* mqtt, uint8_t* result ){
+#ifdef DEBUG
+	if(mqtt == NULL)
+	{
+		return ERROR;
+	}
+
+	if((mqtt->stream == NULL) || (result == NULL))
+	{
+		return ERROR;
+	}
+#endif
+	if(mqtt->stream->input_message == NULL)
+	{
+		*result = 0;
+	} else
+	{
+		*result = 1;
+	}
+
+	return SUCCES;
+}
+
+int pico_mqtt_stream_set_message( struct pico_mqtt* mqtt, struct pico_mqtt_message* message){
+	int result = 0;
+	uint8_t flag = 0;
+
+#ifdef DEBUG
+	if(mqtt == NULL)
+	{
+		return ERROR;
+	}
+
+	if((mqtt->stream == NULL) || (message == NULL))
+	{
+		return ERROR;
+	}
+#endif
+
+	result = pico_mqtt_stream_is_output_message_set(mqtt->stream, &flag);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	if(flag == 1)
+	{
+		return ERROR;
+		/* set an error that the message is set */
+	}
+
+	mqtt->stream->output_message = message;
+	mqtt->stream->output_message_buffer = *(message->data);
+	return SUCCES;
+}
+
+int pico_mqtt_stream_get_message( struct pico_mqtt* mqtt, struct pico_mqtt_message** message_ptr){
+	int result = 0;
+	uint8_t flag = 0;
+
+#ifdef DEBUG
+	if(mqtt == NULL)
+	{
+		return ERROR;
+	}
+
+	if((mqtt->stream == NULL) || (message_ptr == NULL))
+	{
+		return ERROR;
+	}
+#endif
+
+	result = pico_mqtt_stream_is_input_message_set(mqtt->stream, &flag);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	if(flag == 0)
+	{
+		return ERROR;
+		/* set an error that their is no input message set */
+	}
+
+	*message_ptr = mqtt->stream->input_message;
+	mqtt->stream->input_message = NULL; 
 	return 0;
 }
+
+int pico_mqtt_stream_send_receive( struct pico_mqtt* mqtt, uint32_t* time_left){
+	int result = 0;
+	uint8_t input_message_flag = 0;
+	uint8_t output_message_flag = 0;
+
+#ifdef DEBUG
+	if(mqtt == NULL)
+	{
+		return ERROR;
+	}
+
+	if(mqtt->stream == NULL)
+	{
+		return ERROR;
+	}
+#endif
+
+	result = pico_mqtt_stream_is_output_message_set(mqtt, &output_message_flag);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	result = pico_mqtt_stream_is_input_message_set(mqtt, &input_message_flag);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	while((is_time_left(time_left) == 1))
+	{
+		if((input_message_flag == 0))
+		{
+
+			if((output_message_flag == 0)) /* only recieve a message */
+			{
+				result = receive_message(mqtt, &input_message_flag, time_left);
+				if(result == ERROR)
+				{
+					return ERROR;
+				}
+			} else /* send and receive a message */
+			{
+				result = send_message(mqtt, &output_message_flag, time_left);
+				if(result == ERROR)
+				{
+					return ERROR;
+				}
+
+				result = receive_message(mqtt, &input_message_flag, time_left);
+				if(result == ERROR)
+				{
+					return ERROR;
+				}
+			}
+
+		} else
+		{
+			if((output_message_flag == 0)) /* nothing more to be done */
+			{
+				return SUCCES;		
+			} else /* send a message */
+			{
+				result = send_message(mqtt, &output_message_flag, time_left);
+				if(result == ERROR)
+				{
+					return ERROR;
+				}
+			}
+		}
+	}
+	
+	/* timeout occurred */
+	return SUCCES;
+}
+
+int pico_mqtt_stream_destroy( struct pico_mqtt* mqtt )
+{
+	int result = 0;
+#ifdef DEBUG
+	if(mqtt == NULL)
+	{
+		return ERROR;
+	}
+#endif
+
+	result = pico_mqtt_connection_close(&(mqtt->stream->socket));
+	if(result == ERROR)
+	{
+		free(stream);
+		return ERROR;
+	}
+	
+	free(stream);
+	return SUCCES;
+}
+
 
 /**
 * Private Function Implementation
 **/
 
+static int send_message(struct pico_mqtt* mqtt, uint8_t* flag, struct timeval* time_left)
+{
+	int result = 0;
+#ifdef DEBUG
+	if(mqtt->stream->socket == NULL)
+	{
+		return ERROR;
+	}
+#endif
+	result = pico_mqtt_connection_write(mqtt->stream->socket, mqtt->stream->output_message_buffer, time_left);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	result = check_message_status(mqtt);
+	if(result == ERROR)
+	{
+		return ERROR;
+	}
+
+	return SUCCES;
+}
+
+static int receive_message(struct pico_mqtt* mqtt, uint8_t* flag, struct timeval* time_left);
+
+static int check_message_status(struct pico_mqtt* mqtt)
+{
+	int result = 0;
+
+	if(mqtt->stream->output_message_buffer.length == 0) /* done sending message */
+	{
+		mqtt->stream->output_message_buffer = {.length = 0, .data = NULL}; /* clear the buffer */
+		PTODO("Use the correct free method to remove a message\n");
+		/*result = mqtt->free(&(mqtt->stream->output_message));  free the message */
+
+		if(result == ERROR)
+		{
+			return ERROR;
+		}
+	}
+}
+
 static int8_t is_time_left(struct timeval* time_left){
 	if(time_left == NULL)
-		return -1;
+	{
+		/* infinite time left */
+		return 1;
+	}
 
-	return time_left->tv_sec != 0 || time_left->tv_usec != 0;
+	return ((time_left->tv_sec != 0) || (time_left->tv_usec != 0));
 }
 			
-static int try_interpret_fixed_header(struct pico_mqtt_stream* stream, struct pico_mqtt_data* fixed_header){
+static int try_interpret_fixed_header(struct pico_mqtt* mqtt, struct pico_mqtt_data* fixed_header){
 	if(fixed_header->length == 0){ /* check if bytes where red */
 		++(stream->fixed_header_next_byte);
 		uint8_t bytes_red = stream->fixed_header_next_byte - &(stream->fixed_header[0]);

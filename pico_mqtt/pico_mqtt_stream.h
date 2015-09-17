@@ -1,10 +1,11 @@
 #include <sys/time.h>
 #include "pico_mqtt.h"
+#include "pico_mqtt_private.h"
 #include "pico_mqtt_socket.h"
 
 struct pico_mqtt_stream;
 
-int pico_mqtt_stream_create( struct pico_mqtt* mqtt, struct pico_mqtt_stream** stream, int (*my_malloc)(struct pico_mqtt*, void**, size_t), int (*my_free)(struct pico_mqtt*, void*, size_t));
+int pico_mqtt_stream_create( struct pico_mqtt* mqtt, const char* uri);
 int pico_mqtt_stream_is_output_message_set( struct pico_mqtt_stream* stream );
 int pico_mqtt_stream_is_input_message_set( struct pico_mqtt_stream* stream );
 int pico_mqtt_stream_set_message( struct pico_mqtt_stream* stream, struct pico_mqtt_data* message);
