@@ -10,13 +10,17 @@ OPTIONS?=
 
 CFLAGS=-I$(PICOTCP)/build/include
 CFLAGS += -Wall
+ifeq ($(CROSS_COMPILE),arm-none-eabi-)
 CFLAGS += -mcpu=cortex-m3 -mthumb -mlittle-endian -mthumb-interwork
 CFLAGS += -ffreestanding -nostartfiles
 CFLAGS += -mfloat-abi=soft
 CFLAGS += -DCORE_M3 -DLPC18XX
 CFLAGS += -DDEBUG_HARDFAULT -ggdb -O0
 CFLAGS += -DMEM_MEASURE
-
+endif
+ifeq ($(ARCH),faulty)
+CFLAGS += -DUNIT_TEST
+endif
 PWD=`pwd`
 
 
@@ -35,7 +39,9 @@ libhttp.a:
 	$(AR) cru libhttp.a *.o 
 	$(RANLIB) libhttp.a
 
+units: libhttp.a
+	gcc -o units.app $^ -I./ $(CFLAGS) ../test/unit/modunit_pico_http_client.c -lcheck -lm -pthread -lrt libhttp.a
 
 clean:
 	rm -rf picotcp
-	rm -f *.o *.a
+	rm -f *.o *.a ../test/unit/*.o

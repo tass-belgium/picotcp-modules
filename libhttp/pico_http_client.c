@@ -16,7 +16,6 @@
 #include "pico_http_util.h"
 #include "pico_ipv4.h"
 #include "pico_stack.h"
-
 /*
  * This is the size of the following header
  *
@@ -110,7 +109,7 @@ struct pico_http_client
 #define HTTP_PROTO_TOK      "http://"
 #define HTTP_PROTO_LEN      7u
 
-static void free_uri(struct pico_http_client *to_be_removed);
+static int8_t free_uri(struct pico_http_client *to_be_removed);
 static int32_t client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID);
 static void free_header(struct pico_http_client *to_be_removed);
 
@@ -166,9 +165,14 @@ static void print_request_part_info(struct pico_http_client *client)
 }
 
 //User memory buffers will not be freed
-static void request_parts_destroy(struct pico_http_client *client)
+static int8_t request_parts_destroy(struct pico_http_client *client)
 {
     uint32_t i = 0;
+    if (!client)
+    {
+        return HTTP_RETURN_ERROR;
+    }
+
     for (i=0; i<client->request_parts_len; i++)
     {
         if (client->request_parts[i]->copy == HTTP_COPY_TO_HEAP || client->request_parts[i]->mem == HTTP_NO_USER_MEM)
@@ -182,6 +186,7 @@ static void request_parts_destroy(struct pico_http_client *client)
     client->request_parts_len_done = 0;
     client->request_parts_len = 0;
     client->request_parts_idx = 0;
+    return HTTP_RETURN_OK;
 }
 
 static int32_t socket_write_request_parts(struct pico_http_client *client)
@@ -352,24 +357,26 @@ static int8_t pico_process_uri(const uint8_t *uri, struct pico_http_uri *urikey)
     return HTTP_RETURN_OK;
 
 error:
-    if (urikey->resource)
+    if (urikey)
     {
-        PICO_FREE(urikey->resource);
-        urikey->resource = NULL;
-    }
+        if (urikey->resource)
+        {
+            PICO_FREE(urikey->resource);
+            urikey->resource = NULL;
+        }
 
-    if (urikey->raw)
-    {
-        PICO_FREE(urikey->raw);
-        urikey->raw = NULL;
-    }
+        if (urikey->raw)
+        {
+            PICO_FREE(urikey->raw);
+            urikey->raw = NULL;
+        }
 
-    if (urikey->host)
-    {
-        PICO_FREE(urikey->host);
-        urikey->host = NULL;
+        if (urikey->host)
+        {
+            PICO_FREE(urikey->host);
+            urikey->host = NULL;
+        }
     }
-
     return HTTP_RETURN_ERROR;
 }
 
@@ -1180,7 +1187,7 @@ static int32_t client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t co
     if (pico_string_to_ipv4(client->urikey->host, &ip) == -1)
     {
         dbg("Querying : %s \n", client->urikey->host);
-        pico_dns_client_getaddr(client->urikey->host, dns_callback, client);
+        pico_dns_client_getaddr(client->urikey->host, (void *)dns_callback, client);
     }
     else
     {
@@ -1799,8 +1806,13 @@ static void free_header(struct pico_http_client *to_be_removed)
     }
 }
 
-static void free_uri(struct pico_http_client *to_be_removed)
+static int8_t free_uri(struct pico_http_client *to_be_removed)
 {
+    if (!to_be_removed)
+    {
+        return HTTP_RETURN_ERROR;
+    }
+
     if (to_be_removed->urikey)
     {
         if (to_be_removed->urikey->host)
@@ -1817,6 +1829,9 @@ static void free_uri(struct pico_http_client *to_be_removed)
         }
         PICO_FREE(to_be_removed->urikey);
     }
+    
+    return HTTP_RETURN_OK;
+
 }
 
 int8_t MOCKABLE pico_http_client_close(uint16_t conn)
