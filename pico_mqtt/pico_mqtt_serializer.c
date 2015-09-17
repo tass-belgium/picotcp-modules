@@ -1,11 +1,5 @@
 #include "pico_mqtt_serializer.h"
-
-/**
-* Error related
-**/
-
-#define SUCCES 0
-#define ERROR -1
+#include "pico_mqtt_error.h"
 
 /**
 * Lengths
@@ -594,13 +588,13 @@ static int create_acknowledge(
 
 static int create_message(struct pico_mqtt* mqtt, struct pico_mqtt_message** result, size_t length, void** stream, uint8_t fixed_header, uint16_t message_id)
 {
+	PTODO("Use a global method to create the message.\n");
 	*result = (struct pico_mqtt_message*) malloc(sizeof(struct pico_mqtt_message));
 	**result = (struct pico_mqtt_message) {
+		.header = fixed_header;
 		.message_id = message_id,
 		.topic = {.length = 0, .data = NULL},
 		.data = {.length = 0, .data = NULL}};
-
-	(*result)->header = fixed_header;
 
 	if(mqtt->malloc(mqtt, &((*result)->data.data), length) != SUCCES)
 	{
