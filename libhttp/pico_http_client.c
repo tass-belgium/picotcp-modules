@@ -746,6 +746,11 @@ static int8_t *pico_http_client_build_delete(const struct pico_http_uri *uri_dat
 
 struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, uint8_t *name, uint8_t *filename, uint8_t *content_disposition, uint8_t *content_type)
 {
+    if (length_data <= 0 || data == NULL)
+    {
+        return NULL;
+    }
+
     struct multipart_chunk *chunk = PICO_ZALLOC(sizeof(struct multipart_chunk));
 
     if (!chunk)
@@ -785,6 +790,10 @@ struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_da
 
 int8_t multipart_chunk_destroy(struct multipart_chunk *chunk)
 {
+    if (!chunk)
+    {
+        return -1;
+    }
     PICO_FREE(chunk->data);
     PICO_FREE(chunk->name);
     PICO_FREE(chunk->filename);
@@ -1145,8 +1154,14 @@ static int32_t client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t co
 {
     struct pico_http_client *client;
     uint32_t ip = 0;
+
+    if (!wakeup || !uri)
+    {
+        return HTTP_RETURN_ERROR;
+    }
+
     client = PICO_ZALLOC(sizeof(struct pico_http_client));
-    if(!client)
+    if (!client)
     {
         /* memory error */
         pico_err = PICO_ERR_ENOMEM;
@@ -1173,7 +1188,6 @@ static int32_t client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t co
     }
 
     pico_process_uri(uri, client->urikey);
-
     if (pico_tree_insert(&pico_client_list, client))
     {
         /* already in */
@@ -1191,7 +1205,7 @@ static int32_t client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t co
     }
     else
     {
-        dbg("host already and ip address, no dns required");
+        dbg("host already and ip address, no dns required\n");
         dns_callback(client->urikey->host, client);
     }
 
@@ -1352,6 +1366,11 @@ int8_t MOCKABLE pico_http_client_send_post(uint16_t conn, uint8_t *post_data, ui
     struct pico_http_client *http = pico_tree_findKey(&pico_client_list, &search);
     int32_t bytes_written = 0;
 
+    if(!post_data || !post_data_len)
+    {
+        return HTTP_RETURN_ERROR;
+    }
+
     if (!http)
     {
         dbg("Client not found !\n");
@@ -1422,7 +1441,12 @@ int8_t MOCKABLE pico_http_client_send_raw(uint16_t conn, uint8_t *request)
 
     if (!http)
     {
-        dbg("Client not found !\n");
+        dbg("Client not found!\n");
+        return HTTP_RETURN_ERROR;
+    }
+    if (!request)
+    {
+        dbg("Request is empty!\n");
         return HTTP_RETURN_ERROR;
     }
 
@@ -1829,7 +1853,7 @@ static int8_t free_uri(struct pico_http_client *to_be_removed)
         }
         PICO_FREE(to_be_removed->urikey);
     }
-    
+
     return HTTP_RETURN_OK;
 
 }
