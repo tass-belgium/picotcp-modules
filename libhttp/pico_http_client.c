@@ -1245,9 +1245,16 @@ int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, struct multi
     struct pico_http_client search = {
         .connectionID = conn
     };
-    struct pico_http_client *http = pico_tree_findKey(&pico_client_list, &search);
+    struct pico_http_client *http = NULL;
     int32_t bytes_written;
     int8_t rv = 0;
+
+    if (!post_data || !length_post_data)
+    {
+        return HTTP_RETURN_ERROR;
+    }
+
+    http = pico_tree_findKey(&pico_client_list, &search);
     if (!http)
     {
         dbg("Client not found !\n");
@@ -1363,14 +1370,14 @@ int8_t MOCKABLE pico_http_client_send_post(uint16_t conn, uint8_t *post_data, ui
     struct pico_http_client search = {
         .connectionID = conn
     };
-    struct pico_http_client *http = pico_tree_findKey(&pico_client_list, &search);
+    struct pico_http_client *http = NULL;
     int32_t bytes_written = 0;
 
     if(!post_data || !post_data_len)
     {
         return HTTP_RETURN_ERROR;
     }
-
+    http = pico_tree_findKey(&pico_client_list, &search);
     if (!http)
     {
         dbg("Client not found !\n");
@@ -1866,11 +1873,11 @@ int8_t MOCKABLE pico_http_client_close(uint16_t conn)
     };
     dummy.connectionID = conn;
 
-    dbg("Closing the client...\n");
+    dbg("Closing the client %d...\n", conn);
     to_be_removed = pico_tree_delete(&pico_client_list, &dummy);
     if (!to_be_removed)
     {
-        dbg("Warning ! Element not found ...");
+        dbg("Warning ! Element not found...");
         return HTTP_RETURN_ERROR;
     }
 

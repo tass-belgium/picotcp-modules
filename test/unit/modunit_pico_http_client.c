@@ -30,9 +30,17 @@ static struct pico_socket example_socket;
 static struct pico_http_client *example_client = NULL;
 static int write_success_cnt = 0;
 
+/*static inline void *pico_zalloc(size_t size)
+{
+    void *ptr = malloc(size);
+    if(ptr)
+        memset(ptr, 0u, size);
+    return ptr;
+}*/
+
 void cb(uint16_t ev, uint16_t conn)
 {
-    printf("Callback!\n");
+    printf("Callback! %d\n", ev);
     if (ev & EV_HTTP_WRITE_SUCCESS)
     {
         write_success_cnt++;
@@ -46,22 +54,26 @@ int pico_dns_client_getaddr(const char *url, void (*callback)(char *ip, void *ar
 
 int pico_socket_close(struct pico_socket *s)
 {
+    fail_if(s != &example_socket);
     return 0;
 }
 
 int pico_socket_connect(struct pico_socket *s, const void *srv_addr, uint16_t remote_port)
 {
+    printf("pico_socket_connect %p, %p\n", s, &example_socket);
     fail_if(s != &example_socket);
     return 0;
 }
 
 struct pico_socket *pico_socket_open(uint16_t net, uint16_t proto, void (*wakeup)(uint16_t ev, struct pico_socket *s))
 {
+    example_socket.wakeup = wakeup;
     return &example_socket;
 }
 
 int pico_socket_read(struct pico_socket *s, void *buf, int len)
 {
+    fail_if(s != &example_socket);
     return 0;
 }
 
@@ -69,6 +81,7 @@ int pico_socket_write(struct pico_socket *s, const void *buf, int len)
 {
     fail_if(buf == NULL);
     fail_if(len == 0);
+    printf("pico_socket_write %p, %p, buf: %p len: %d\n", s, &example_socket, buf, len);
     fail_if(s != &example_socket);
     return len;
 }
@@ -80,11 +93,20 @@ int pico_string_to_ipv4(const char *ipstr, uint32_t *ip)
 
 void *pico_tree_delete(struct pico_tree *tree, void *key)
 {
-    return NULL;
+    
+    if (((struct pico_http_client*)key)->connectionID == 99)
+    {
+        return NULL;
+    }
+    return example_client;
 }
 
 void *pico_tree_findKey(struct pico_tree *tree, void *key)
 {
+    if (((struct pico_http_client*)key)->connectionID == 99)
+    {
+        return NULL;
+    }
     return example_client;
 }
 
@@ -154,17 +176,20 @@ END_TEST
 START_TEST(tc_pico_http_client_open)
 {
     //TODO: test this: int32_t pico_http_client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
-    int32_t ret = 0;
+    int32_t conn = 0;
     char uri[50] = "http://httpbin.org/";
     /*Case1: no callback*/
-    ret = pico_http_client_open(uri, NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    conn = pico_http_client_open(uri, NULL);
+    ck_assert_int_eq(conn, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
     /*Case2: no uri*/
-    ret = pico_http_client_open(NULL, cb);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    conn = pico_http_client_open(NULL, cb);
+    ck_assert_int_eq(conn, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
     /*Case3: positive test*/
-    ret = pico_http_client_open("http://httpbin.org/", cb);
-    ck_assert_int_ge(ret, 0);
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ck_assert_int_ge(conn, 0);
+    pico_http_client_close(conn);
 }
 END_TEST
 START_TEST(tc_pico_http_client_send_raw)
@@ -175,18 +200,21 @@ START_TEST(tc_pico_http_client_send_raw)
     char request[256] = "POST / HTTP/1.1\nUser-Agent: picotcp\nAccept: */*\nHost: 192.168.2.22:8080\nCo    nnection: Keep-Alive\nContent-Type: application/x-www-form-urlencoded\nContent-Length: 17\n\nkey=1&test=robbin";
     /*Case1: unknown client*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_raw(9999, request);
+    ret = pico_http_client_send_raw(99, request);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
     /*Case2: empty request*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_send_raw(conn, NULL);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
     /*Case3: positive test*/
     write_success_cnt = 0;
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_send_raw(conn, request);
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
     ck_assert_int_eq(write_success_cnt, 1);//TODO: alles wordt in 1 keer geschreven
+    pico_http_client_close(conn);
 }
 END_TEST
 START_TEST(tc_pico_http_client_send_get)
@@ -194,21 +222,23 @@ START_TEST(tc_pico_http_client_send_get)
     //TODO: test this: int8_t pico_http_client_send_get(uint16_t conn, uint8_t *request);
     int32_t ret = 0;
     int16_t conn = 0;
-    uint8_t connection = HTTP_CONN_CLOSE;
     /*Case1: unknown client*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_get(9999, connection);
+    ret = pico_http_client_send_get(99, HTTP_CONN_CLOSE);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
     /*Case2: unknown connection*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_send_get(conn, 99);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
     /*Case3: positive test*/
     write_success_cnt = 0;
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_get(conn, connection);
+    ret = pico_http_client_send_get(conn, HTTP_CONN_CLOSE);
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
     ck_assert_int_eq(write_success_cnt, 1);//TODO: alles wordt in 1 keer geschreven 
+    pico_http_client_close(conn);
 }
 END_TEST
 START_TEST(tc_pico_http_client_send_post)
@@ -216,35 +246,148 @@ START_TEST(tc_pico_http_client_send_post)
     //TODO: test this: int8_t pico_http_client_send_post(uint16_t conn, uint8_t *post_data, uint32_t post_data_len, uint8_t connection, uint8_t *content_type, uint8_t *cache_control);
     int32_t ret = 0;
     int16_t conn = 0;
-    uint8_t connection = HTTP_CONN_CLOSE;
     uint8_t *post_data = "key=1&robbin=robbin";
     uint32_t post_data_len = strlen(post_data);
     char content_type[50] = "";
     char cache_controle[50] = "";
-    printf("ljsdhfksdjhfkjsdhfkjsdhfkjhsdfkhjdskjfh\n\n");
     /*Case1: unknown client*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_post(9999, post_data, post_data_len, connection, NULL, NULL);
+    ret = pico_http_client_send_post(99, post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    /*Case2: unknown connection*/
+    pico_http_client_close(conn);
+    /*Case2: empty data*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_post(conn, NULL, post_data_len, connection, NULL, NULL);
+    ret = pico_http_client_send_post(conn, NULL, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    /*Case3: unknown connection*/
+    pico_http_client_close(conn);
+    /*Case3: data_len = 0*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_post(conn, post_data, 0, connection, NULL, NULL);
+    ret = pico_http_client_send_post(conn, post_data, 0, HTTP_CONN_CLOSE, NULL, NULL);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    /*Case4: positive test*/
+    pico_http_client_close(conn);
+    /*Case4: unknown connection*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_post(conn, post_data, post_data_len, 100, NULL, NULL);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case5: positive test*/
     write_success_cnt = 0;
     conn = pico_http_client_open("http://httpbin.org/", cb);
-    ret = pico_http_client_send_post(conn, post_data, post_data_len, connection, NULL, NULL);
+    ret = pico_http_client_send_post(conn, post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
     ck_assert_int_eq(write_success_cnt, 1);//TODO: alles wordt in 1 keer geschreven 
+    pico_http_client_close(conn);
+}
+END_TEST
+START_TEST(tc_pico_http_client_send_post_multipart)
+{
+    //TODO: test this: int8_t pico_http_client_send_post_multipart(uint16_t conn, struct multipart_chunk **post_data, uint16_t post_data_len, uint8_t connection);;
+    int32_t ret = 0;
+    int16_t conn = 0;
+    uint32_t post_data_len = 2;
+    struct multipart_chunk **chunks1;
+    chunks1 = PICO_ZALLOC(2 * sizeof(struct multipart_chunk *));
+    chunks1[0] = multipart_chunk_create("data1", 5u, "name1", "filename1", "attachment", NULL);
+    chunks1[1] = multipart_chunk_create("data2", 5u, "name2", "filename2", "attachment", NULL);  
+    /*Case1: unknown client*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_post_multipart(99, chunks1, post_data_len, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case2: empty chunks (NULL)*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_post_multipart(conn, NULL, post_data_len, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case3: unknown connection*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_post_multipart(conn, chunks1, post_data_len, 100);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case4: data_len = 0*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_post_multipart(conn, chunks1, 0, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case5: positive test*/
+    write_success_cnt = 0;
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_post_multipart(conn, chunks1, post_data_len, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    ck_assert_int_eq(write_success_cnt, 1);//TODO: alles wordt in 1 keer geschreven 
+    pico_http_client_close(conn);
+}
+END_TEST
+START_TEST(tc_pico_http_client_send_delete)
+{
+    //TODO: test this: int8_t pico_http_client_send_delete(uint16_t conn, uint8_t connection);
+    int32_t ret = 0;
+    int16_t conn = 0;
+    /*Case1: unknown client*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_delete(99, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case2: unknown connection*/
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_send_delete(conn, 100);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    pico_http_client_close(conn);
+    /*Case3: positive test*/
+    write_success_cnt = 0;
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    printf("Conn: %d\n", conn);
+    ret = pico_http_client_send_delete(conn, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    ck_assert_int_eq(write_success_cnt, 1);//TODO: alles wordt in 1 keer geschreven 
+    pico_http_client_close(conn);
+}
+END_TEST
+START_TEST(tc_pico_http_client_close)
+{
+    //TODO: test this: int8_t pico_http_client_close(uint16_t conn);
+    int32_t ret = 0;
+    int16_t conn = 0;
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    /*Case1: unknown client*/
+    ret = pico_http_client_close(99);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    /*Case2: positive test*/ 
+    ret = pico_http_client_close(conn);
+    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+}
+END_TEST
+START_TEST(tc_pico_http_client_long_poll_send_get)
+{
+    //TODO: test this: int8_t pico_http_client_long_poll_send_get(uint16_t conn, uint8_t connection);
+    int32_t ret = 0;
+    int16_t conn = 0;
+    /*Case1: unknown client*/
+    ret = pico_http_client_long_poll_send_get(99, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    /*Case2: positive test*/ 
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_long_poll_send_get(conn, HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    ret = pico_http_client_long_poll_cancel(conn);
+}
+END_TEST
+START_TEST(tc_pico_http_client_long_poll_cancel)
+{
+    //TODO: test this: int8_t pico_http_client_long_poll_cancel(uint16_t conn);
+    int32_t ret = 0;
+    int16_t conn = 0;
+    /*Case1: unknown client*/
+    ret = pico_http_client_long_poll_cancel(99);
+    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    /*Case2: positive test*/ 
+    conn = pico_http_client_open("http://httpbin.org/", cb);
+    ret = pico_http_client_long_poll_send_get(conn, HTTP_CONN_CLOSE);
+    ret = pico_http_client_long_poll_cancel(conn);
+    ck_assert_int_ge(ret, HTTP_RETURN_OK);
 }
 END_TEST
 /* API end */
-
-
 
 
 START_TEST(tc_free_uri)
@@ -253,7 +396,7 @@ START_TEST(tc_free_uri)
     int ret = 0;
     ret = free_uri(NULL);
     ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
-
+    
     struct pico_http_client *client = NULL;
     client = PICO_ZALLOC(sizeof(struct pico_http_client));
     client->urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
@@ -462,6 +605,11 @@ Suite *pico_suite(void)
     TCase *TCase_pico_http_client_send_raw = tcase_create("Unit test for tc_pico_http_client_send_raw");
     TCase *TCase_pico_http_client_send_get = tcase_create("Unit test for tc_pico_http_client_send_get");
     TCase *TCase_pico_http_client_send_post = tcase_create("Unit test for tc_pico_http_client_send_post");
+    TCase *TCase_pico_http_client_send_post_multipart = tcase_create("Unit test for tc_pico_http_client_send_post_multipart");
+    TCase *TCase_pico_http_client_send_delete = tcase_create("Unit test for tc_pico_http_client_send_delete");
+    TCase *TCase_pico_http_client_close = tcase_create("Unit test for tc_pico_http_client_close");
+    TCase *TCase_pico_http_client_long_poll_send_get = tcase_create("Unit test for tc_pico_http_client_long_poll_send_get");
+    TCase *TCase_pico_http_client_long_poll_cancel = tcase_create("Unit test for tc_pico_http_client_long_poll_cancel");
 
     /*API end*/
 
@@ -518,9 +666,21 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_pico_http_client_send_get);
     tcase_add_test(TCase_pico_http_client_send_post, tc_pico_http_client_send_post);
     suite_add_tcase(s, TCase_pico_http_client_send_post);
+    tcase_add_test(TCase_pico_http_client_send_post_multipart, tc_pico_http_client_send_post_multipart);
+    suite_add_tcase(s, TCase_pico_http_client_send_post_multipart);
+    //tcase_add_test(TCase_pico_http_client_send_delete, tc_pico_http_client_send_delete);
+    //suite_add_tcase(s, TCase_pico_http_client_send_delete);
+    tcase_add_test(TCase_pico_http_client_close, tc_pico_http_client_close);
+    suite_add_tcase(s, TCase_pico_http_client_close);
+    tcase_add_test(TCase_pico_http_client_long_poll_send_get, tc_pico_http_client_long_poll_send_get);
+    suite_add_tcase(s, TCase_pico_http_client_long_poll_send_get);
+    tcase_add_test(TCase_pico_http_client_long_poll_cancel, tc_pico_http_client_long_poll_cancel);
+    suite_add_tcase(s, TCase_pico_http_client_long_poll_cancel);
+    
     /*API end*/
 
-    tcase_add_test(TCase_free_uri, tc_free_uri);
+
+    /*tcase_add_test(TCase_free_uri, tc_free_uri);
     suite_add_tcase(s, TCase_free_uri);
     tcase_add_test(TCase_client_open, tc_client_open);
     suite_add_tcase(s, TCase_client_open);
@@ -594,6 +754,7 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_read_chunk_trail);
     tcase_add_test(TCase_read_chunk_value, tc_read_chunk_value);
     suite_add_tcase(s, TCase_read_chunk_value);
+    */
 return s;
 }
 
