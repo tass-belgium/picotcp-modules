@@ -108,4 +108,8 @@ int pico_mqtt_create_disconnect(
 	struct pico_mqtt_message** result
 	);
 
+int pico_mqtt_deserialize(
+	struct pico_mqtt* mqtt,
+	struct pico_mqtt_message* message
+	);
 #endif
