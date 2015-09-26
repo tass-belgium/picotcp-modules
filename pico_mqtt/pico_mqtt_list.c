@@ -477,6 +477,11 @@ static int remove_element(struct pico_mqtt_list* list, struct element* element)
 }
 
 #ifdef DEBUG
+
+/**
+* Debug Function Implementation
+**/
+
 static void print_element(struct element* e)
 {
 	printf("|  +---------------------------+  |\n");

@@ -6,6 +6,7 @@
 #include <sys/socket.h>
 #include <arpa/inet.h>
 
+/* return the configuration for the IP lookup*/
 static struct addrinfo lookup_configuration( void ){
 	struct addrinfo hints;
 	int* flags = &(hints.ai_flags);
@@ -48,16 +49,12 @@ int lookup_host (const char *host)
   char addrstr[100];
   void *ptr;
 
-/*  memset (&hints, 0, sizeof (hints));
-  hints.ai_family = PF_UNSPEC;
-  hints.ai_socktype = SOCK_STREAM;
-  hints.ai_flags |= AI_CANONNAME;*/
-
 	hints = lookup_configuration();
 
-  errcode = getaddrinfo (host, NULL, &hints, &res);
+  errcode = getaddrinfo ("localhost", "1883", &hints, &res);
   if (errcode != 0)
     {
+      printf("error\n");
       perror ("getaddrinfo error");
       return -1;
     }
@@ -77,7 +74,5 @@ int lookup_host (const char *host)
 int
 main (int argc, char *argv[])
 {
-  if (argc < 2)
-    exit (1);
   return lookup_host (argv[1]);
 }
