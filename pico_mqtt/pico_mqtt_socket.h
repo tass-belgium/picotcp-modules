@@ -11,6 +11,8 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <poll.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -21,21 +23,18 @@
 
 #include "pico_mqtt.h"
 
-/* enable dns lookup or only allow IP addresses*/
-#define PICO_MQTT_DNS_LOOKUP 1
-
 struct pico_mqtt_socket;
 
 /* create pico mqtt socket and connect to the URI*/ 
-int pico_mqtt_connection_open(struct pico_mqtt_socket** socket, const char* URI, struct timeval* time_left);
+int pico_mqtt_connection_open(struct pico_mqtt_socket** socket, const char* URI, const char* port);
 
 /* read data from the socket, add this to the read buffer */ 
-int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct timeval* time_left);
+int pico_mqtt_connection_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct timeval* time_left);
 
 /* write data to the socket, remove this from the write buffer*/ 
-int pico_mqtt_connection_write( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct timeval* time_left);
+int pico_mqtt_connection_send( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct timeval* time_left);
 
-int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct pico_mqtt_data* write_buffer, struct timeval* time_left);
+int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, struct timeval* time_left);
 
 /* close pico mqtt socket*/ 
 int pico_mqtt_connection_close( struct pico_mqtt_socket** socket);
