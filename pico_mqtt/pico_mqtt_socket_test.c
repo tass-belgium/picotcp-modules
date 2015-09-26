@@ -59,30 +59,33 @@ START_TEST(tcp_socket_create_and_destroy)
 {
 	int result = 0;
 	struct pico_mqtt_socket* socket = NULL;
-	result = pico_mqtt_connection_open(&socket, "127.0.0.1", NULL);
+	result = pico_mqtt_connection_open(&socket, "127.0.0.1", "1883");
 	ck_assert_msg(socket != NULL, "Error while creating the socket");
-	printf("result %d\n", result);
 	ck_assert_msg(result == SUCCES, "Error while creating the socket");
 	result = pico_mqtt_connection_close( &socket );
 	ck_assert_msg(result == SUCCES, "Error while closing the socket");
 }
 END_TEST
-/*
+
 START_TEST(tcp_socket_send_test)
 {
 	struct pico_mqtt_socket* socket;
 	int result = 0;
-	struct test_thread thread;
-	char* buffer = (char*) malloc(100);
-	char* ip = "localhost";
-	thread = create_test_thread(tcp_v4_echo_server, (void*) NULL);
-	sleep(1);
-	socket =  pico_mqtt_connection_open( ip, NULL);
-	*buffer = 'a';
-	result = pico_mqtt_connection_write(socket, (void*) buffer, 1, NULL);
-	if(result == -1)
-		printf("error: %s\n", strerror(errno));
+	struct timeval time_left = {.tv_usec = 0, .tv_sec = 1};
+	/*struct test_thread thread;*/
+	char buffer[100] = "Hallo world";
+	struct pico_mqtt_data data = {.length = 12, .data = buffer};
 
+	char* ip = "127.0.0.1";
+	/*thread = create_test_thread(tcp_v4_echo_server, (void*) NULL);*/
+	/*sleep(1);*/
+	result = pico_mqtt_connection_open(&socket, ip, "1883");
+	ck_assert_msg(result == SUCCES, "Unable to find host");
+
+	/**buffer = 'a';*/
+	result = pico_mqtt_connection_send(socket, &data, &time_left);
+	ck_assert_msg(result == SUCCES, "Error while writing to the socket.");
+/*
 	*buffer = 'b';
 	result = read(thread.read_descriptor, buffer, 1);
 	if(result == -1)
@@ -90,11 +93,10 @@ START_TEST(tcp_socket_send_test)
 	close(thread.write_descriptor);
 	close(thread.read_descriptor);
 	wait(NULL);
-	ck_assert_msg(*buffer == 'a', "thread not writing to parent");
-	free((void*) buffer);
+	ck_assert_msg(*buffer == 'a', "thread not writing to parent");*/
 }
 END_TEST
-*/
+
 Suite * tcp_suite(void)
 {
 	Suite *test_suite;
@@ -107,7 +109,7 @@ Suite * tcp_suite(void)
 
 	tcase_add_test(test_case_core, fork_test);
 	tcase_add_test(test_case_core, tcp_socket_create_and_destroy);
-/*	tcase_add_test(test_case_core, tcp_socket_send_test);*/
+	tcase_add_test(test_case_core, tcp_socket_send_test);
 	suite_add_tcase(test_suite, test_case_core);
 
 	return test_suite;
