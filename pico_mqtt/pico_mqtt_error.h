@@ -26,63 +26,85 @@
 
 */
 
-
 #define PERROR(args...) do{} while(0)
 #define PWARNING(args...) do{} while(0)
 #define PINFO(args...) do{} while(0)
+#define PTODO(args...) do{} while(0)
+#define PTRACE do{} while(0)
 
-#ifdef DEBUG
-	#if DEBUG >= 1
-		#include <stdio.h> /* needed for printf */
-		#include <string.h> /* needed for strerror */
+#ifdef DEBUG /* if not in debug mode, nothing should be printed */
+
+	#if DEBUG > 0
+		#ifndef ENABLE_ERROR
+			#define ENABLE_ERROR
+		#endif
+
+		#ifndef ENABLE_TRACE
+			#define ENABLE_TRACE
+		#endif
+	#endif
+
+	#if DEBUG > 1
+		#ifndef ENABLE_WARNING
+			#define ENABLE_WARNING
+		#endif
+	#endif
+
+	#if DEBUG > 2
+		#ifndef ENABLE_INFO
+			#define ENABLE_INFO
+		#endif
+	#endif
+
+	#ifdef ENABLE_ERROR
+		#include <stdio.h>
 
 		#undef PERROR	
-		#define PERROR(...) do{\
-			printf("[ERROR] in %s at line %d:\t\t", __FILE__, __LINE__);\
+		#define PERROR( ...) do{\
+			printf("[ERROR] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 			printf(__VA_ARGS__);\
 			} while(0)
 	#endif /* DEBUG >= 1 */
 
-	#if DEBUG >= 2
+	#ifdef ENABLE_WARNING
+		#include <stdio.h>
+
 		#undef PWARNING
 		#define PWARNING(...) do{\
-			printf("[WARNING] in %s at line %d:\t\t", __FILE__, __LINE__);\
+			printf("[WARNING] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 			printf(__VA_ARGS__);\
 			} while(0)
 	#endif /* DEBUG >= 2 */
 
-	#if DEBUG >= 3
+	#ifdef ENABLE_INFO
+		#include <stdio.h>
+
 		#undef PINFO
 		#define PINFO(...) do{\
-			printf("[INFO] in %s at line %d:\t\t", __FILE__, __LINE__);\
+			printf("[INFO] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 			printf(__VA_ARGS__);\
 			} while(0)
 	#endif /* DEBUG >= 3*/
-#endif /* defined DEBUG */
 
-#ifdef TODO
-	#if TODO == 1
+	#ifdef ENABLE_TODO
 		#include <stdio.h>
 	
+		#undef PTODO
 		#define PTODO(...) do{\
-			printf("[TODO] in %s at line %d:\t\t", __FILE__, __LINE__);\
+			printf("[TODO] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 			printf(__VA_ARGS__);\
 			} while(0)
-	#endif /* TODO >= 1 */
+	#endif /*defined TODO */
 
-	#if TODO >= 2
+	#ifdef ENABLE_TRACE
 		#include <stdio.h>
-		
-		#define PTODO(...) do{\
-			printf("[TODO] in %s at line %d:\t\t", __FILE__, __LINE__);\
-			printf(__VA_ARGS__);\
-			#warning "Some tasks are not yet completed"\
+
+		#undef PTRACE
+		#define PTRACE do{\
+			printf("[TRACE] in %s - %s at line %d: called function returned error.\n", __FILE__,__func__,__LINE__);\
 			} while(0)
-	#endif /* TODO >= 2 */
-#else
-	#define PTODO(args...) do{} while(0)
-#endif /*defined TODO */
+	#endif
 
-#define RETURN_IF_ERROR(x) do{if(x==ERROR){return ERROR;}} while(0)
+#endif /* defined DEBUG */
 
-#endif
+#endif /* end of header file */
