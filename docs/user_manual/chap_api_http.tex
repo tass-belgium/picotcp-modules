@@ -1,0 +1,242 @@
+\section{Hypertext Transfer Protocol (HTTP)}
+TODO
+
+\subsection{pico\_http\_client\_open}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int32\_t pico\_http\_client\_open(uint8\_t *hostname, void (*wakeup)(uint16\_t ev, uint16\_t conn));}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+A new connection is created and the connectionID is returned. On error -1 is returned.
+
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_close}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_close(uint16\_t conn);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_send\_raw}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_raw(uint16\_t conn, uint8\_t *request);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_send\_get}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, uint8\_t *resource, uint8\_t connection\_type);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_send\_post}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_post(uint16\_t conn, uint8\_t *resource, uint8\_t *post\_data, uint32\_t post\_data\_len, uint8\_t connection\_type, uint8\_t *content\_type, uint8\_t *cache\_control);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_send\_delete}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_delete(uint16\_t conn, uint8\_t *resource, uint8\_t connection\_type);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_send\_post\_multipart}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_post\_multipart(uint16\_t conn, uint8\_t *resource, struct multipart\_chunk **post\_data, uint16\_t post\_data\_len, uint8\_t connection\_type);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{multipart\_chunk\_create}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{struct multipart\_chunk *multipart\_chunk\_create(uint8\_t *data, uint64\_t length\_data, uint8\_t *name, uint8\_t *filename, uint8\_t *content\_disposition, uint8\_t *content\_type);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{multipart\_chunk\_destroy}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t multipart\_chunk\_destroy(struct multipart\_chunk *chunk);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_long\_poll\_send\_get}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, uint8\_t *resource, uint8\_t connection\_type);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_long\_poll\_cancel}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_long\_poll\_cancel(uint16\_t conn);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_get\_write\_progress}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_get\_write\_progress(uint16\_t conn, uint32\_t *total\_bytes\_written, uint32\_t *total\_bytes\_to\_write);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_read\_header}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{struct pico\_http\_header *pico\_http\_client\_read\_header(uint16\_t conn);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_read\_uri\_data}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{struct pico\_http\_uri *pico\_http\_client\_read\_uri\_data(uint16\_t conn);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO
+
+
+\subsection{pico\_http\_client\_read\_body}
+
+\subsubsection*{Description}
+TODO
+
+\subsubsection*{Function prototype}
+\texttt{int32\_t pico\_http\_client\_read\_body(uint16\_t conn, uint8\_t *data, uint16\_t size, uint8\_t *body\_read\_done);}
+
+\subsubsection*{Parameters}
+TODO
+\subsubsection*{Return value}
+TODO
+\subsubsection*{Example}
+TODO

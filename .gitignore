@@ -21,3 +21,5 @@
 # Latex files
 *.toc
 *.pdf
+*.log
+*.aux
