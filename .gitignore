@@ -17,3 +17,7 @@
 *.exe
 *.out
 *.app
+
+# Latex files
+*.toc
+*.pdf
