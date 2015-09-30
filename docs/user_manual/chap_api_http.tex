@@ -4,83 +4,142 @@ TODO
 \subsection{pico\_http\_client\_open}
 
 \subsubsection*{Description}
-TODO
+Opens a connection to a HTTP-server
 
 \subsubsection*{Function prototype}
-\texttt{int32\_t pico\_http\_client\_open(uint8\_t *hostname, void (*wakeup)(uint16\_t ev, uint16\_t conn));}
+\texttt{int32\_t pico\_http\_client\_open(char\_t *hostname, void (*wakeup)(uint16\_t ev, uint16\_t conn));}
 
 \subsubsection*{Parameters}
-TODO
+\begin{itemize}[noitemsep]
+\item \texttt{hostname} - string specifying the name and port of the HTTP-server to connect to. [http:]hostname[:port]/
+\item \texttt{wakeup} - a pointer to a callback function of type \texttt{int fn(uint16\_t *, uint16\_t)}. This function will be called when there was an event on a \texttt{conn}.
+\end{itemize}
+
+\subsubsection*{Possible events passed trough the \texttt{wakeup} function}
+\begin{itemize}[noitemsep]
+\item \texttt{EV\_HTTP\_CON} - HTTP-client is connected to the HTTP-server.
+\item \texttt{EV\_HTTP\_REQ} - header has arrived.
+\item \texttt{EV\_HTTP\_BODY} - body data available for reading.
+\item \texttt{EV\_HTTP\_WRITE\_SUCCESS} - request was successfully written to the socket.
+\item \texttt{EV\_HTTP\_WRITE\_PROGRESS\_MADE} - if it isn't possible to write everything at once to the socket, this event will come trough to tell write progress has been made.
+\item \texttt{EV\_HTTP\_WRITE\_FAILED} - Request was not successfully written to the socket.
+\item \texttt{EV\_HTTP\_ERROR} - an error occured on the \texttt{conn}.
+\item \texttt{EV\_HTTP\_CLOSE} - close the connection.
+\item \texttt{EV\_HTTP\_DNS} - DNS query was successful. 
+\end{itemize}
 \subsubsection*{Return value}
-A new connection is created and the connectionID is returned. On error -1 is returned.
+A new connection is opened and the connection id \texttt{conn} is returned. 
+\\On error \texttt{HTTP\_RETURN\_ERROR} is returned.
 
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+ret = pico_http_client_open(hostname, wakeup_function);
+\end{verbatim}
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_close}
 
 \subsubsection*{Description}
-TODO
+Connection will be close and everything related to this connection id will be cleaned up.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_close(uint16\_t conn);}
 
 \subsubsection*{Parameters}
-TODO
+\begin{itemize}[noitemsep]
+\item \texttt{conn} - Connection id of the connection that needs to be close.
+\end{itemize}
 \subsubsection*{Return value}
-TODO
+On success \texttt{HTTP\_RETURN\_OK}.
+\\On failure \texttt{HTTP\_RETURN\_ERROR}.
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+ret = pico_http_client_close(connection_id);
+\end{verbatim}
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_send\_raw}
 
 \subsubsection*{Description}
-TODO
+Makes it possible to send the a self made request, nothing will be added or removed from the \texttt{request}.
+Make sure \texttt{request} is available untill the event \texttt{EV\_HTTP\_WRITE\_SUCCESS} is triggered.
 
 \subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_raw(uint16\_t conn, uint8\_t *request);}
+\texttt{int8\_t pico\_http\_client\_send\_raw(uint16\_t conn, char *request);}
 
 \subsubsection*{Parameters}
-TODO
-\subsubsection*{Return value}
-TODO
-\subsubsection*{Example}
-TODO
+\begin{itemize}[noitemsep]
+\item \texttt{conn} - Connection id through which the \texttt{request} has to be send.
+\item \texttt{request} - The raw string that has to be send. 
+\end{itemize}
 
+\subsubsection*{Return value}
+On success \texttt{HTTP\_RETURN\_OK}.
+\\On failure \texttt{HTTP\_RETURN\_ERROR}.
+
+\subsubsection*{Example}
+\begin{verbatim}
+ret = pico_http_client_send_raw(connection_id, request);
+\end{verbatim}
+
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_send\_get}
-
 \subsubsection*{Description}
-TODO
+Send a GET request to the HTTP-server. The library will build the GET request based on the \texttt{resource} and the hostname that was passed on opening the connection to the HTTP-server. Via \texttt{connection\_type} you can select a "Close" or "Keep-Alive" connection.
 
 \subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, uint8\_t *resource, uint8\_t connection\_type);}
+\texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, char *resource, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
-TODO
-\subsubsection*{Return value}
-TODO
-\subsubsection*{Example}
-TODO
+\begin{itemize}[noitemsep]
+\item \texttt{conn} - Connection id through which the GET request has to be send. 
+\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connected will not be closed and a new request can be send over the same connection. The connection will be close after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
+\end{itemize}
 
+\subsubsection*{Return value}
+On success \texttt{HTTP\_RETURN\_OK}.
+\\On failure \texttt{HTTP\_RETURN\_ERROR}.
+
+\subsubsection*{Example}
+\begin{verbatim}
+ret = pico_http_client_send_get(connection_id, "/test/index.html", HTTP_CONN_CLOSE);
+\end{verbatim}
+
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_send\_post}
 
 \subsubsection*{Description}
-TODO
+Send a POST request to the HTTP-server. The library will build the POST request based on the parameters passed and the hostname that was passed on opening the connection to the HTTP-server. Make sure \texttt{post\_data} is available untill the event \texttt{EV\_HTTP\_WRITE\_SUCCESS} is triggered.
 
 \subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_post(uint16\_t conn, uint8\_t *resource, uint8\_t *post\_data, uint32\_t post\_data\_len, uint8\_t connection\_type, uint8\_t *content\_type, uint8\_t *cache\_control);}
+\texttt{int8\_t pico\_http\_client\_send\_post(uint16\_t conn, char *resource, uint8\_t *post\_data, uint32\_t post\_data\_len, uint8\_t connection\_type, char *content\_type, char *cache\_control);}
 
 \subsubsection*{Parameters}
-TODO
+\begin{itemize}[noitemsep]
+\item \texttt{conn} - Connection id through which the POST request has to be send. 
+\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{post\_data} - A char buffer with the data to send. Format: "key1=value1\&key2=value2\&..." 
+\item \texttt{post\_data\_len} - Length of the \texttt{post\_data} in number of bytes.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connected will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
+\item \texttt{content\_type} - String to specify the content type. If NULL, "application/x-www-form-urlencoded" is added to the header.
+\item \texttt{cache\_controle} - String to specify the cache controle. If NULL, "private, max-age=0, no-cache" is added to the header.
+\end{itemize}
 \subsubsection*{Return value}
-TODO
+On success \texttt{HTTP\_RETURN\_OK}.
+\\On failure \texttt{HTTP\_RETURN\_ERROR}.
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+char post_data* = "name=dmx&number=10"
+ret = pico_http_client_send_post(conn, "/post_test/", post_data, strlen(post_data), 
+HTTP_CONN_CLOSE, NULL, NULL);
+\end{verbatim}
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_send\_delete}
 
@@ -88,15 +147,19 @@ TODO
 TODO
 
 \subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_delete(uint16\_t conn, uint8\_t *resource, uint8\_t connection\_type);}
+\texttt{int8\_t pico\_http\_client\_send\_delete(uint16\_t conn, char *resource, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_send\_post\_multipart}
 
@@ -104,15 +167,19 @@ TODO
 TODO
 
 \subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_post\_multipart(uint16\_t conn, uint8\_t *resource, struct multipart\_chunk **post\_data, uint16\_t post\_data\_len, uint8\_t connection\_type);}
+\texttt{int8\_t pico\_http\_client\_send\_post\_multipart(uint16\_t conn, char *resource, struct multipart\_chunk **post\_data, uint16\_t post\_data\_len, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{multipart\_chunk\_create}
 
@@ -120,15 +187,19 @@ TODO
 TODO
 
 \subsubsection*{Function prototype}
-\texttt{struct multipart\_chunk *multipart\_chunk\_create(uint8\_t *data, uint64\_t length\_data, uint8\_t *name, uint8\_t *filename, uint8\_t *content\_disposition, uint8\_t *content\_type);}
+\texttt{struct multipart\_chunk *multipart\_chunk\_create(uint8\_t *data, uint64\_t length\_data, char *name, char *filename, char *content\_disposition, char *content\_type);}
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{multipart\_chunk\_destroy}
 
@@ -140,11 +211,15 @@ TODO
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_long\_poll\_send\_get}
 
@@ -152,15 +227,19 @@ TODO
 TODO
 
 \subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, uint8\_t *resource, uint8\_t connection\_type);}
+\texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, char *resource, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_long\_poll\_cancel}
 
@@ -172,11 +251,15 @@ TODO
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_get\_write\_progress}
 
@@ -188,11 +271,15 @@ TODO
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_read\_header}
 
@@ -204,11 +291,15 @@ TODO
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_read\_uri\_data}
 
@@ -220,11 +311,15 @@ TODO
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
 TODO
 
+%-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_read\_body}
 
@@ -236,6 +331,9 @@ TODO
 
 \subsubsection*{Parameters}
 TODO
+\begin{itemize}[noitemsep]
+\item \texttt{}
+\end{itemize}
 \subsubsection*{Return value}
 TODO
 \subsubsection*{Example}
