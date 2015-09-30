@@ -112,7 +112,7 @@ struct pico_mime_map {
 
 struct pico_http_uri
 {
-    uint8_t *raw_hostname;  /* can contain host + port */
+    char *raw_hostname;  /* can contain host + port */
     uint8_t protoHttp;      /* is the protocol Http ? */
     char *host;             /* hostname */
     uint16_t port;          /* port if specified */

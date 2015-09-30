@@ -72,6 +72,11 @@ int pico_socket_connect(struct pico_socket *s, const void *srv_addr, uint16_t re
     return 0;
 }
 
+int pico_socket_setoption(struct pico_socket *s, int option, void *value)
+{
+    return 0;
+}
+
 struct pico_socket *pico_socket_open(uint16_t net, uint16_t proto, void (*wakeup)(uint16_t ev, struct pico_socket *s))
 {
     example_socket.wakeup = wakeup;
@@ -145,7 +150,7 @@ struct pico_tree_node *pico_tree_next(struct pico_tree_node *node)
 /* API start */
 START_TEST(tc_multipart_chunk_create)
 {
-    /* TODO: test this: struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, uint8_t *name, uint8_t *filename, uint8_t *content_disposition, uint8_t *content_type);*/
+    /* TODO: test this: struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type);*/
     char data[10] = "data";
     char name[10] = "test";
     char filename[10] = "test.txt";
@@ -194,7 +199,7 @@ START_TEST(tc_multipart_chunk_destroy)
 END_TEST
 START_TEST(tc_pico_http_client_open)
 {
-    //TODO: test this: int32_t pico_http_client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
+    //TODO: test this: int32_t pico_http_client_open(char *hostname, void (*wakeup)(uint16_t ev, uint16_t conn));
     int32_t conn = 0;
     char hostname[50] = "http://httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_open\n");
@@ -215,7 +220,7 @@ START_TEST(tc_pico_http_client_open)
 END_TEST
 START_TEST(tc_pico_http_client_send_raw)
 {
-    //TODO: test this: int8_t pico_http_client_send_raw(uint16_t conn, uint8_t *request);
+    //TODO: test this: int8_t pico_http_client_send_raw(uint16_t conn, char *request);
     int32_t ret = 0;
     int16_t conn = 0;
     char hostname[50] = "http://httpbin.org/";
@@ -255,7 +260,7 @@ START_TEST(tc_pico_http_client_send_raw)
 END_TEST
 START_TEST(tc_pico_http_client_send_get)
 {
-    //TODO: test this: int8_t pico_http_client_send_get(uint16_t conn, uint8_t *request);
+    //TODO: test this: int8_t pico_http_client_send_get(uint16_t conn, char *resource);
     int32_t ret = 0;
     int16_t conn = 0;
     char hostname[50] = "http://httpbin.org/";
@@ -283,10 +288,10 @@ START_TEST(tc_pico_http_client_send_get)
 END_TEST
 START_TEST(tc_pico_http_client_send_post)
 {
-    //TODO: test this: int8_t pico_http_client_send_post(uint16_t conn, uint8_t *post_data, uint32_t post_data_len, uint8_t connection, uint8_t *content_type, uint8_t *cache_control);
+    //TODO: test this: int8_t pico_http_client_send_post(uint16_t conn, char *resource, uint8_t *post_data, uint32_t post_data_len, uint8_t connection, char *content_type, char *cache_control);
     int32_t ret = 0;
     int16_t conn = 0;
-    uint8_t *post_data = "key=1&robbin=robbin";
+    char *post_data = "key=1&robbin=robbin";
     uint32_t post_data_len = strlen(post_data);
     char content_type[50] = "";
     char cache_controle[50] = "";
@@ -324,7 +329,7 @@ START_TEST(tc_pico_http_client_send_post)
 END_TEST
 START_TEST(tc_pico_http_client_send_post_multipart)
 {
-    //TODO: test this: int8_t pico_http_client_send_post_multipart(uint16_t conn, struct multipart_chunk **post_data, uint16_t post_data_len, uint8_t connection);;
+    //TODO: test this: int8_t pico_http_client_send_post_multipart(uint16_t conn, char *resource, struct multipart_chunk **post_data, uint16_t post_data_len, uint8_t connection);;
     int32_t ret = 0;
     int16_t conn = 0;
     uint32_t post_data_len = 2;
@@ -373,7 +378,7 @@ START_TEST(tc_pico_http_client_send_post_multipart)
 END_TEST
 START_TEST(tc_pico_http_client_send_delete)
 {
-    //TODO: test this: int8_t pico_http_client_send_delete(uint16_t conn, uint8_t connection);
+    //TODO: test this: int8_t pico_http_client_send_delete(uint16_t conn, char *resource, uint8_t connection);
     int32_t ret = 0;
     int16_t conn = 0;
     char hostname[50] = "http://httpbin.org/";
@@ -417,7 +422,7 @@ START_TEST(tc_pico_http_client_close)
 END_TEST
 START_TEST(tc_pico_http_client_long_poll_send_get)
 {
-    //TODO: test this: int8_t pico_http_client_long_poll_send_get(uint16_t conn, uint8_t connection);
+    //TODO: test this: int8_t pico_http_client_long_poll_send_get(uint16_t conn, char *resource, uint8_t connection);
     int32_t ret = 0;
     int16_t conn = 0;
     printf("\n\nStart: tc_pico_http_client_long_poll_send_get\n");
@@ -573,7 +578,7 @@ START_TEST(tc_free_uri)
 END_TEST
 START_TEST(tc_client_open)
 {
-   /* TODO: test this: static int32_t client_open(uint8_t *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID); */
+   /* TODO: test this: static int32_t client_open(char *hostname, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID); */
 }
 END_TEST
 START_TEST(tc_free_header)
@@ -601,7 +606,7 @@ START_TEST(tc_socket_write_request_parts)
 END_TEST
 START_TEST(tc_pico_process_hostname)
 {
-   /* TODO: test this: static int8_t pico_process_hostname(const uint8_t *hostname, struct pico_http_uri *urikey) */
+   /* TODO: test this: static int8_t pico_process_hostname(const char *hostname, struct pico_http_uri *urikey) */
    int ret = 0;
    ret = pico_process_hostname(NULL, NULL);
    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);

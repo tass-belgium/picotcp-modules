@@ -22,14 +22,14 @@
 
 //TODO: check in rfc what to add
 
-static const uint8_t return_fail_header[] =
+static const char return_fail_header[] =
     "HTTP/1.1 404 Not Found\r\n\
 Host: localhost\r\n\
 Connection: close\r\n\
 \r\n\
 <html><body>The resource you requested cannot be found !</body></html>";
 
-static const uint8_t error_header[] =
+static const char error_header[] =
     "HTTP/1.1 400 Bad Request\r\n\
 Host: localhost\r\n\
 Connection: close\r\n\
@@ -37,7 +37,7 @@ Connection: close\r\n\
 <html><body>There was a problem with your request !</body></html>";
 
 
-int32_t construct_return_ok_header(uint8_t* headerstring, uint8_t cacheable, const uint8_t* contenttype)
+int32_t construct_return_ok_header(char* headerstring, uint8_t cacheable, const char* contenttype)
 {
     strcat(headerstring, "HTTP/1.1 200 OK\r\n");
     strcat(headerstring, "Host: localhost\r\n");
@@ -72,10 +72,10 @@ struct http_client
     void *buffer;
     uint16_t buffer_size;
     uint16_t buffer_sent;
-    uint8_t *resource;
+    char *resource;
     uint16_t state;
     uint16_t method;
-    uint8_t *body;
+    char *body;
 };
 
 /* Local states for clients */
@@ -99,7 +99,7 @@ static struct http_server server = {
  * Private functions
  */
 static int16_t parse_request(struct http_client *client);
-static int read_remaining_reader(struct http_client *client);
+//static int read_remaining_reader(struct http_client *client);
 static void send_data(struct http_client *client);
 static void send_final(struct http_client *client);
 static inline int32_t read_data(struct http_client *client);  /* used only in a place */
@@ -279,7 +279,7 @@ int32_t pico_http_server_accept(void)
  * client. It is useful after the request header (EV_HTTP_REQ)
  * from client was received, otherwise NULL is returned.
  */
-uint8_t *pico_http_get_resource(uint16_t conn)
+char *pico_http_get_resource(uint16_t conn)
 {
     struct http_client *client = find_client(conn);
 
@@ -310,7 +310,7 @@ int16_t pico_http_get_method(uint16_t conn)
  * It is useful after a POST request header (EV_HTTP_REQ)
  * from client was received, otherwise NULL is returned.
  */
-uint8_t *pico_http_get_body(uint16_t conn)
+char *pico_http_get_body(uint16_t conn)
 {
     struct http_client *client = find_client(conn);
 
@@ -336,7 +336,7 @@ uint8_t *pico_http_get_body(uint16_t conn)
  * immediately submit (static) data.
  *
  */
-int32_t pico_http_respond_mimetype(uint16_t conn, uint16_t code, const uint8_t* mimetype)
+int32_t pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetype)
 {
     struct http_client *client = find_client(conn);
 
@@ -354,7 +354,7 @@ int32_t pico_http_respond_mimetype(uint16_t conn, uint16_t code, const uint8_t* 
             uint16_t len = HTTP_OK_HEADER_FIXED;
             if (mimetype != NULL)
                 len += (uint16_t)strlen(mimetype);
-            uint8_t *retheader = PICO_ZALLOC(len);
+            char *retheader = PICO_ZALLOC(len);
             if (!retheader)
             {
                 pico_err = PICO_ERR_ENOMEM;
@@ -423,12 +423,12 @@ int32_t pico_http_respond(uint16_t conn, uint16_t code)
             client->state = (code & HTTP_STATIC_RESOURCE) ? HTTP_WAIT_STATIC_DATA : HTTP_WAIT_DATA;
 
             /* Try to guess MIME type */
-            const uint8_t* mimetype = pico_http_get_mimetype(client->resource);
+            const char* mimetype = pico_http_get_mimetype(client->resource);
 
             uint16_t len = HTTP_OK_HEADER_FIXED;
             if (mimetype != NULL)
                 len += (uint16_t)strlen(mimetype);
-            uint8_t *retheader = PICO_ZALLOC(len);
+            char *retheader = PICO_ZALLOC(len);
             if (!retheader)
             {
                 pico_err = PICO_ERR_ENOMEM;
@@ -488,7 +488,7 @@ int16_t pico_http_submit_data(uint16_t conn, void *buffer, uint16_t len)
 {
 
     struct http_client *client = find_client(conn);
-    uint8_t chunk_str[10];
+    char chunk_str[10];
     int16_t chunk_count;
 
     if (!client)
@@ -644,7 +644,7 @@ int16_t pico_http_close(uint16_t conn)
     }
 }
 
-static int32_t parse_request_consume_full_line(struct http_client *client, uint8_t *line)
+static int32_t parse_request_consume_full_line(struct http_client *client, char *line)
 {
     char c = 0;
     uint32_t index = 0;
@@ -664,7 +664,7 @@ static int32_t parse_request_consume_full_line(struct http_client *client, uint8
     return (int32_t)index;
 }
 
-static uint16_t parse_request_extract_function(uint8_t *line, uint8_t index, const uint8_t *method)
+static uint16_t parse_request_extract_function(char *line, uint8_t index, const char *method)
 {
     uint8_t len = (uint8_t)strlen(method);
 
@@ -678,7 +678,7 @@ static uint16_t parse_request_extract_function(uint8_t *line, uint8_t index, con
     return 0;
 }
 
-static int16_t parse_request_read_resource(struct http_client *client, uint32_t method_length, uint8_t *line)
+static int16_t parse_request_read_resource(struct http_client *client, uint32_t method_length, char *line)
 {
     uint32_t index;
 
@@ -707,7 +707,7 @@ static int16_t parse_request_read_resource(struct http_client *client, uint32_t 
     return 0;
 }
 
-static int32_t parse_request_get(struct http_client *client, uint8_t *line)
+static int32_t parse_request_get(struct http_client *client, char *line)
 {
     int32_t ret;
 
@@ -728,7 +728,7 @@ static int32_t parse_request_get(struct http_client *client, uint8_t *line)
     return HTTP_RETURN_OK;
 }
 
-static int32_t parse_request_post(struct http_client *client, uint8_t *line)
+static int32_t parse_request_post(struct http_client *client, char *line)
 {
     int32_t ret;
 
@@ -753,7 +753,7 @@ static int32_t parse_request_post(struct http_client *client, uint8_t *line)
 int16_t parse_request(struct http_client *client)
 {
     uint8_t c = 0;
-    uint8_t *line = PICO_ZALLOC(HTTP_HEADER_MAX_LINE);
+    char *line = (char *)PICO_ZALLOC(HTTP_HEADER_MAX_LINE);
     if (!line)
         {
             pico_err = PICO_ERR_ENOMEM;

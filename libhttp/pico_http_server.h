@@ -29,15 +29,15 @@ int32_t pico_http_server_accept(void);
 /*
  * Client functions
  */
-uint8_t *pico_http_get_resource(uint16_t conn);
+char *pico_http_get_resource(uint16_t conn);
 int16_t pico_http_get_method(uint16_t conn);
-uint8_t *pico_http_get_body(uint16_t conn);
+char *pico_http_get_body(uint16_t conn);
 int16_t pico_http_get_progress(uint16_t conn, uint16_t *sent, uint16_t *total);
 
 /*
  * Handshake and data functions
  */
-int32_t pico_http_respond_mimetype(uint16_t conn, uint16_t code, const uint8_t* mimetype);
+int32_t pico_http_respond_mimetype(uint16_t conn, uint16_t code, const char* mimetype);
 int32_t pico_http_respond(uint16_t conn, uint16_t code);
 int16_t pico_http_submit_data(uint16_t conn, void *buffer, uint16_t len);
 int16_t pico_http_close(uint16_t conn);
