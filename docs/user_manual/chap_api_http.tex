@@ -4,7 +4,7 @@ TODO
 \subsection{pico\_http\_client\_open}
 
 \subsubsection*{Description}
-Opens a connection to a HTTP-server
+Opens a new connection to a HTTP-server.
 
 \subsubsection*{Function prototype}
 \texttt{int32\_t pico\_http\_client\_open(char\_t *hostname, void (*wakeup)(uint16\_t ev, uint16\_t conn));}
@@ -12,7 +12,7 @@ Opens a connection to a HTTP-server
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{hostname} - string specifying the name and port of the HTTP-server to connect to. [http:]hostname[:port]/
-\item \texttt{wakeup} - a pointer to a callback function of type \texttt{int fn(uint16\_t *, uint16\_t)}. This function will be called when there was an event on a \texttt{conn}.
+\item \texttt{wakeup} - a pointer to a callback function of type \texttt{int fn(uint16\_t *, uint16\_t)}.
 \end{itemize}
 
 \subsubsection*{Possible events passed trough the \texttt{wakeup} function}
@@ -25,10 +25,10 @@ Opens a connection to a HTTP-server
 \item \texttt{EV\_HTTP\_WRITE\_FAILED} - Request was not successfully written to the socket.
 \item \texttt{EV\_HTTP\_ERROR} - an error occured on the \texttt{conn}.
 \item \texttt{EV\_HTTP\_CLOSE} - close the connection.
-\item \texttt{EV\_HTTP\_DNS} - DNS query was successful. 
+\item \texttt{EV\_HTTP\_DNS} - DNS query was successful.
 \end{itemize}
 \subsubsection*{Return value}
-A new connection is opened and the connection id \texttt{conn} is returned. 
+A new connection is opened and the connection id \texttt{conn} is returned.
 \\On error \texttt{HTTP\_RETURN\_ERROR} is returned.
 
 \subsubsection*{Example}
@@ -64,7 +64,7 @@ ret = pico_http_client_close(connection_id);
 
 \subsubsection*{Description}
 Makes it possible to send the a self made request, nothing will be added or removed from the \texttt{request}.
-Make sure \texttt{request} is available untill the event \texttt{EV\_HTTP\_WRITE\_SUCCESS} is triggered.
+Make sure \texttt{request} is available untill the event \texttt{EV\_HTTP\_WRITE\_SUCCESS} is triggered. When the complete request has been send, a \texttt{EV\_HTTP\_WRITE\_SUCCESS} is trown via the callback function.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_send\_raw(uint16\_t conn, char *request);}
@@ -72,7 +72,7 @@ Make sure \texttt{request} is available untill the event \texttt{EV\_HTTP\_WRITE
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id through which the \texttt{request} has to be send.
-\item \texttt{request} - The raw string that has to be send. 
+\item \texttt{request} - The raw string that has to be send.
 \end{itemize}
 
 \subsubsection*{Return value}
@@ -88,16 +88,16 @@ ret = pico_http_client_send_raw(connection_id, request);
 
 \subsection{pico\_http\_client\_send\_get}
 \subsubsection*{Description}
-Send a GET request to the HTTP-server. The library will build the GET request based on the \texttt{resource} and the hostname that was passed on opening the connection to the HTTP-server. Via \texttt{connection\_type} you can select a "Close" or "Keep-Alive" connection.
+Send a GET request to the HTTP-server. The library will build the GET request based on the \texttt{resource} and the hostname that was passed on opening the connection to the HTTP-server. Via \texttt{connection\_type} you can select a "Close" or "Keep-Alive" connection. When the complete request has been send, a \texttt{EV\_HTTP\_WRITE\_SUCCESS} is trown via the callback function.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, char *resource, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
-\item \texttt{conn} - Connection id through which the GET request has to be send. 
+\item \texttt{conn} - Connection id through which the GET request has to be send.
 \item \texttt{resource} - Path to resource that needs to be addressed.
-\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connected will not be closed and a new request can be send over the same connection. The connection will be close after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be close after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
 \end{itemize}
 
 \subsubsection*{Return value}
@@ -114,18 +114,18 @@ ret = pico_http_client_send_get(connection_id, "/test/index.html", HTTP_CONN_CLO
 \subsection{pico\_http\_client\_send\_post}
 
 \subsubsection*{Description}
-Send a POST request to the HTTP-server. The library will build the POST request based on the parameters passed and the hostname that was passed on opening the connection to the HTTP-server. Make sure \texttt{post\_data} is available untill the event \texttt{EV\_HTTP\_WRITE\_SUCCESS} is triggered.
+Send a POST request to the HTTP-server. The library will build the POST request based on the parameters passed and the hostname that was passed on opening the connection to the HTTP-server. Make sure \texttt{post\_data} is available untill the event \texttt{EV\_HTTP\_WRITE\_SUCCESS} is triggered, this means the complete request has been send.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_send\_post(uint16\_t conn, char *resource, uint8\_t *post\_data, uint32\_t post\_data\_len, uint8\_t connection\_type, char *content\_type, char *cache\_control);}
 
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
-\item \texttt{conn} - Connection id through which the POST request has to be send. 
+\item \texttt{conn} - Connection id through which the POST request has to be send.
 \item \texttt{resource} - Path to resource that needs to be addressed.
-\item \texttt{post\_data} - A char buffer with the data to send. Format: "key1=value1\&key2=value2\&..." 
+\item \texttt{post\_data} - A char buffer with the data to send. Format: "key1=value1\&key2=value2\&..."
 \item \texttt{post\_data\_len} - Length of the \texttt{post\_data} in number of bytes.
-\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connected will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
 \item \texttt{content\_type} - String to specify the content type. If NULL, "application/x-www-form-urlencoded" is added to the header.
 \item \texttt{cache\_controle} - String to specify the cache controle. If NULL, "private, max-age=0, no-cache" is added to the header.
 \end{itemize}
@@ -135,7 +135,7 @@ On success \texttt{HTTP\_RETURN\_OK}.
 \subsubsection*{Example}
 \begin{verbatim}
 char post_data* = "name=dmx&number=10"
-ret = pico_http_client_send_post(conn, "/post_test/", post_data, strlen(post_data), 
+ret = pico_http_client_send_post(conn, "/post_test/", post_data, strlen(post_data),
 HTTP_CONN_CLOSE, NULL, NULL);
 \end{verbatim}
 
@@ -144,197 +144,276 @@ HTTP_CONN_CLOSE, NULL, NULL);
 \subsection{pico\_http\_client\_send\_delete}
 
 \subsubsection*{Description}
-TODO
+Send a DELETE request to the HTTP-server. The library will build the DELETE request based on the \texttt{resource} and the hostname that was passed on opening the connection to the HTTP-server. Via \texttt{connection\_type} you can select a "Close" or "Keep-Alive" connection. When the complete request has been send, a \texttt{EV\_HTTP\_WRITE\_SUCCESS} is trown via the callback function.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_send\_delete(uint16\_t conn, char *resource, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - Connection id through which the DELETE request has to be send.
+\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On success \texttt{HTTP\_RETURN\_OK}.
+\\On failure \texttt{HTTP\_RETURN\_ERROR}.
 \subsubsection*{Example}
-TODO
-
-%-----------------------------------------------------------------------------------------------------
-
-\subsection{pico\_http\_client\_send\_post\_multipart}
-
-\subsubsection*{Description}
-TODO
-
-\subsubsection*{Function prototype}
-\texttt{int8\_t pico\_http\_client\_send\_post\_multipart(uint16\_t conn, char *resource, struct multipart\_chunk **post\_data, uint16\_t post\_data\_len, uint8\_t connection\_type);}
-
-\subsubsection*{Parameters}
-TODO
-\begin{itemize}[noitemsep]
-\item \texttt{}
-\end{itemize}
-\subsubsection*{Return value}
-TODO
-\subsubsection*{Example}
-TODO
+\begin{verbatim}
+ret = pico_http_client_send_delete(connection_id, "/test_delete", HTTP_CONN_CLOSE);
+\end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{multipart\_chunk\_create}
 
 \subsubsection*{Description}
-TODO
+Function to create multipart chunks to send via MULTIPART POST request.
 
 \subsubsection*{Function prototype}
 \texttt{struct multipart\_chunk *multipart\_chunk\_create(uint8\_t *data, uint64\_t length\_data, char *name, char *filename, char *content\_disposition, char *content\_type);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{data} - pointer to the data that needs to be send.
+\item \texttt{length\_data} - number of bytes in \texttt{data}.
+\item \texttt{name} - name of the data.
+\item \texttt{filename} - name of the file.
+\item \texttt{content\_disposition} - for example "attachment". If \texttt{content\_disposition} is used, it would result in: "Content-Disposition: attachment; name="name"; filename="filename"
+\item \texttt{content\_type} - The type of content, for example "text/plain"
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On failure \texttt{NULL}.
+\\On success a pointer to a new \texttt{struct multipart\_chunk}.
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+struct multipart_chunk **chunks;
+uint32_t chunks_len = 3;
+int32_t fd = 0;
+off_t size;
+uint8_t *buff = NULL;
+int32_t rv = 0;
 
+chunks = PICO_ZALLOC(chunks_len * sizeof(struct multipart_chunk *));
+chunks[0] = multipart_chunk_create("data1", 5u, "name1", "filename1", 
+                                   "attachment", NULL);
+chunks[1] = multipart_chunk_create("data2", 5u, "name2", "filename2", 
+                                   "attachment", NULL);
+fd=open("./apps/baremetal/http-client-demo/min.jpg", O_RDWR);
+buff_size = lseek(fd, 0, SEEK_END);
+lseek(fd, 0, SEEK_SET);
+buff = PICO_ZALLOC(buff_size);
+rv = read(fd, buff, buff_size);
+chunks[3] = multipart_chunk_create(buff, buff_size, "name3", 
+                                   "min.jpg", "attachment", NULL);
+\end{verbatim}
+
+
+%-----------------------------------------------------------------------------------------------------
+
+\subsection{pico\_http\_client\_send\_post\_multipart}
+
+\subsubsection*{Description}
+Send a MULTIPART POST to the HTTP-server. The library will build the MULTIPART POST request based on the \texttt{resource} and the hostname that was passed on opening the connection. Via \texttt{connection\_type} you can select a "Close" or "Keep-Alive" connection. Pass the files/data that need to be send via \texttt{post\_data}. Make sure that the data in the multipart chunks is available utill the complete request has been send, a \texttt{EV\_HTTP\_WRITE\_SUCCESS} is trown via the callback function.
+
+\subsubsection*{Function prototype}
+\texttt{int8\_t pico\_http\_client\_send\_post\_multipart(uint16\_t conn, char *resource, struct multipart\_chunk **post\_data, uint16\_t post\_data\_len, uint8\_t connection\_type);}
+
+\subsubsection*{Parameters}
+\begin{itemize}[noitemsep]
+\item \texttt{conn} - Connection id through which the MULTIPART POST request has to be send.
+\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
+\item \texttt{post\_data} - A pointer to \texttt{struct multipart\_chunk} pointers.
+\item \texttt{post\_data\_len} - Number of \texttt{struct multipart\_chunk} pointers in \texttt{post\_data}.
+\end{itemize}
+\subsubsection*{Return value}
+On success \texttt{HTTP\_RETURN\_OK}.
+\\On failure \texttt{HTTP\_RETURN\_ERROR}.
+\subsubsection*{Example}
+\begin{verbatim}
+ret = pico_http_client_send_post_multipart(conn, "/", chunks, 
+                                           chunks_len, HTTP_CONN_KEEP_ALIVE);
+\end{verbatim}
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{multipart\_chunk\_destroy}
 
 \subsubsection*{Description}
-TODO
+Function to destroy/free a multipart chunk. The pointer to the data is also freed.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t multipart\_chunk\_destroy(struct multipart\_chunk *chunk);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{chunk} - pointer to a \texttt{struct multipart\_chunk}.
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On failure \texttt{HTTP\_RETURN\_ERROR}.
+\\On success \texttt{HTTP\_RETURN\_OK};
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+ret = multipart_chunk_destroy(chunk);
+\end{verbatim}
+
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_long\_poll\_send\_get}
 
 \subsubsection*{Description}
-TODO
-
+Will start LONG POLLING GET request.
+\begin{enumerate}
+\item Client sends a request.
+\item Client waits for the server to respond.
+\item Server responds and the callback is triggered.
+\item When client has read the response the libraby automaticly triggers a new GET request.
+\end{enumerate}
+Dispite from which \texttt{connection\_type} you pass, the connection id will be reused for the next GET request.
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_send\_get(uint16\_t conn, char *resource, uint8\_t connection\_type);}
 
 \subsubsection*{Parameters}
-TODO
+
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - Connection id through which the LONG POLLING GET request has to be started.
+\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request will be send over the same connection. The connection will be close after the response when \texttt{HTTP\_CONN\_CLOSE} is passed and a new one will be created to send the next LONG POLLING GET.
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On failure \texttt{HTTP\_RETURN\_ERROR}.
+\\On success \texttt{HTTP\_RETURN\_OK};
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
+\end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_long\_poll\_cancel}
 
 \subsubsection*{Description}
-TODO
+Cancel a running LONG POLLING GET.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_long\_poll\_cancel(uint16\_t conn);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - Connection id
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On failure \texttt{HTTP\_RETURN\_ERROR}.
+\\On success \texttt{HTTP\_RETURN\_OK};
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+ret = pico_http_client_long_poll_cancel(conn);
+\end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_get\_write\_progress}
 
 \subsubsection*{Description}
-TODO
+Function to get the progress of sending a request.
 
 \subsubsection*{Function prototype}
 \texttt{int8\_t pico\_http\_client\_get\_write\_progress(uint16\_t conn, uint32\_t *total\_bytes\_written, uint32\_t *total\_bytes\_to\_write);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - connection id
+\item \texttt{total\_bytes\_written} - pointer to \texttt{uint32\_t} to store the bytes that allready have been send.
+\item \texttt{total\_bytes\_to\_write} - (optional) pointer to  \texttt{unint32\_t} to store the total number of bytes that need to be send.
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On failure \texttt{HTTP\_RETURN\_ERROR}.
+\\On success \texttt{HTTP\_RETURN\_OK};
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+int32_t total_bytes_written = 0;
+int32_t total_bytes_to_write = 0;
+ret = pico_http_client_get_write_progress(conn, &total_bytes_written, 
+                                          &total_bytes_to_write);
+\end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_read\_header}
 
 \subsubsection*{Description}
-TODO
+Function to get the header info after \texttt{EV\_HTTP\_REQ} was triggered via the callback.
 
 \subsubsection*{Function prototype}
 \texttt{struct pico\_http\_header *pico\_http\_client\_read\_header(uint16\_t conn);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - connection id
 \end{itemize}
+
 \subsubsection*{Return value}
-TODO
+On failure \texttt{NULL}.
+\\On success a pointer to a \texttt{struct pico\_http\_header}.
+
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+struct pico_http_header *header = NULL;
+header = pico_http_client_read_header(conn);
+printf("Received header from server...\n");
+printf("Server response : %d\n",header->response_code);
+printf("Location : %s\n",header->location);
+printf("Transfer-Encoding : %d\n",header->transfer_coding);
+printf("Size/Chunk : %d\n",header->content_length_or_chunk);
+\end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_read\_uri\_data}
 
 \subsubsection*{Description}
-TODO
+Function to get the uri info.
 
 \subsubsection*{Function prototype}
 \texttt{struct pico\_http\_uri *pico\_http\_client\_read\_uri\_data(uint16\_t conn);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - connection id
 \end{itemize}
+
 \subsubsection*{Return value}
-TODO
+On failure \texttt{NULL}.
+\\On success a pointer to a \texttt{struct pico\_http\_uri}.
+
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+struct pico_http_uri *uri = NULL;
+uri = pico_http_client_read_uri_data(conn);
+\end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
 
 \subsection{pico\_http\_client\_read\_body}
 
 \subsubsection*{Description}
-TODO
+Function to read the body of the response, can be called after \texttt{EV\_HTTP\_BODY} event.
 
 \subsubsection*{Function prototype}
 \texttt{int32\_t pico\_http\_client\_read\_body(uint16\_t conn, uint8\_t *data, uint16\_t size, uint8\_t *body\_read\_done);}
 
 \subsubsection*{Parameters}
-TODO
 \begin{itemize}[noitemsep]
-\item \texttt{}
+\item \texttt{conn} - connection id
+\item \texttt{data} - pointer to a buffer where the read body data will be copied to.
+\item \texttt{size} - number of bytes to read.
+\item \texttt{body\_read\_done} - pointer to \texttt{uint8\_t}. Will be set to 1 if the body read is complete.
 \end{itemize}
 \subsubsection*{Return value}
-TODO
+On failure \texttt{HTTP\_RETURN\_ERROR}.
+\\On success the number of bytes that have been read.
 \subsubsection*{Example}
-TODO
+\begin{verbatim}
+bytes_read = pico_http_client_read_body(conn, &data[_length],1024, &body_read_done);
+\end{verbatim}
