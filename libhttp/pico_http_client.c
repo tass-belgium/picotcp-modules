@@ -232,6 +232,7 @@ static int32_t socket_write_request_parts(struct pico_http_client *client)
         }
         if (client->request_parts_len_done==client->request_parts_len)
         {
+            dbg("Write success\n");
             request_parts_destroy(client);
             client->state = HTTP_START_READING_HEADER;
             client->wakeup(EV_HTTP_WRITE_SUCCESS, client->connectionID);
@@ -459,11 +460,13 @@ static void treat_read_event(struct pico_http_client *client)
     if (client->state == HTTP_START_READING_HEADER)
     {
         /* wait for header */
+        dbg("Wait for header\n");
         free_header(client); //when using keep alive, we create a new one
         client->header = PICO_ZALLOC(sizeof(struct pico_http_header));
         if (!client->header)
         {
             pico_err = PICO_ERR_ENOMEM;
+            dbg("Client not found!\n");
             return;
         }
 
@@ -630,11 +633,11 @@ static void dns_callback(char *ip, void *ptr)
             client->wakeup(EV_HTTP_ERROR, client->connectionID);
             return;
         }
-        uint32_t t = 60000;
-        uint8_t cnt = 7;
-        //pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPIDLE, &t);
-        //pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPINTVL, &t);
-        //pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPCNT, &cnt);
+        val = 60000;
+        pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPIDLE, &val);
+        pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPINTVL, &val);
+        val = 7;
+        pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPCNT, &val);
         if (pico_socket_connect(client->sck, &client->ip, short_be(client->urikey->port)) < 0)
         {
             client->wakeup(EV_HTTP_ERROR, client->connectionID);
@@ -1271,7 +1274,6 @@ int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, char *resour
     {
         return HTTP_RETURN_ERROR;
     }
-    
     return HTTP_RETURN_OK;
 }
 
@@ -1432,7 +1434,7 @@ int8_t MOCKABLE pico_http_client_send_post(uint16_t conn, char *resource, uint8_
     if (bytes_written < 0)
     {
         return HTTP_RETURN_ERROR;
-    } 
+    }
     return HTTP_RETURN_OK;
 }
 
@@ -1756,8 +1758,10 @@ int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16
         if ((client->header->content_length_or_chunk - client->body_read) < size)
         {
             size = client->header->content_length_or_chunk;
+            dbg("client->header->content_length_or_chunk: %d\n", client->header->content_length_or_chunk);
         }
         bytes_read = pico_socket_read(client->sck, (void *)data, size);
+        client->body_read += bytes_read;
         if (client->header->content_length_or_chunk == client->body_read)
         {
             client->body_read_done = 1;
@@ -1766,9 +1770,9 @@ int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16
     else
     {
         //client->state will be set to HTTP_READ_BODY_DONE if we reach the ending '0' at the end of the body, read_chunked_data make sure we don't read to mutch.
+        client->body_read += bytes_read;
         bytes_read = read_chunked_data(client, data, size);
     }
-    client->body_read += bytes_read;
 
     if (client->body_read_done)
     {
@@ -1908,12 +1912,13 @@ int8_t MOCKABLE pico_http_client_close(uint16_t conn)
 static inline void read_first_line(struct pico_http_client *client, uint8_t *line, uint32_t *index)
 {
     uint8_t c;
-
     /* read the first line of the header */
     while (consume_char(c) > 0 && c != '\r')
     {
         if (*index < HTTP_HEADER_LINE_SIZE) /* truncate if too long */
+        {
             line[(*index)++] = c;
+        }
     }
     consume_char(c); /* consume \n */
 }
@@ -1937,12 +1942,12 @@ static inline int32_t parse_loc_and_cont(struct pico_http_client *client, struct
 {
     uint8_t c;
     /* Location: */
-
     if (is_location(line))
     {
         *index = 0;
         while (consume_char(c) > 0 && c != '\r')
         {
+            dbg("parse_location: %c\n", c);
             line[(*index)++] = c;
         }
         /* allocate space for the field */
@@ -1965,6 +1970,7 @@ static inline int32_t parse_loc_and_cont(struct pico_http_client *client, struct
         consume_char(c);
         while (consume_char(c) > 0 && c != '\r')
         {
+            dbg("parse_content_length: %c\n", c);
             header->content_length_or_chunk = header->content_length_or_chunk * 10u + (uint32_t)(c - '0');
         }
         return 1;
@@ -2027,12 +2033,13 @@ static inline int32_t parse_rest_of_header(struct pico_http_client *client, stru
 {
     uint8_t c;
     uint32_t read_len = 0;
+    (*index) = 0u;
 
     /* parse the rest of the header */
     read_len = consume_char(c);
     if (read_len == 0)
         return HTTP_RETURN_BUSY;
-
+    dbg("parse_rest_of_header: client %p, header %p, line %p, index: %d\n", client, header, line, *index);
     while (read_len > 0)
     {
         if (c == ':')
@@ -2050,7 +2057,6 @@ static inline int32_t parse_rest_of_header(struct pico_http_client *client, stru
         {
             line[(*index)++] = c;
         }
-
         read_len = consume_char(c);
     }
     return HTTP_RETURN_OK;
@@ -2060,7 +2066,7 @@ static int8_t parse_header_from_server(struct pico_http_client *client, struct p
 {
     uint8_t line[HTTP_HEADER_LINE_SIZE];
     uint32_t index = 0;
-
+    dbg("Parse header from server\n");
     if (client->state == HTTP_START_READING_HEADER)
     {
         read_first_line(client, line, &index);
@@ -2078,6 +2084,7 @@ static int8_t parse_header_from_server(struct pico_http_client *client, struct p
         header->response_code = (uint16_t)((line[RESPONSE_INDEX] - '0') * 100 +
                                           (line[RESPONSE_INDEX + 1] - '0') * 10 +
                                           (line[RESPONSE_INDEX + 2] - '0'));
+
         if (header->response_code == HTTP_NOT_FOUND)
         {
             return HTTP_RETURN_NOT_FOUND;
@@ -2094,7 +2101,6 @@ static int8_t parse_header_from_server(struct pico_http_client *client, struct p
 
     if (parse_rest_of_header(client, header, line, &index) == HTTP_RETURN_BUSY)
         return HTTP_RETURN_BUSY;
-
     start_reading_body(client, header);
     dbg("End of header\n");
     return HTTP_RETURN_OK;

@@ -31,6 +31,10 @@ static struct pico_http_client *example_client = NULL;
 static int write_success_cnt = 0;
 static int write_progress_made_cnt = 0;
 static int write_in_chunks = 0;
+static int header_ev_cnt = 0;
+static int body_ev_cnt = 0;
+static int read_header_in_chunks = 0;
+static int clear_read_idx = 0;
 
 /*static inline void *pico_zalloc(size_t size)
 {
@@ -43,8 +47,19 @@ static int write_in_chunks = 0;
 void cb(uint16_t ev, uint16_t conn)
 {
     printf("Callback! %d\n", ev);
+    if (ev & EV_HTTP_REQ)
+    {
+        printf("Read header event\n");
+        header_ev_cnt++;
+    }
+    if (ev & EV_HTTP_BODY)
+    {
+        printf("Read body event\n");
+        body_ev_cnt++;
+    }
     if (ev & EV_HTTP_WRITE_SUCCESS)
     {
+        printf("Write success event\n");
         write_success_cnt++;
     }
     if (ev & EV_HTTP_WRITE_PROGRESS_MADE)
@@ -85,8 +100,45 @@ struct pico_socket *pico_socket_open(uint16_t net, uint16_t proto, void (*wakeup
 
 int pico_socket_read(struct pico_socket *s, void *buf, int len)
 {
+    char response[150] = "HTTP/1.1 200 get balbalba\r\nContent-Length: 12\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Thu, 01 Oct 2015 08:12:05 GMT\r\n\r\nget balbalba";
+    int length = strlen(response);
+    static int idx = 0;
+    int bytes_read = 0;
+    //printf("in pico_socket_read length: %d\n", length);
+    if(clear_read_idx)
+    {
+        idx = 0;
+        clear_read_idx = 0;
+    }
+
+    if (read_header_in_chunks && idx == 10)
+    {
+        read_header_in_chunks = 0;
+        return 0;
+    }
+
+    if (length == idx)
+    {
+        return 0;
+    }
+    else if (len < (length - idx))
+    {
+        //printf("buf: %p, response: %p, idx: %d, response + idx: %p, len: %d\n", buf,response, idx, &response[idx], len);
+        memcpy((char *)buf, &response[idx], len);
+        //printf("buf: %c\n", ((char *)buf)[0]);
+        idx += len;
+    }
+    else
+    {
+        bytes_read = length-idx;
+        printf("length-idx %d-%d = %d   buf: %p\n", length, idx, bytes_read, buf);
+        memcpy((char *)buf, (char *)&response[idx], bytes_read);
+        printf("return %d\n", bytes_read);
+        idx += bytes_read;
+        return bytes_read;
+    }
     fail_if(s != &example_socket);
-    return 0;
+    return len;
 }
 
 int pico_socket_write(struct pico_socket *s, const void *buf, int len)
@@ -98,7 +150,7 @@ int pico_socket_write(struct pico_socket *s, const void *buf, int len)
     if (write_in_chunks)
     {
         write_in_chunks = 0;
-        return (len/2); 
+        return (len/2);
     }
     else
     {
@@ -113,7 +165,7 @@ int pico_string_to_ipv4(const char *ipstr, uint32_t *ip)
 
 void *pico_tree_delete(struct pico_tree *tree, void *key)
 {
-    
+
     if (((struct pico_http_client*)key)->connectionID == 99)
     {
         return NULL;
@@ -338,7 +390,7 @@ START_TEST(tc_pico_http_client_send_post_multipart)
     printf("\n\nStart: tc_pico_http_client_send_post_multipart\n");
     chunks1 = PICO_ZALLOC(2 * sizeof(struct multipart_chunk *));
     chunks1[0] = multipart_chunk_create("data1", 5u, "name1", "filename1", "attachment", NULL);
-    chunks1[1] = multipart_chunk_create("data2", 5u, "name2", "filename2", "attachment", NULL);  
+    chunks1[1] = multipart_chunk_create("data2", 5u, "name2", "filename2", "attachment", NULL);
     /*Case1: unknown client*/
     conn = pico_http_client_open(hostname, cb);
     ret = pico_http_client_send_post_multipart(99, "/", chunks1, post_data_len, HTTP_CONN_CLOSE);
@@ -414,7 +466,7 @@ START_TEST(tc_pico_http_client_close)
     /*Case1: unknown client*/
     ret = pico_http_client_close(99);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    /*Case2: positive test*/ 
+    /*Case2: positive test*/
     ret = pico_http_client_close(conn);
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
     printf("Stop: tc_pico_http_client_close\n");
@@ -429,7 +481,7 @@ START_TEST(tc_pico_http_client_long_poll_send_get)
     /*Case1: unknown client*/
     ret = pico_http_client_long_poll_send_get(99, "/", HTTP_CONN_CLOSE);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    /*Case2: positive test*/ 
+    /*Case2: positive test*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
@@ -446,7 +498,7 @@ START_TEST(tc_pico_http_client_long_poll_cancel)
     /*Case1: unknown client*/
     ret = pico_http_client_long_poll_cancel(99);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    /*Case2: positive test*/ 
+    /*Case2: positive test*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
     ret = pico_http_client_long_poll_cancel(conn);
@@ -477,7 +529,7 @@ START_TEST(tc_pico_http_client_get_write_progress)
     printf("total_bytes_written: %d, total_bytes_to_write: %d\n", total_bytes_written, total_bytes_to_write);
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
     treat_write_event(example_client);
-    ret = pico_http_client_get_write_progress(conn, &total_bytes_written, &total_bytes_to_write); 
+    ret = pico_http_client_get_write_progress(conn, &total_bytes_written, &total_bytes_to_write);
     ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
     ck_assert_int_ge(total_bytes_written, 0);
     ck_assert_int_ge(total_bytes_to_write, 0);
@@ -489,21 +541,21 @@ START_TEST(tc_pico_http_client_get_write_progress)
     conn = pico_http_client_open(hostname, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(conn, NULL, &total_bytes_to_write);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR); 
+    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: No address for total_bytes_to_write*/
     write_in_chunks = 1;
     conn = pico_http_client_open(hostname, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(conn, &total_bytes_written, NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_OK); 
+    ck_assert_int_eq(ret, HTTP_RETURN_OK);
     pico_http_client_close(conn);
     /*Case4: Unknown connectionID*/
     write_in_chunks = 1;
     conn = pico_http_client_open(hostname, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(99, &total_bytes_written, NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR); 
+    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_get_write_progress\n");
 }
@@ -511,16 +563,29 @@ END_TEST
 START_TEST(tc_pico_http_client_read_header)
 {
     /*TODO: test this: struct pico_http_header *pico_http_client_read_header(uint16_t conn);*/
-    printf("\n\nStart: tc_pico_http_client_read_header\n");
     int ret = 0;
     int conn = 0;
     struct pico_http_header *header = NULL;
     char hostname[50] = "http://httpbin.org/";
+    header_ev_cnt = 0;
+    read_header_in_chunks = 0;
+    clear_read_idx = 1;
     printf("\n\nStart: tc_pico_http_client_read_header\n");
     /*Cse1: Positive case*/
     conn = pico_http_client_open(hostname, cb);
+    ck_assert_int_ge(conn, 0);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
+    ck_assert_int_ge(ret, 0);
+    ck_assert_int_eq(write_success_cnt, 1);
+    treat_read_event(example_client);  //first time 10bytes will come in
+    treat_read_event(example_client);  //second time de rest is available for reading.
+    printf("header_ev_cnt, %d\n", header_ev_cnt); //fails here because lib can't handle the response if it comes in chunks
+    ck_assert_int_eq(header_ev_cnt, 1);
     header = pico_http_client_read_header(conn);
+    printf("Received header from server...\n");
+    printf("Server response : %d\n",header->response_code);
+    printf("Location : %s\n",header->location);
+    printf("Transfer-Encoding : %d\n",header->transfer_coding);
     ck_assert_ptr_ne(header, NULL);
     /*Case2: Unknown connectionID*/
     header = pico_http_client_read_header(99);
@@ -536,6 +601,7 @@ START_TEST(tc_pico_http_client_read_uri_data)
     int conn = 0;
     struct pico_http_uri *urikey = NULL;
     char hostname[50] = "http://httpbin.org/";
+    clear_read_idx = 1;
     printf("\n\nStart: tc_pico_http_client_read_uri_data\n");
     /*Cse1: Positive case*/
     conn = pico_http_client_open(hostname, cb);
@@ -549,14 +615,46 @@ START_TEST(tc_pico_http_client_read_uri_data)
     printf("Stop: tc_pico_http_client_read_uri_data\n");
 }
 END_TEST
+
 START_TEST(tc_pico_http_client_read_body)
 {
     /*TODO: test this: int32_t pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16_t size, uint8_t *body_read_done);*/
+    int ret = 0;
+    int conn = 0;
+    char hostname[50] = "http://httpbin.org/";
+    uint8_t body_read_done = 0;
+    uint8_t *data = PICO_ZALLOC(1024*1024);
+    struct pico_http_header *header = NULL;
+    clear_read_idx = 1;
     printf("\n\nStart: tc_pico_http_client_read_body\n");
-
+    //first the header needs to come in
+    write_success_cnt = 0;
+    header_ev_cnt = 0;
+    body_ev_cnt = 0;
+    conn = pico_http_client_open(hostname, cb);
+    ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
+    ck_assert_int_eq(write_success_cnt, 1);
+    treat_read_event(example_client);
+    ck_assert_int_eq(header_ev_cnt, 1);
+    header = pico_http_client_read_header(conn);
+    printf("Received header from server...\n");
+    printf("Server response : %d\n",header->response_code);
+    printf("Location : %s\n",header->location);
+    printf("Transfer-Encoding : %d\n",header->transfer_coding);
+    printf("Size/Chunk : %d\n",header->content_length_or_chunk);
+    ck_assert_int_eq(body_ev_cnt, 1);
+    //then we can read the body
+    ret = pico_http_client_read_body(conn, data, 1024, &body_read_done);
+    write(0, data, ret);
+    printf("body_read_done: %d ret: %d\n", body_read_done, ret);
+    ck_assert_int_eq(ret, 12);
+    ck_assert_int_eq(body_read_done, 1);
+    pico_http_client_close(conn);
+    PICO_FREE(data);
     printf("Stop: tc_pico_http_client_read_body\n");
 }
 END_TEST
+
 /* API end */
 
 
@@ -567,7 +665,7 @@ START_TEST(tc_free_uri)
     printf("\n\nStart: tc_free_uri\n");
     ret = free_uri(NULL);
     ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
-    
+
     struct pico_http_client *client = NULL;
     client = PICO_ZALLOC(sizeof(struct pico_http_client));
     client->urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
@@ -786,7 +884,7 @@ Suite *pico_suite(void)
     TCase *TCase_pico_http_client_read_header = tcase_create("Unit test for tc_pico_http_client_read_header");
     TCase *TCase_pico_http_client_read_uri_data = tcase_create("Unit test for tc_pico_http_client_read_uri_data");
     TCase *TCase_pico_http_client_read_body = tcase_create("Unit test for tc_pico_http_client_read_body");
-    
+
     /*API end*/
 
 
@@ -860,7 +958,7 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_pico_http_client_read_uri_data);
     tcase_add_test(TCase_pico_http_client_read_body, tc_pico_http_client_read_body);
     suite_add_tcase(s, TCase_pico_http_client_read_body);
-    
+
     /*API end*/
 
 
