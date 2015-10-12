@@ -35,6 +35,7 @@ static int header_ev_cnt = 0;
 static int body_ev_cnt = 0;
 static int read_header_in_chunks = 0;
 static int clear_read_idx = 0;
+static int chunked_response = 0;
 
 /*static inline void *pico_zalloc(size_t size)
 {
@@ -100,7 +101,15 @@ struct pico_socket *pico_socket_open(uint16_t net, uint16_t proto, void (*wakeup
 
 int pico_socket_read(struct pico_socket *s, void *buf, int len)
 {
-    char response[150] = "HTTP/1.1 200 get balbalba\r\nContent-Length: 12\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Thu, 01 Oct 2015 08:12:05 GMT\r\n\r\nget balbalba";
+    char response[1024];
+    if (chunked_response)
+    {
+        strcpy(response,"HTTP/1.1 200 OK\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Fri, 09 Oct 2015 11:26:38 GMT\r\nTransfer-Encoding: chunked\r\nContent-type: text/plain\r\n\r\n12\r\nthis is chunk: 0\r\n\r\n12\r\nthis is chunk: 1\r\n\r\n12\r\nthis is chunk: 2\r\n\r\n12\r\nthis is chunk: 3\r\n\r\n12\r\nthis is chunk: 4\r\n\r\n12\r\nthis is chunk: 5\r\n\r\n12\r\nthis is chunk: 6\r\n\r\n12\r\nthis is chunk: 7\r\n\r\n12\r\nthis is chunk: 8\r\n\r\n12\r\nthis is chunk: 9\r\n\r\n0");
+    }
+    else
+    {
+        strcpy(response, "HTTP/1.1 200 get balbalba\r\nContent-Length: 12\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Thu, 01 Oct 2015 08:12:05 GMT\r\n\r\nget balbalba");
+    }
     int length = strlen(response);
     static int idx = 0;
     int bytes_read = 0;
@@ -131,13 +140,14 @@ int pico_socket_read(struct pico_socket *s, void *buf, int len)
     else
     {
         bytes_read = length-idx;
-        printf("length-idx %d-%d = %d   buf: %p\n", length, idx, bytes_read, buf);
+        //printf("length-idx %d-%d = %d   buf: %p\n", length, idx, bytes_read, buf);
         memcpy((char *)buf, (char *)&response[idx], bytes_read);
-        printf("return %d\n", bytes_read);
+        //printf("return %d\n", bytes_read);
         idx += bytes_read;
         return bytes_read;
     }
     fail_if(s != &example_socket);
+    //printf("Return len: %d\n", len);
     return len;
 }
 
@@ -214,9 +224,11 @@ START_TEST(tc_multipart_chunk_create)
     /*Case1: data is NULL-ptr*/
     mpch = multipart_chunk_create(NULL, 4, name, filename, cont_disp, cont_type);
     ck_assert_ptr_eq(mpch, NULL);
+    multipart_chunk_destroy(mpch);
     /*Case2: data length is 0*/
     mpch = multipart_chunk_create(data, 0, name, filename, cont_disp, cont_type);
     ck_assert_ptr_eq(mpch, NULL);
+    multipart_chunk_destroy(mpch);
     /*Case3: possitive test, check if everting got assigned*/
     mpch = multipart_chunk_create(data, 4, name, filename, cont_disp, cont_type);
     ck_assert_ptr_ne(mpch, NULL);
@@ -228,7 +240,7 @@ START_TEST(tc_multipart_chunk_create)
     ck_assert_int_eq(mpch->length_content_disposition, strlen(cont_disp));
     ck_assert_str_eq(mpch->content_type, cont_type);
     ck_assert_int_eq(mpch->length_content_type, strlen(cont_type));
-    //TODO compare data
+    multipart_chunk_destroy(mpch);
     ck_assert_int_eq(mpch->length_data, 4);
     printf("Stop: tc_multipart_chunk_create\n");
 }
@@ -425,6 +437,9 @@ START_TEST(tc_pico_http_client_send_post_multipart)
     ck_assert_int_ge(ret, HTTP_RETURN_OK);
     ck_assert_int_eq(write_success_cnt, 1);
     pico_http_client_close(conn);
+    multipart_chunk_destroy(chunks1[0]);
+    multipart_chunk_destroy(chunks1[1]);
+    PICO_FREE(chunks1);
     printf("Stop: tc_pico_http_client_send_post_multipart\n");
 }
 END_TEST
@@ -625,6 +640,7 @@ START_TEST(tc_pico_http_client_read_body)
     uint8_t body_read_done = 0;
     uint8_t *data = PICO_ZALLOC(1024*1024);
     struct pico_http_header *header = NULL;
+    /*Case1: not chunked*/
     clear_read_idx = 1;
     printf("\n\nStart: tc_pico_http_client_read_body\n");
     //first the header needs to come in
@@ -652,6 +668,42 @@ START_TEST(tc_pico_http_client_read_body)
     pico_http_client_close(conn);
     PICO_FREE(data);
     printf("Stop: tc_pico_http_client_read_body\n");
+
+    /*Case2: data in response is chunked*/
+    clear_read_idx = 1;
+    //first the header needs to come in
+    write_success_cnt = 0;
+    header_ev_cnt = 0;
+    body_ev_cnt = 0;
+    chunked_response = 1;
+    body_read_done = 0;
+    data = PICO_ZALLOC(1024*1024);
+    conn = pico_http_client_open(hostname, cb);
+    ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
+    ck_assert_int_eq(write_success_cnt, 1);
+    treat_read_event(example_client);
+    ck_assert_int_eq(header_ev_cnt, 1);
+    header = pico_http_client_read_header(conn);
+    printf("Received header from server...\n");
+    printf("Server response : %d\n",header->response_code);
+    printf("Location : %s\n",header->location);
+    printf("Transfer-Encoding : %d\n",header->transfer_coding);
+    printf("Size/Chunk : %d\n",header->content_length_or_chunk);
+    ck_assert_int_eq(body_ev_cnt, 1);
+    //then we can read the body
+    int number_of_expected_chunks = 10;
+    while (number_of_expected_chunks)
+    {
+        ret = pico_http_client_read_body(conn, data, 1024, &body_read_done);
+        write(0, data, ret);
+        printf("body_read_done: %d ret: %d\n", body_read_done, ret);
+        number_of_expected_chunks--;
+    }
+    ck_assert_int_eq(body_read_done, 1);
+    pico_http_client_close(conn);
+    PICO_FREE(data);
+    printf("Stop: tc_pico_http_client_read_body\n");
+    chunked_response = 0;
 }
 END_TEST
 
@@ -888,7 +940,7 @@ Suite *pico_suite(void)
     /*API end*/
 
 
-    TCase *TCase_free_uri = tcase_create("Unit test for free_uri");
+    /*TCase *TCase_free_uri = tcase_create("Unit test for free_uri");
     TCase *TCase_client_open = tcase_create("Unit test for client_open");
     TCase *TCase_free_header = tcase_create("Unit test for free_header");
     TCase *TCase_print_request_part_info = tcase_create("Unit test for print_request_part_info");
@@ -904,7 +956,6 @@ Suite *pico_suite(void)
     TCase *TCase_treat_long_polling = tcase_create("Unit test for treat_long_polling");
     TCase *TCase_tcp_callback = tcase_create("Unit test for tcp_callback");
     TCase *TCase_dns_callback = tcase_create("Unit test for dns_callback");
-    TCase *TCase_pico_http_client_build_delete = tcase_create("Unit test for *pico_http_client_build_delete");
     TCase *TCase_get_content_length = tcase_create("Unit test for get_content_length");
     TCase *TCase_get_max_multipart_header_size = tcase_create("Unit test for get_max_multipart_header_size");
     TCase *TCase_add_multipart_chunks = tcase_create("Unit test for add_multipart_chunks");
@@ -926,6 +977,7 @@ Suite *pico_suite(void)
     TCase *TCase_set_client_chunk_state = tcase_create("Unit test for set_client_chunk_state");
     TCase *TCase_read_chunk_trail = tcase_create("Unit test for read_chunk_trail");
     TCase *TCase_read_chunk_value = tcase_create("Unit test for read_chunk_value");
+    */
 
     /*API start*/
     tcase_add_test(TCase_multipart_chunk_create, tc_multipart_chunk_create);
@@ -942,8 +994,8 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_pico_http_client_send_post);
     tcase_add_test(TCase_pico_http_client_send_post_multipart, tc_pico_http_client_send_post_multipart);
     suite_add_tcase(s, TCase_pico_http_client_send_post_multipart);
-    //tcase_add_test(TCase_pico_http_client_send_delete, tc_pico_http_client_send_delete);
-    //suite_add_tcase(s, TCase_pico_http_client_send_delete);
+    tcase_add_test(TCase_pico_http_client_send_delete, tc_pico_http_client_send_delete);
+    suite_add_tcase(s, TCase_pico_http_client_send_delete);
     tcase_add_test(TCase_pico_http_client_close, tc_pico_http_client_close);
     suite_add_tcase(s, TCase_pico_http_client_close);
     tcase_add_test(TCase_pico_http_client_long_poll_send_get, tc_pico_http_client_long_poll_send_get);
@@ -958,7 +1010,6 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_pico_http_client_read_uri_data);
     tcase_add_test(TCase_pico_http_client_read_body, tc_pico_http_client_read_body);
     suite_add_tcase(s, TCase_pico_http_client_read_body);
-
     /*API end*/
 
 

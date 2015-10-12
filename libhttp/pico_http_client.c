@@ -42,13 +42,13 @@
 #define RESPONSE_INDEX                      9u
 
 #define HTTP_CHUNK_ERROR    0xFFFFFFFFu
-
+/*
 #ifdef dbg
     #undef dbg
 #endif
 
 #define dbg(...) do {} while(0)
-
+*/
 #define nop() do {} while(0)
 
 #define consume_char(c)                          (pico_socket_read(client->sck, &c, 1u))
@@ -119,7 +119,9 @@ static void free_header(struct pico_http_client *to_be_removed);
 
 struct request_part *request_part_create(char *buf, uint32_t buf_len, uint8_t copy, uint8_t mem)
 {
+    dbg("request_part_create: Before pico_zalloc\n");
     struct request_part *part = PICO_ZALLOC(sizeof(struct request_part));
+    dbg("request_part_create: After pico_zalloc\n");
     if (!part)
     {
         /* not enough memory */
@@ -271,14 +273,16 @@ static int8_t pico_process_hostname(const char *hostname, struct pico_http_uri *
     {
         pico_err = PICO_ERR_EINVAL;
     }
-    urikey->raw_hostname = (char *)PICO_ZALLOC(strlen(hostname));
+    urikey->raw_hostname = (char *)PICO_ZALLOC(strlen(hostname)+1);
     if (!urikey->raw_hostname)
     {
         pico_err = PICO_ERR_ENOMEM;
         pico_http_uri_destroy(urikey);
         return HTTP_RETURN_ERROR;
     }
-    strcpy(urikey->raw_hostname, hostname);
+    //strcpy(urikey->raw_hostname, hostname);
+    memcpy(urikey->raw_hostname, hostname, strlen(hostname)+1);
+
     /* detect protocol => search for  "colon-slash-slash" */
     if (memcmp(hostname, HTTP_PROTO_TOK, HTTP_PROTO_LEN) == 0) /* could be optimized */
     { /* protocol identified, it is http */
@@ -312,7 +316,7 @@ static int8_t pico_process_hostname(const char *hostname, struct pico_http_uri *
     else
     {
         /* extract host */
-        urikey->host = (char *)PICO_ZALLOC((uint32_t)(index - last_index + 1));
+        urikey->host = PICO_ZALLOC((uint32_t)(index - last_index + 1));
 
         if(!urikey->host)
         {
@@ -368,7 +372,7 @@ static int8_t pico_process_resource(const char *resource, struct pico_http_uri *
     }
 
     /* cpy the resource */
-    urikey->resource = (char *)PICO_ZALLOC(strlen(resource));
+    urikey->resource = PICO_ZALLOC(strlen(resource)+1);
 
     if (!urikey->resource)
     {
@@ -378,7 +382,8 @@ static int8_t pico_process_resource(const char *resource, struct pico_http_uri *
         return HTTP_RETURN_ERROR;
     }
 
-    strcpy(urikey->resource, resource);
+    //strcpy(urikey->resource, resource);
+    memcpy(urikey->resource, resource, strlen(resource)+1);
     return HTTP_RETURN_OK;
 }
 
@@ -638,6 +643,7 @@ static void dns_callback(char *ip, void *ptr)
         pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPINTVL, &val);
         val = 7;
         pico_socket_setoption(client->sck, PICO_SOCKET_OPT_KEEPCNT, &val);
+        dbg("client->sck: %p\n", client->sck);
         if (pico_socket_connect(client->sck, &client->ip, short_be(client->urikey->port)) < 0)
         {
             client->wakeup(EV_HTTP_ERROR, client->connectionID);
@@ -673,9 +679,9 @@ char *pico_http_client_build_get(const struct pico_http_uri *uri_data, uint8_t c
     }
 
     /*  */
-    header_size = (header_size + strlen(uri_data->host));
-    header_size = (header_size + strlen(uri_data->resource));
-    header_size = (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
+    header_size += (header_size + strlen(uri_data->host));
+    header_size += (header_size + strlen(uri_data->resource));
+    header_size += (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
     header = PICO_ZALLOC(header_size);
 
     if (!header)
@@ -711,9 +717,9 @@ static char *pico_http_client_build_delete(const struct pico_http_uri *uri_data,
     }
 
     /*  */
-    header_size = (header_size + strlen(uri_data->host));
-    header_size = (header_size + strlen(uri_data->resource));
-    header_size = (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
+    header_size += (header_size + strlen(uri_data->host));
+    header_size += (header_size + strlen(uri_data->resource));
+    header_size += (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
     header = PICO_ZALLOC(header_size);
 
     if (!header)
