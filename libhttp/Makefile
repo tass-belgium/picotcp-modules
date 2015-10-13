@@ -39,6 +39,7 @@ libhttp.a:
 	$(AR) cru libhttp.a *.o 
 	$(RANLIB) libhttp.a
 
+#make units ARCH=faulty 
 units: libhttp.a
 	gcc -o units.app $^ -I./ $(CFLAGS) ../test/unit/modunit_pico_http_client.c -lcheck -lm -pthread -lrt libhttp.a
 

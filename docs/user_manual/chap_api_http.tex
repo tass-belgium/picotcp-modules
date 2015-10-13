@@ -1,5 +1,7 @@
 \section{Hypertext Transfer Protocol (HTTP)}
-TODO
+The Hypertext Transfer Protocol (HTTP) is an application-level protocol for distributed, collaborative, hypermedia information systems. It is a generic, stateless, protocol which can be used for many tasks beyond its use for hypertext, such as name servers and distributed object management systems, through extension of its request methods, error codes and headers. A feature of HTTP is the typing and negotiation of data representation, allowing systems to be built independently of the data being transferred.
+
+HTTP has been in use by the World-Wide Web global information initiative since 1990. This section describes what we support for HTTP/1.1.
 
 \subsection{pico\_http\_client\_open}
 
@@ -7,7 +9,7 @@ TODO
 Opens a new connection to a HTTP-server.
 
 \subsubsection*{Function prototype}
-\texttt{int32\_t pico\_http\_client\_open(char\_t *uri,
+\texttt{int32\_t pico\_http\_client\_open(char *uri,
                 void (*wakeup)(uint16\_t ev, uint16\_t conn));}
 
 \subsubsection*{Parameters}
@@ -34,7 +36,7 @@ On success connection id \texttt{conn}.
 
 \subsubsection*{Example}
 \begin{verbatim}
-ret = pico_http_client_open(uri, wakeup_function);
+ret = pico_http_client_open("http://my_webserver:8080/", wakeup_function);
 \end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
@@ -107,7 +109,7 @@ On success \texttt{HTTP\_RETURN\_OK}.
 
 \subsubsection*{Example}
 \begin{verbatim}
-ret = pico_http_client_send_get(connection_id, "/test/index.html", HTTP_CONN_CLOSE);
+ret = pico_http_client_send_get(connection_id, "/test/get.html", HTTP_CONN_CLOSE);
 \end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
@@ -136,7 +138,7 @@ On success \texttt{HTTP\_RETURN\_OK}.
 \subsubsection*{Example}
 \begin{verbatim}
 char post_data* = "name=dmx&number=10"
-ret = pico_http_client_send_post(conn, "/post_test/", post_data, strlen(post_data),
+ret = pico_http_client_send_post(conn, "/test/post.html", post_data, strlen(post_data),
 HTTP_CONN_CLOSE, NULL, NULL);
 \end{verbatim}
 
@@ -161,7 +163,7 @@ On success \texttt{HTTP\_RETURN\_OK}.
 \\On failure \texttt{HTTP\_RETURN\_ERROR}.
 \subsubsection*{Example}
 \begin{verbatim}
-ret = pico_http_client_send_delete(connection_id, "/test_delete", HTTP_CONN_CLOSE);
+ret = pico_http_client_send_delete(connection_id, "/test/delete.html", HTTP_CONN_CLOSE);
 \end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
@@ -233,7 +235,7 @@ On success \texttt{HTTP\_RETURN\_OK}.
 \\On failure \texttt{HTTP\_RETURN\_ERROR}.
 \subsubsection*{Example}
 \begin{verbatim}
-ret = pico_http_client_send_post_multipart(conn, "/", chunks,
+ret = pico_http_client_send_post_multipart(conn, "/test/multipart.html", chunks,
                                            chunks_len, HTTP_CONN_KEEP_ALIVE);
 \end{verbatim}
 
@@ -269,8 +271,8 @@ Will start LONG POLLING GET request. The library will build the GET request base
 \begin{enumerate}
 \item Client sends a request.
 \item Client waits for the server to respond.
-\item Server responds and the wakeup\_function is triggered.
-\item When client has read the responsei, the libraby automaticly sends a new GET request.
+\item Server responds and the wakeup\_function gets called.
+\item When client has read the response, the libraby automaticly sends a new GET request.
 \end{enumerate}
 Dispite which \texttt{connection\_type} you pass, the connection id will be reused for the next GET request.
 \subsubsection*{Function prototype}
@@ -288,7 +290,7 @@ On failure \texttt{HTTP\_RETURN\_ERROR}.
 \\On success \texttt{HTTP\_RETURN\_OK};
 \subsubsection*{Example}
 \begin{verbatim}
-ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
+ret = pico_http_client_long_poll_send_get(conn, "/test/long_poll", HTTP_CONN_CLOSE);
 \end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
@@ -326,8 +328,8 @@ Function to get the write progress if the library is sending a request.
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id
-\item \texttt{total\_bytes\_written} - Pointer to \texttt{uint32\_t} to store the bytes that allready have been send.
-\item \texttt{total\_bytes\_to\_write} - (optional) pointer to  \texttt{unint32\_t} to store the total number of bytes that need to be send.
+\item \texttt{total\_bytes\_written} - \texttt{uint32\_t} pointer to store the bytes that allready have been send.
+\item \texttt{total\_bytes\_to\_write} - (optional) \texttt{unint32\_t} pointer to store the total number of bytes that need to be send.
 \end{itemize}
 \subsubsection*{Return value}
 On failure \texttt{HTTP\_RETURN\_ERROR}.
@@ -400,7 +402,7 @@ uri = pico_http_client_read_uri_data(conn);
 \subsection{pico\_http\_client\_read\_body}
 
 \subsubsection*{Description}
-Function to read the body of the response, should be called after \texttt{EV\_HTTP\_BODY} event.
+Function to read the body of the response.
 
 \subsubsection*{Function prototype}
 \texttt{int32\_t pico\_http\_client\_read\_body(uint16\_t conn, uint8\_t *data, uint16\_t size, uint8\_t *body\_read\_done);}

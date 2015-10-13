@@ -104,7 +104,7 @@ void wget_callback(uint16_t ev, uint16_t conn)
         printf("Connection was closed...\n");
         printf("Reading remaining data, if any ...\n");
 
-        while((len = pico_http_client_read_data(conn,data,1000u,
+        while((len = pico_http_client_read_body(conn,data,1000u,
                                                 &body_read_done)) && len > 0)
         {
             _length += len;
