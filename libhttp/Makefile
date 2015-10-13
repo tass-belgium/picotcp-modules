@@ -7,6 +7,7 @@ SIZE:=$(CROSS_COMPILE)size
 STRIP_BIN:=$(CROSS_COMPILE)strip
 TEST_LDFLAGS=-pthread  $(PREFIX)/modules/*.o $(PREFIX)/lib/*.o -lvdeplug -lpcap
 OPTIONS?=
+UNITS_DIR=../build/test/units
 
 CFLAGS=-I$(PICOTCP)/build/include
 CFLAGS += -Wall
@@ -41,7 +42,9 @@ libhttp.a:
 
 #make units ARCH=faulty 
 units: libhttp.a
-	gcc -o units.app $^ -I./ $(CFLAGS) ../test/unit/modunit_pico_http_client.c -lcheck -lm -pthread -lrt libhttp.a
+	gcc -o modunit_libhttp_client.elf $^ -I./ $(CFLAGS) ../test/unit/modunit_pico_http_client.c -lcheck -lm -pthread -lrt libhttp.a
+	mv modunit_libhttp_client.elf $(UNITS_DIR)/
+	#gcc -o modunit_libhttp_server.elf $^ -I./ $(CFLAGS) ../test/unit/modunit_pico_http_client.c -lcheck -lm -pthread -lrt libhttp.a
 
 clean:
 	rm -rf picotcp

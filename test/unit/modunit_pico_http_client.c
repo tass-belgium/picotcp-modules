@@ -213,7 +213,7 @@ struct pico_tree_node *pico_tree_next(struct pico_tree_node *node)
 START_TEST(tc_multipart_chunk_create)
 {
     /* TODO: test this: struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type);*/
-    char data[10] = "data";
+    uint8_t data[10] = "data";
     char name[10] = "test";
     char filename[10] = "test.txt";
     char cont_disp[20] = "content_disp_test";
@@ -251,7 +251,7 @@ START_TEST(tc_multipart_chunk_destroy)
     struct multipart_chunk *mpch = NULL;
     int8_t ret = 0;
     printf("\n\nStart: tc_multipart_chunk_destroy\n");
-    mpch = multipart_chunk_create("data", 4, "name", "filename", "cont_disp", "cont_type");
+    mpch = multipart_chunk_create((uint8_t *)"data", 4, "name", "filename", "cont_disp", "cont_type");
     /*Case1: free NULL-ptr*/
     ret = multipart_chunk_destroy(NULL);
     ck_assert_int_eq(ret, -1);
@@ -359,10 +359,10 @@ START_TEST(tc_pico_http_client_send_post)
     //TODO: test this: int8_t pico_http_client_send_post(uint16_t conn, char *resource, uint8_t *post_data, uint32_t post_data_len, uint8_t connection, char *content_type, char *cache_control);
     int32_t ret = 0;
     int16_t conn = 0;
-    char *post_data = "key=1&robbin=robbin";
-    uint32_t post_data_len = strlen(post_data);
-    char content_type[50] = "";
-    char cache_controle[50] = "";
+    unsigned char *post_data = (unsigned char*)"key=1&robbin=robbin";
+    uint32_t post_data_len = strlen((char*)post_data);
+    //char content_type[50] = "";
+    //char cache_controle[50] = "";
     char uri[50] = "http://httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_send_post\n");
     /*Case1: unknown client*/
@@ -409,11 +409,13 @@ START_TEST(tc_pico_http_client_send_post_multipart)
     int16_t conn = 0;
     uint32_t post_data_len = 2;
     struct multipart_chunk **chunks1;
+    unsigned char *data1 = (unsigned char*)"data1";
+    unsigned char *data2 = (unsigned char*)"data2";
     char uri[50] = "http://httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_send_post_multipart\n");
     chunks1 = PICO_ZALLOC(2 * sizeof(struct multipart_chunk *));
-    chunks1[0] = multipart_chunk_create("data1", 5u, "name1", "filename1", "attachment", NULL);
-    chunks1[1] = multipart_chunk_create("data2", 5u, "name2", "filename2", "attachment", NULL);
+    chunks1[0] = multipart_chunk_create(data1, 5, "name1", "filename1", "attachment", NULL);
+    chunks1[1] = multipart_chunk_create(data2, 5, "name2", "filename2", "attachment", NULL);
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(99, "/", chunks1, post_data_len, HTTP_CONN_CLOSE);
@@ -557,13 +559,13 @@ START_TEST(tc_pico_http_client_get_write_progress)
     //TODO: test this: int32_t pico_http_client_get_write_progress(uint16_t conn, uint32_t *total_bytes_written, uint32_t *total_bytes_to_write);
     int32_t ret = 0;
     int16_t conn = 0;
-    uint8_t *post_data = "key=1&robbin=robbin";
-    uint32_t post_data_len = strlen(post_data);
-    char content_type[50] = "";
-    char cache_controle[50] = "";
+    unsigned char *post_data = (unsigned char*)"key=1&robbin=robbin";
+    uint32_t post_data_len = strlen((char *)post_data);
+    //char content_type[50] = "";
+    //char cache_controle[50] = "";
     char uri[50] = "http://httpbin.org/";
-    int32_t total_bytes_written = 0;
-    int32_t total_bytes_to_write = 0;
+    uint32_t total_bytes_written = 0;
+    uint32_t total_bytes_to_write = 0;
     printf("\n\nStart: tc_pico_http_client_get_write_progress\n");
     /*Case1: positieve test (bytes returned in total_bytes_written,total_bytes_to_write | returns -1 when there is nothing to write)*/
     write_success_cnt = 0;
@@ -653,6 +655,7 @@ START_TEST(tc_pico_http_client_read_uri_data)
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
     urikey = pico_http_client_read_uri_data(conn);
+    ck_assert_int_eq(ret, HTTP_RETURN_OK);
     ck_assert_ptr_ne(urikey, NULL);
     /*Case2: Unknown connectionID*/
     urikey = pico_http_client_read_uri_data(99);
@@ -740,10 +743,10 @@ END_TEST
 
 /* API end */
 
-
+/*
 START_TEST(tc_free_uri)
 {
-   /* TODO: test this: static int8_t free_uri(struct pico_http_client *to_be_removed); */
+   // TODO: test this: static int8_t free_uri(struct pico_http_client *to_be_removed);
     int ret = 0;
     printf("\n\nStart: tc_free_uri\n");
     ret = free_uri(NULL);
@@ -759,22 +762,22 @@ START_TEST(tc_free_uri)
 END_TEST
 START_TEST(tc_client_open)
 {
-   /* TODO: test this: static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID); */
+   // TODO: test this: static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID); 
 }
 END_TEST
 START_TEST(tc_free_header)
 {
-   /* TODO: test this: static void free_header(struct pico_http_client *to_be_removed); */
+   // TODO: test this: static void free_header(struct pico_http_client *to_be_removed);
 }
 END_TEST
 START_TEST(tc_print_request_part_info)
 {
-   /* TODO: test this: static void print_request_part_info(struct pico_http_client *client) */
+   // TODO: test this: static void print_request_part_info(struct pico_http_client *client) 
 }
 END_TEST
 START_TEST(tc_request_parts_destroy)
 {
-   /* TODO: test this: static int8_t request_parts_destroy(struct pico_http_client *client) */
+   // TODO: test this: static int8_t request_parts_destroy(struct pico_http_client *client) 
     int ret = 0;
     ret = request_parts_destroy(NULL);
     ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
@@ -782,12 +785,12 @@ START_TEST(tc_request_parts_destroy)
 END_TEST
 START_TEST(tc_socket_write_request_parts)
 {
-   /* TODO: test this: static int32_t socket_write_request_parts(struct pico_http_client *client) */
+   // TODO: test this: static int32_t socket_write_request_parts(struct pico_http_client *client)
 }
 END_TEST
 START_TEST(tc_pico_process_uri)
 {
-   /* TODO: test this: static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey) */
+   // TODO: test this: static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
    int ret = 0;
    ret = pico_process_uri(NULL, NULL);
    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
@@ -797,155 +800,155 @@ START_TEST(tc_pico_process_uri)
 END_TEST
 START_TEST(tc_compare_clients)
 {
-   /* TODO: test this: static int32_t compare_clients(void *ka, void *kb) */
+   // TODO: test this: static int32_t compare_clients(void *ka, void *kb)
 }
 END_TEST
 START_TEST(tc_parse_header_from_server)
 {
-   /* TODO: test this: static int8_t parse_header_from_server(struct pico_http_client *client, struct pico_http_header *header); */
+   // TODO: test this: static int8_t parse_header_from_server(struct pico_http_client *client, struct pico_http_header *header);
 }
 END_TEST
 START_TEST(tc_read_chunk_line)
 {
-   /* TODO: test this: static int8_t read_chunk_line(struct pico_http_client *client); */
+   // TODO: test this: static int8_t read_chunk_line(struct pico_http_client *client);
 }
 END_TEST
 START_TEST(tc_wait_for_header)
 {
-   /* TODO: test this: static inline void wait_for_header(struct pico_http_client *client) */
+   // TODO: test this: static inline void wait_for_header(struct pico_http_client *client) 
 }
 END_TEST
 START_TEST(tc_treat_write_event)
 {
-   /* TODO: test this: static void treat_write_event(struct pico_http_client *client) */
+   // TODO: test this: static void treat_write_event(struct pico_http_client *client)
 }
 END_TEST
 START_TEST(tc_treat_read_event)
 {
-   /* TODO: test this: static void treat_read_event(struct pico_http_client *client) */
+   // TODO: test this: static void treat_read_event(struct pico_http_client *client)
 }
 END_TEST
 START_TEST(tc_treat_long_polling)
 {
-   /* TODO: test this: static void treat_long_polling(struct pico_http_client *client, uint16_t ev) */
+   // TODO: test this: static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
 }
 END_TEST
 START_TEST(tc_tcp_callback)
 {
-   /* TODO: test this: static void tcp_callback(uint16_t ev, struct pico_socket *s) */
+   // TODO: test this: static void tcp_callback(uint16_t ev, struct pico_socket *s)
 }
 END_TEST
 START_TEST(tc_dns_callback)
 {
-   /* TODO: test this: static void dns_callback(uint8_t *ip, void *ptr) */
+   // TODO: test this: static void dns_callback(uint8_t *ip, void *ptr)
 }
 END_TEST
 START_TEST(tc_pico_http_client_build_delete)
 {
-   /* TODO: test this: static int8_t *pico_http_client_build_delete(const struct pico_http_uri *uri_data, uint8_t connection) */
+   // TODO: test this: static int8_t *pico_http_client_build_delete(const struct pico_http_uri *uri_data, uint8_t connection)
 }
 END_TEST
 START_TEST(tc_get_content_length)
 {
-   /* TODO: test this: static int32_t get_content_length(struct multipart_chunk **post_data, uint16_t length, uint8_t *boundary) */
+   // TODO: test this: static int32_t get_content_length(struct multipart_chunk **post_data, uint16_t length, uint8_t *boundary)
 }
 END_TEST
 START_TEST(tc_get_max_multipart_header_size)
 {
-   /* TODO: test this: static int32_t get_max_multipart_header_size(struct multipart_chunk **post_data, uint16_t length) */
+   // TODO: test this: static int32_t get_max_multipart_header_size(struct multipart_chunk **post_data, uint16_t length) 
 }
 END_TEST
 START_TEST(tc_add_multipart_chunks)
 {
-   /* TODO: test this: static int8_t add_multipart_chunks(struct multipart_chunk **post_data, uint16_t post_data_length, uint8_t *boundary, struct pico_http_client *http) */
+   // TODO: test this: static int8_t add_multipart_chunks(struct multipart_chunk **post_data, uint16_t post_data_length, uint8_t *boundary, struct pico_http_client *http)
 }
 END_TEST
 START_TEST(tc_pico_http_client_build_post_multipart_request)
 {
-   /* TODO: test this: static int8_t pico_http_client_build_post_multipart_request(const struct pico_http_uri *uri_data, struct multipart_chunk **post_data, uint16_t len, struct pico_http_client *http, uint8_t connection) */
+   // TODO: test this: static int8_t pico_http_client_build_post_multipart_request(const struct pico_http_uri *uri_data, struct multipart_chunk **post_data, uint16_t len, struct pico_http_client *http, uint8_t connection) 
 }
 END_TEST
 START_TEST(tc_pico_http_client_build_post_header)
 {
-   /* TODO: test this: static int8_t *pico_http_client_build_post_header(const struct pico_http_uri *uri_data, uint32_t post_data_len, uint8_t connection, uint8_t *content_type, uint8_t *cache_control) */
+   // TODO: test this: static int8_t *pico_http_client_build_post_header(const struct pico_http_uri *uri_data, uint32_t post_data_len, uint8_t connection, uint8_t *content_type, uint8_t *cache_control)
 }
 END_TEST
 START_TEST(tc_check_chunk_line)
 {
-   /* TODO: test this: static inline int check_chunk_line(struct pico_http_client *client, int tmp_len_read) */
+   // TODO: test this: static inline int check_chunk_line(struct pico_http_client *client, int tmp_len_read)
 }
 END_TEST
 START_TEST(tc_update_content_length)
 {
-   /* TODO: test this: static inline void update_content_length(struct pico_http_client *client, uint32_t tmp_len_read ) */
+   // TODO: test this: static inline void update_content_length(struct pico_http_client *client, uint32_t tmp_len_read )
 }
 END_TEST
 START_TEST(tc_read_body)
 {
-   /* TODO: test this: static inline int32_t read_body(struct pico_http_client *client, uint8_t *data, uint16_t size, uint32_t *len_read, uint32_t *tmp_len_read) */
+   // TODO: test this: static inline int32_t read_body(struct pico_http_client *client, uint8_t *data, uint16_t size, uint32_t *len_read, uint32_t *tmp_len_read)
 }
 END_TEST
 START_TEST(tc_read_big_chunk)
 {
-   /* TODO: test this: static inline uint32_t read_big_chunk(struct pico_http_client *client, uint8_t *data, uint16_t size, uint32_t *len_read) */
+   // TODO: test this: static inline uint32_t read_big_chunk(struct pico_http_client *client, uint8_t *data, uint16_t size, uint32_t *len_read)
 }
 END_TEST
 START_TEST(tc_read_small_chunk)
 {
-   /* TODO: test this: static inline void read_small_chunk(struct pico_http_client *client, uint8_t *data, uint16_t size, uint32_t *len_read) */
+   // TODO: test this: static inline void read_small_chunk(struct pico_http_client *client, uint8_t *data, uint16_t size, uint32_t *len_read)
 }
 END_TEST
 START_TEST(tc_read_chunked_data)
 {
-   /* TODO: test this: static inline int32_t read_chunked_data(struct pico_http_client *client, uint8_t *data, uint16_t size) */
+   // TODO: test this: static inline int32_t read_chunked_data(struct pico_http_client *client, uint8_t *data, uint16_t size)
 }
 END_TEST
 START_TEST(tc_read_first_line)
 {
-   /* TODO: test this: static inline void read_first_line(struct pico_http_client *client, uint8_t *line, uint32_t *index) */
+   // TODO: test this: static inline void read_first_line(struct pico_http_client *client, uint8_t *line, uint32_t *index)
 }
 END_TEST
 START_TEST(tc_start_reading_body)
 {
-   /* TODO: test this: static inline void start_reading_body(struct pico_http_client *client, struct pico_http_header *header) */
+   // TODO: test this: static inline void start_reading_body(struct pico_http_client *client, struct pico_http_header *header)
 }
 END_TEST
 START_TEST(tc_parse_loc_and_cont)
 {
-   /* TODO: test this: static inline int32_t parse_loc_and_cont(struct pico_http_client *client, struct pico_http_header *header, uint8_t *line, uint32_t *index) */
+   // TODO: test this: static inline int32_t parse_loc_and_cont(struct pico_http_client *client, struct pico_http_header *header, uint8_t *line, uint32_t *index)
 }
 END_TEST
 START_TEST(tc_parse_transfer_encoding)
 {
-   /* TODO: test this: static inline int32_t parse_transfer_encoding(struct pico_http_client *client, struct pico_http_header *header, uint8_t *line, uint32_t *index) */
+   // TODO: test this: static inline int32_t parse_transfer_encoding(struct pico_http_client *client, struct pico_http_header *header, uint8_t *line, uint32_t *index)
 }
 END_TEST
 START_TEST(tc_parse_fields)
 {
-   /* TODO: test this: static inline int32_t parse_fields(struct pico_http_client *client, struct pico_http_header *header, int8_t *line, uint32_t *index) */
+   // TODO: test this: static inline int32_t parse_fields(struct pico_http_client *client, struct pico_http_header *header, int8_t *line, uint32_t *index)
 }
 END_TEST
 START_TEST(tc_parse_rest_of_header)
 {
-   /* TODO: test this: static inline int32_t parse_rest_of_header(struct pico_http_client *client, struct pico_http_header *header, uint8_t *line, uint32_t *index) */
+   // TODO: test this: static inline int32_t parse_rest_of_header(struct pico_http_client *client, struct pico_http_header *header, uint8_t *line, uint32_t *index)
 }
 END_TEST
 START_TEST(tc_set_client_chunk_state)
 {
-   /* TODO: test this: static inline void set_client_chunk_state(struct pico_http_client *client) */
+   // TODO: test this: static inline void set_client_chunk_state(struct pico_http_client *client)
 }
 END_TEST
 START_TEST(tc_read_chunk_trail)
 {
-   /* TODO: test this: static inline void read_chunk_trail(struct pico_http_client *client) */
+   // TODO: test this: static inline void read_chunk_trail(struct pico_http_client *client)
 }
 END_TEST
 START_TEST(tc_read_chunk_value)
 {
-   /* TODO: test this: static inline void read_chunk_value(struct pico_http_client *client) */
+   // TODO: test this: static inline void read_chunk_value(struct pico_http_client *client)
 }
 END_TEST
-
+*/
 
 Suite *pico_suite(void)
 {

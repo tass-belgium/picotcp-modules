@@ -765,7 +765,7 @@ static char *pico_http_client_build_delete(const struct pico_http_uri *uri_data,
 }
 
 
-struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type)
+struct multipart_chunk *multipart_chunk_create(unsigned char *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type)
 {
     if (length_data <= 0 || data == NULL)
     {
@@ -1737,7 +1737,7 @@ static inline void read_small_chunk(struct pico_http_client *client, uint8_t *da
         }
     }
 }
-static inline int32_t read_chunked_data(struct pico_http_client *client, uint8_t *data, uint16_t size)
+static inline int32_t read_chunked_data(struct pico_http_client *client, unsigned char *data, uint16_t size)
 {
     uint32_t len_read = 0;
     int32_t value;
@@ -1774,7 +1774,7 @@ static inline int32_t read_chunked_data(struct pico_http_client *client, uint8_t
  * and pass it to the user.
  * Body_read_done will be set to 1 if the body has been read completly.
  */
-int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16_t size, uint8_t *body_read_done)
+int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, unsigned char *data, uint16_t size, uint8_t *body_read_done)
 {
     uint32_t bytes_read = 0;
     struct pico_http_client dummy = {

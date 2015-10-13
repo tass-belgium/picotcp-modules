@@ -43,7 +43,7 @@ struct pico_http_client;
 
 struct multipart_chunk
 {
-    uint8_t *data;
+    unsigned char *data;
     uint32_t length_data;
     char *name;
     uint16_t length_name;
@@ -55,7 +55,7 @@ struct multipart_chunk
     uint16_t length_content_type;
 };
 
-struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type);
+struct multipart_chunk *multipart_chunk_create(unsigned char *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type);
 int8_t multipart_chunk_destroy(struct multipart_chunk *chunk);
 int8_t pico_http_client_get_write_progress(uint16_t conn, uint32_t *total_bytes_written, uint32_t *total_bytes_to_write);
 int32_t pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
@@ -70,7 +70,7 @@ int8_t pico_http_client_send_post_multipart(uint16_t conn, char *resource, struc
 struct pico_http_header *pico_http_client_read_header(uint16_t conn);
 struct pico_http_uri *pico_http_client_read_uri_data(uint16_t conn);
 
-int32_t pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16_t size, uint8_t *body_read_done);
+int32_t pico_http_client_read_body(uint16_t conn, unsigned char *data, uint16_t size, uint8_t *body_read_done);
 int8_t pico_http_client_close(uint16_t conn);
 
 #endif /* PICO_HTTP_CLIENT_H_ */
