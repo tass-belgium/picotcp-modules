@@ -42,13 +42,11 @@
 #define RESPONSE_INDEX                      9u
 
 #define HTTP_CHUNK_ERROR    0xFFFFFFFFu
-/*
 #ifdef dbg
     #undef dbg
 #endif
 
 #define dbg(...) do {} while(0)
-*/
 #define nop() do {} while(0)
 
 #define consume_char(c)                          (pico_socket_read(client->sck, &c, 1u))
@@ -114,7 +112,7 @@ struct pico_http_client
 #define HTTP_PROTO_LEN      7u
 
 static int8_t free_uri(struct pico_http_client *to_be_removed);
-static int32_t client_open(char *hostname, char *resource, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID);
+static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID);
 static void free_header(struct pico_http_client *to_be_removed);
 
 struct request_part *request_part_create(char *buf, uint32_t buf_len, uint8_t copy, uint8_t mem)
@@ -252,10 +250,10 @@ static int8_t pico_http_uri_destroy(struct pico_http_uri *urikey)
             PICO_FREE(urikey->resource);
             urikey->resource = NULL;
         }
-        if (urikey->raw_hostname)
+        if (urikey->raw_uri)
         {
-            PICO_FREE(urikey->raw_hostname);
-            urikey->raw_hostname = NULL;
+            PICO_FREE(urikey->raw_uri);
+            urikey->raw_uri = NULL;
         }
         if (urikey->host)
         {
@@ -266,95 +264,9 @@ static int8_t pico_http_uri_destroy(struct pico_http_uri *urikey)
     return HTTP_RETURN_OK;
 }
 
-static int8_t pico_process_hostname(const char *hostname, struct pico_http_uri *urikey)
-{
-    uint16_t last_index = 0, index;
-    if (!hostname || !urikey || hostname[0] == '/')
-    {
-        pico_err = PICO_ERR_EINVAL;
-    }
-    urikey->raw_hostname = (char *)PICO_ZALLOC(strlen(hostname)+1);
-    if (!urikey->raw_hostname)
-    {
-        pico_err = PICO_ERR_ENOMEM;
-        pico_http_uri_destroy(urikey);
-        return HTTP_RETURN_ERROR;
-    }
-    //strcpy(urikey->raw_hostname, hostname);
-    memcpy(urikey->raw_hostname, hostname, strlen(hostname)+1);
-
-    /* detect protocol => search for  "colon-slash-slash" */
-    if (memcmp(hostname, HTTP_PROTO_TOK, HTTP_PROTO_LEN) == 0) /* could be optimized */
-    { /* protocol identified, it is http */
-        urikey->protoHttp = 1;
-        last_index = HTTP_PROTO_LEN;
-    }
-    else
-    {
-        if (strstr(hostname, "://")) /* different protocol specified */
-        {
-            urikey->protoHttp = 0;
-            pico_http_uri_destroy(urikey);
-            return HTTP_RETURN_ERROR;
-        }
-        /* no protocol specified, assuming by default it's http */
-        urikey->protoHttp = 1;
-    }
-
-    /* detect hostname */
-    index = last_index;
-    while (hostname[index] && hostname[index] != '/' && hostname[index] != ':') index++;
-    if (index == last_index)
-    {
-        /* wrong format */
-        urikey->host = urikey->resource = NULL;
-        urikey->port = urikey->protoHttp = 0u;
-        pico_err = PICO_ERR_EINVAL;
-        pico_http_uri_destroy(urikey);
-        return HTTP_RETURN_ERROR;
-    }
-    else
-    {
-        /* extract host */
-        urikey->host = PICO_ZALLOC((uint32_t)(index - last_index + 1));
-
-        if(!urikey->host)
-        {
-            /* no memory */
-            pico_err = PICO_ERR_ENOMEM;
-            pico_http_uri_destroy(urikey);
-            return HTTP_RETURN_ERROR;
-        }
-
-        memcpy(urikey->host, hostname + last_index, (size_t)(index - last_index));
-    }
-
-    if (!hostname[index] || hostname[index] == '/')
-    {
-        /* nothing specified */
-        urikey->port = 80u;
-        return HTTP_RETURN_OK;
-    }
-    else if (hostname[index] == '/')
-    {
-        urikey->port = 80u;
-    }
-    else if (hostname[index] == ':')
-    {
-        urikey->port = 0u;
-        index++;
-        while (hostname[index] && hostname[index] != '/')
-        {
-            /* should check if every component is a digit */
-            urikey->port = (uint16_t)(urikey->port * 10 + (hostname[index] - '0'));
-            index++;
-        }
-    }
-    return HTTP_RETURN_OK;
- }
-
 static int8_t pico_process_resource(const char *resource, struct pico_http_uri *urikey)
 {
+    dbg("Start pico_process_resource(..) %s\n", resource);
     if (!resource || !urikey || resource[0] != '/')
     {
         pico_err = PICO_ERR_EINVAL;
@@ -384,8 +296,98 @@ static int8_t pico_process_resource(const char *resource, struct pico_http_uri *
 
     //strcpy(urikey->resource, resource);
     memcpy(urikey->resource, resource, strlen(resource)+1);
+    dbg("Stop pico_process_resource(..) %s\n", urikey->resource);
     return HTTP_RETURN_OK;
 }
+
+static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
+{
+    uint16_t last_index = 0, index;
+    dbg("Start: pico_process_uri(..) %s\n", uri);
+    if (!uri || !urikey || uri[0] == '/')
+    {
+        pico_err = PICO_ERR_EINVAL;
+    }
+    urikey->raw_uri = (char *)PICO_ZALLOC(strlen(uri)+1);
+    if (!urikey->raw_uri)
+    {
+        pico_err = PICO_ERR_ENOMEM;
+        pico_http_uri_destroy(urikey);
+        return HTTP_RETURN_ERROR;
+    }
+    memcpy(urikey->raw_uri, uri, strlen(uri)+1);
+
+    /* detect protocol => search for  "colon-slash-slash" */
+    if (memcmp(uri, HTTP_PROTO_TOK, HTTP_PROTO_LEN) == 0) /* could be optimized */
+    { /* protocol identified, it is http */
+        urikey->protoHttp = 1;
+        last_index = HTTP_PROTO_LEN;
+    }
+    else
+    {
+        if (strstr(uri, "://")) /* different protocol specified */
+        {
+            urikey->protoHttp = 0;
+            pico_http_uri_destroy(urikey);
+            return HTTP_RETURN_ERROR;
+        }
+        /* no protocol specified, assuming by default it's http */
+        urikey->protoHttp = 1;
+    }
+
+    /* detect hostname */
+    index = last_index;
+    while (uri[index] && uri[index] != '/' && uri[index] != ':') index++;
+    if (index == last_index)
+    {
+        /* wrong format */
+        urikey->host = urikey->resource = NULL;
+        urikey->port = urikey->protoHttp = 0u;
+        pico_err = PICO_ERR_EINVAL;
+        pico_http_uri_destroy(urikey);
+        return HTTP_RETURN_ERROR;
+    }
+    else
+    {
+        /* extract host */
+        urikey->host = PICO_ZALLOC((uint32_t)(index - last_index + 1));
+
+        if(!urikey->host)
+        {
+            /* no memory */
+            pico_err = PICO_ERR_ENOMEM;
+            pico_http_uri_destroy(urikey);
+            return HTTP_RETURN_ERROR;
+        }
+
+        memcpy(urikey->host, uri + last_index, (size_t)(index - last_index));
+    }
+
+    if (!uri[index] || uri[index] == '/')
+    {
+        /* nothing specified */
+        urikey->port = 80u;
+    }
+    else if (uri[index] == '/')
+    {
+        urikey->port = 80u;
+    }
+    else if (uri[index] == ':')
+    {
+        urikey->port = 0u;
+        index++;
+        while (uri[index] && uri[index] != '/')
+        {
+            /* should check if every component is a digit */
+            urikey->port = (uint16_t)(urikey->port * 10 + (uri[index] - '0'));
+            index++;
+        }
+    }
+
+    dbg("End: pico_process_uri(..) index: %d\n", index);
+    return pico_process_resource(&uri[index], urikey);
+ }
+
 
 static int32_t compare_clients(void *ka, void *kb)
 {
@@ -492,9 +494,11 @@ static void treat_read_event(struct pico_http_client *client)
 static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
 {
     uint32_t conn = 0;
-    char *raw_hostname = NULL;
+    char *raw_uri = NULL;
     char *resource = NULL;
-    void *wakeup = NULL;
+    //void *wakeup = NULL;
+    void (*wakeup)(uint16_t ev, uint16_t conn) = NULL;
+    uint8_t cpy_long_polling_state = 0;
     dbg("TREAT LONG POLLING\n");
 
     conn = client->connectionID;
@@ -504,33 +508,55 @@ static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
         {
             dbg("Connection: Keep-Alive, but still got close ev, setup new connection.");
         }
-        raw_hostname = PICO_ZALLOC(strlen(client->urikey->raw_hostname));
-        if (!raw_hostname)
+        raw_uri = PICO_ZALLOC(strlen(client->urikey->raw_uri)+1);
+        if (!raw_uri)
         {
             pico_err = PICO_ERR_ENOMEM;
             client->wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, client->connectionID);
             return;
         }
-        strcpy(raw_hostname, client->urikey->raw_hostname);
-        resource = PICO_ZALLOC(strlen(client->urikey->resource));
+        strcpy(raw_uri, client->urikey->raw_uri);
+        resource = PICO_ZALLOC(strlen(client->urikey->resource) + 1);
         if (!resource)
         {
-            PICO_FREE(raw_hostname);
+            PICO_FREE(raw_uri);
             pico_err = PICO_ERR_ENOMEM;
             client->wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, client->connectionID);
             return;
         }
         strcpy(resource, client->urikey->resource);
         wakeup = client->wakeup;
+        cpy_long_polling_state = client->long_polling_state;
         pico_http_client_close(client->connectionID);
-        conn = client_open(raw_hostname, resource, wakeup, conn);
-        PICO_FREE(raw_hostname);
-        PICO_FREE(resource);
+        dbg("treat_long_polling client_open\n");
+        conn = client_open(raw_uri, wakeup, conn);
+        dbg("treat_long_polling After client_open\n");
         if (conn < 0)
         {
-            client->wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, client->connectionID);
+            wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, conn);
+            PICO_FREE(raw_uri);
+            PICO_FREE(resource);
             return;
         }
+        //refresh client with the new one but same connectionID
+        struct pico_http_client search = {
+            .connectionID = conn
+        };
+        client = pico_tree_findKey(&pico_client_list, &search);
+        if (!client)
+        {
+            PICO_FREE(raw_uri);
+            PICO_FREE(resource);
+            dbg("treat_long_polling Client not found!\n");
+            wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, conn);
+            return;
+        }
+        //put back the long polling state
+        client->long_polling_state = cpy_long_polling_state;
+        //put the correct resource back
+        pico_process_resource(resource, client->urikey);
+        PICO_FREE(raw_uri);
+        PICO_FREE(resource);
     }
 
     if (client->long_polling_state == HTTP_LONG_POLL_CONN_CLOSE)
@@ -1122,12 +1148,12 @@ int8_t MOCKABLE pico_http_client_get_write_progress(uint16_t conn, uint32_t *tot
 
 }
 
-static int32_t client_open(char *hostname, char *resource, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID)
+static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID)
 {
     struct pico_http_client *client;
     uint32_t ip = 0;
 
-    if (!wakeup || !hostname)
+    if (!wakeup || !uri)
     {
         return HTTP_RETURN_ERROR;
     }
@@ -1159,18 +1185,10 @@ static int32_t client_open(char *hostname, char *resource, void (*wakeup)(uint16
         return HTTP_RETURN_ERROR;
     }
 
-    if (pico_process_hostname(hostname, client->urikey) < 0)
+    if (pico_process_uri(uri, client->urikey) < 0)
     {
         PICO_FREE(client);
         return HTTP_RETURN_ERROR;
-    }
-    if (resource)
-    {
-        if(pico_process_resource(resource, client->urikey) < 0)
-        {
-            PICO_FREE(client);
-            return HTTP_RETURN_ERROR;
-        }
     }
 
     if (pico_tree_insert(&pico_client_list, client))
@@ -1202,14 +1220,14 @@ static int32_t client_open(char *hostname, char *resource, void (*wakeup)(uint16
 /*
  * API used for opening a new HTTP Client.
  *
- * The accepted hostname's are [http:]hostname[:port]/
+ * The accepted uri's are [http:]['hostname'][:port]/['resource']
  *
  * The function returns a connection ID >= 0 if successful
  * -1 if an error occured.
  */
-int32_t MOCKABLE pico_http_client_open(char *hostname, void (*wakeup)(uint16_t ev, uint16_t conn))
+int32_t MOCKABLE pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
 {
-    return client_open(hostname, NULL, wakeup, -1);
+    return client_open(uri, wakeup, -1);
 }
 
 
@@ -1253,10 +1271,13 @@ int8_t MOCKABLE pico_http_client_send_post_multipart(uint16_t conn, char *resour
     {
         return HTTP_RETURN_ERROR;
     }
-    if(pico_process_resource(resource, http->urikey) < 0)
+    if (resource)
     {
-        PICO_FREE(http);
-        return HTTP_RETURN_ERROR;
+        if(pico_process_resource(resource, http->urikey) < 0)
+        {
+            PICO_FREE(http);
+            return HTTP_RETURN_ERROR;
+        }
     }
     http->request_parts = PICO_ZALLOC((2+length_post_data*2) * sizeof(struct request_part *)); //header + end_boundary + 2*length_post_data
     if (!http->request_parts)
@@ -1314,10 +1335,13 @@ int8_t MOCKABLE pico_http_client_send_delete(uint16_t conn, char *resource, uint
     {
         return HTTP_RETURN_ERROR;
     }
-    if (pico_process_resource(resource, http->urikey) < 0)
+    if (resource)
     {
-        PICO_FREE(http);
-        return HTTP_RETURN_ERROR;
+        if (pico_process_resource(resource, http->urikey) < 0)
+        {
+            PICO_FREE(http);
+            return HTTP_RETURN_ERROR;
+        }
     }
     http->request_parts = PICO_ZALLOC(1 * sizeof(struct request_part *));
     if (!http->request_parts)
@@ -1397,10 +1421,13 @@ int8_t MOCKABLE pico_http_client_send_post(uint16_t conn, char *resource, uint8_
         return HTTP_RETURN_ERROR;
     }
 
-    if(pico_process_resource(resource, http->urikey) < 0)
+    if (resource)
     {
-        PICO_FREE(http);
-        return HTTP_RETURN_ERROR;
+        if(pico_process_resource(resource, http->urikey) < 0)
+        {
+            PICO_FREE(http);
+            return HTTP_RETURN_ERROR;
+        }
     }
 
     http->request_parts = PICO_ZALLOC(2 * sizeof(struct request_part *));
@@ -1572,9 +1599,12 @@ int8_t MOCKABLE pico_http_client_send_get(uint16_t conn, char *resource, uint8_t
         return HTTP_RETURN_ERROR;
     }
 
-    if (pico_process_resource(resource, http->urikey) < 0)
+    if (resource)
     {
-        return HTTP_RETURN_ERROR;
+        if (pico_process_resource(resource, http->urikey) < 0)
+        {
+            return HTTP_RETURN_ERROR;
+        }
     }
 
     if (http->state != HTTP_CONN_IDLE)
@@ -1875,9 +1905,9 @@ static int8_t free_uri(struct pico_http_client *to_be_removed)
         {
             PICO_FREE(to_be_removed->urikey->resource);
         }
-        if (to_be_removed->urikey->raw_hostname)
+        if (to_be_removed->urikey->raw_uri)
         {
-            PICO_FREE(to_be_removed->urikey->raw_hostname);
+            PICO_FREE(to_be_removed->urikey->raw_uri);
         }
         PICO_FREE(to_be_removed->urikey);
     }

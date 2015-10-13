@@ -7,12 +7,12 @@ TODO
 Opens a new connection to a HTTP-server.
 
 \subsubsection*{Function prototype}
-\texttt{int32\_t pico\_http\_client\_open(char\_t *hostname,
+\texttt{int32\_t pico\_http\_client\_open(char\_t *uri,
                 void (*wakeup)(uint16\_t ev, uint16\_t conn));}
 
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
-\item \texttt{hostname} - String specifying the name and port of the HTTP-server to connect to. [http:]hostname[:port]/
+\item \texttt{uri} - String specifying the name and port of the HTTP-server to connect to and resource to address [http:][hostname][:port]/[resource]
 \item \texttt{wakeup} - Pointer to a callback function of type \texttt{int fn(uint16\_t, uint16\_t)}.
 \end{itemize}
 
@@ -34,7 +34,7 @@ On success connection id \texttt{conn}.
 
 \subsubsection*{Example}
 \begin{verbatim}
-ret = pico_http_client_open(hostname, wakeup_function);
+ret = pico_http_client_open(uri, wakeup_function);
 \end{verbatim}
 
 %-----------------------------------------------------------------------------------------------------
@@ -97,7 +97,7 @@ Send a GET request to the HTTP-server. The library will build the GET request ba
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id through which the GET request has to be send.
-\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{resource} - Path to resource that needs to be addressed, if \texttt{NULL} the resource passed via the \texttt{uri} on \texttt{pico\_http\_client\_open()} will be used.
 \item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
 \end{itemize}
 
@@ -123,7 +123,7 @@ Send a POST request to the HTTP-server. The library will build the POST request 
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id through which the POST request has to be send.
-\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{resource} - Path to resource that needs to be addressed, if \texttt{NULL} the resource passed via the \texttt{uri} on \texttt{pico\_http\_client\_open()} will be used.
 \item \texttt{post\_data} - A char buffer with the data to send. Format: "key1=value1\&key2=value2\&..."
 \item \texttt{post\_data\_len} - Length of the \texttt{post\_data} in number of bytes.
 \item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
@@ -153,7 +153,7 @@ Send a DELETE request to the HTTP-server. The library will build the DELETE requ
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id through which the DELETE request has to be send.
-\item \texttt{resource} - Path to resource that needs to be addressed.
+\item \texttt{resource} - Path to resource that needs to be addressed, if \texttt{NULL} the resource passed via the \texttt{uri} on \texttt{pico\_http\_client\_open()} will be used.
 \item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
 \end{itemize}
 \subsubsection*{Return value}
@@ -223,7 +223,7 @@ Send a MULTIPART POST to the HTTP-server. The library will build the MULTIPART P
 \subsubsection*{Parameters}
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id through which the MULTIPART POST request has to be send.
-\item \texttt{resource} - Path to the resource that needs to be addressed.
+\item \texttt{resource} - Path to the resource that needs to be addressed, if \texttt{NULL} the resource passed via the \texttt{uri} on \texttt{pico\_http\_client\_open()} will be used.
 \item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request can be send over the same connection. The connection will be closed after the response when \texttt{HTTP\_CONN\_CLOSE} is passed.
 \item \texttt{post\_data} - A pointer to \texttt{struct multipart\_chunk} pointers.
 \item \texttt{post\_data\_len} - Number of \texttt{struct multipart\_chunk} pointers in \texttt{post\_data}.
@@ -280,7 +280,7 @@ Dispite which \texttt{connection\_type} you pass, the connection id will be reus
 
 \begin{itemize}[noitemsep]
 \item \texttt{conn} - Connection id on which the LONG POLLING GET request has to be started.
-\item \texttt{resource} - Path to the resource that needs to be addressed.
+\item \texttt{resource} - Path to the resource that needs to be addressed, if \texttt{NULL} the resource passed via the \texttt{uri} on \texttt{pico\_http\_client\_open()} will be used.
 \item \texttt{connection\_type} - When \texttt{HTTP\_CONN\_KEEP\_ALIVE} is passed, the connection will not be closed and a new request will be send over the same connection. The connection will be close after the response when \texttt{HTTP\_CONN\_CLOSE} is passed and a new one will be created to send the next GET request.
 \end{itemize}
 \subsubsection*{Return value}

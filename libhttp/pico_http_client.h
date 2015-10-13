@@ -58,7 +58,7 @@ struct multipart_chunk
 struct multipart_chunk *multipart_chunk_create(uint8_t *data, uint64_t length_data, char *name, char *filename, char *content_disposition, char *content_type);
 int8_t multipart_chunk_destroy(struct multipart_chunk *chunk);
 int8_t pico_http_client_get_write_progress(uint16_t conn, uint32_t *total_bytes_written, uint32_t *total_bytes_to_write);
-int32_t pico_http_client_open(char *hostname, void (*wakeup)(uint16_t ev, uint16_t conn));
+int32_t pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
 int8_t pico_http_client_send_raw(uint16_t conn, char *resource);
 int8_t pico_http_client_send_get(uint16_t conn, char *resource, uint8_t connection_type);
 int8_t pico_http_client_long_poll_send_get(uint16_t conn, char *resource, uint8_t connection_type);

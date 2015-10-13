@@ -11,16 +11,15 @@ The most common header files are:
 
 \section{HTTP Client example}
 \begin{verbatim}
-static char *resource_filename = NULL;
-static char *resource = NULL;
+static char *uri_filename = NULL;
 
 static int8_t http_save_file(void *data, int len)
 {
-    int32_t fd = open(resource_filename, O_WRONLY |O_CREAT | O_TRUNC, 0660);
+    int32_t fd = open(uri_filename, O_WRONLY |O_CREAT | O_TRUNC, 0660);
     int32_t w, e;
     if (fd < 0)
         return fd;
-    printf("Saving data to : %s\n",resource_filename);
+    printf("Saving data to : %s\n",uri_filename);
     w = write(fd, data, len);
     e = errno;
     close(fd);
@@ -40,7 +39,7 @@ void wget_callback(uint16_t ev, uint16_t conn)
         /* you can let the client use the default generated header
         or you can create you own string header and send it
         via pico_http_client_send_raw(...)*/
-        pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
+        pico_http_client_send_get(conn, NULL, HTTP_CONN_CLOSE);
     }
 
     if (ev & EV_HTTP_WRITE_SUCCESS)
@@ -137,7 +136,7 @@ void wget_callback(uint16_t ev, uint16_t conn)
                 exit(1);
             }
         }
-        if (!resource_filename)
+        if (!uri_filename)
         {
             printf("Failed to get local filename\n");
             exit(1);
@@ -166,24 +165,23 @@ void wget_callback(uint16_t ev, uint16_t conn)
 
 void app_wget(char *arg[])
 {
-    char * hostname;
-    cpy_arg(&hostname, arg[0]);
-    cpy_arg(&resource, arg[1]);
-    if(!hostname || !resource)
+    char * uri;
+    cpy_arg(&uri, arg[0]);
+    if(!uri)
     {
-        fprintf(stderr, " wget expects the hostname
-                        and resource to be received\n");
+        fprintf(stderr, " wget expects the uri
+                        to be received\n");
         exit(1);
     }
     // when opening the http client it will
-    // internally parse the hostname passed
-    if(pico_http_client_open(hostname, wget_callback) < 0)
+    // internally parse the uri passed
+    if(pico_http_client_open(uri, wget_callback) < 0)
     {
-        fprintf(stderr," error opening the hostname : %s,
-                please check the format\n",hostname);
+        fprintf(stderr," error opening the uri : %s,
+                please check the format\n",uri);
         exit(1);
     }
-    resource_filename = basename(resource);
+    uri_filename = basename(uri);
 }
 \end{verbatim}
 
