@@ -3,12 +3,16 @@
 
 #include <netdb.h>
 #include <stdint.h>
+#include <sys/select.h>
 #include <sys/types.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <stddef.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <poll.h>
+#include <unistd.h>
+#include <fcntl.h>
 
 #include <errno.h>
 #include <stdio.h>
@@ -17,21 +21,22 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-/* enable dns lookup or only allow IP addresses*/
-#define PICO_MQTT_DNS_LOOKUP 1
+#include "pico_mqtt.h"
 
 struct pico_mqtt_socket;
 
-/* create pico mqtt socket and connect to the URI, returns NULL on error*/ 
-struct pico_mqtt_socket* pico_mqtt_connection_open( const char* URI, int timeout);
+/* create pico mqtt socket and connect to the URI*/ 
+int pico_mqtt_connection_open(struct pico_mqtt_socket** socket, const char* URI, const char* port);
 
-/* read data from the socket, return the number of bytes read */ 
-int pico_mqtt_connection_read( struct pico_mqtt_socket* socket, void* read_buffer, const uint32_t count, int timeout);
+/* read data from the socket, add this to the read buffer */ 
+int pico_mqtt_connection_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct timeval* time_left);
 
-/* write data to the socket, return the number of bytes written*/ 
-int pico_mqtt_connection_write( struct pico_mqtt_socket* socket, void* write_buffer, const uint32_t count, int timeout); 
+/* write data to the socket, remove this from the write buffer*/ 
+int pico_mqtt_connection_send( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct timeval* time_left);
 
-/* close pico mqtt socket, return -1 on error */ 
-int pico_mqtt_connection_close( struct pico_mqtt_socket* socket);
+int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, struct timeval* time_left);
+
+/* close pico mqtt socket*/ 
+int pico_mqtt_connection_close( struct pico_mqtt_socket** socket);
 
 #endif
