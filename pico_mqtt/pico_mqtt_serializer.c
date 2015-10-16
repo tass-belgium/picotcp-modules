@@ -239,6 +239,62 @@ int pico_mqtt_serializer_create_connect(
 	return SUCCES;
 }
 
+
+#ifdef DEBUG
+int deserialize_connect( 
+	struct pico_mqtt* mqtt, 
+	struct pico_mqtt_data raw, 
+	uint16_t* keep_alive_time,
+	uint8_t* retain,
+	uint8_t* quality_of_service,
+	uint8_t* clean_session,
+	struct pico_mqtt_data* client_id,
+	struct pico_mqtt_data* topic,
+	struct pico_mqtt_data* message,
+	struct pico_mqtt_data* username,
+	struct pico_mqtt_data* password)
+{
+	struct pico_mqtt_data stream = raw;
+
+#ifdef DEBUG
+	if( (mqtt == NULL) || 
+		(raw.data == NULL) || 
+		(keep_alive_time == NULL) ||
+		(retain == NULL) ||
+		(quality_of_service == NULL) ||
+		(clean_session == NULL) ||
+		(client_id == NULL) ||
+		(topic == NULL) ||
+		(message == NULL) ||
+		(username == NULL) ||
+		(password == NULL))
+	{
+		PERROR("Invallid arguments (%p, %p, %p, %p,\n %p, %p, %p, %p,\n %p, %p, %p).\n", 
+			mqtt,
+			raw.data,
+			keep_alive_time,
+			retain,
+
+			quality_of_service,
+			clean_session,
+			client_id,
+			topic,
+
+			message,
+			username,
+			password);
+		return ERROR;
+	}
+#endif
+
+
+	get_header_stream()
+	
+
+	return SUCCES;
+}
+#endif /* define DEBUG */
+
 #ifdef DEBUG /* only needed for debug purposes*/
 int pico_mqtt_create_connack(
 	struct pico_mqtt* mqtt,
@@ -294,7 +350,7 @@ int pico_mqtt_create_publish(
 #ifdef DEBUG /* this check should only be performed during debug */
 	if((mqtt == NULL) || (result == NULL) || (topic == NULL) || (quality_of_service > 2) || (retain > 1))
 	{
-		PTRACE;
+		PERROR("Invallid input.\n");
 		return ERROR;
 	}
 #endif
@@ -628,16 +684,6 @@ int pico_mqtt_deserialize(
 		PTRACE;
 		return ERROR;
 	}
-
-	return SUCCES;
-}
-
-static int deserialize_connect( struct pico_mqtt* mqtt, struct pico_mqtt_message* message)
-{
-	PTODO("Write implementation.\n");
-
-	mqtt++;
-	message++;
 
 	return SUCCES;
 }
