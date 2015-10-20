@@ -270,15 +270,16 @@ START_TEST(tc_pico_http_client_open)
     /*Case1: no callback*/
     conn = pico_http_client_open(uri, NULL);
     fail_if(conn != HTTP_RETURN_ERROR);
-    pico_http_client_close(conn);
     /*Case2: no uri*/
     conn = pico_http_client_open(NULL, cb);
     fail_if(conn != HTTP_RETURN_ERROR);
-    pico_http_client_close(conn);
     /*Case3: positive test*/
     conn = pico_http_client_open(uri, cb);
     fail_if(conn < 0);
     pico_http_client_close(conn);
+    /*Case4: unknown protocal (no :// in hostname)*/
+    conn = pico_http_client_open("//test.org/", cb);
+    fail_if(conn > 0);
     printf("Stop: tc_pico_http_client_open\n");
 }
 END_TEST
