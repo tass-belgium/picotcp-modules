@@ -223,25 +223,25 @@ START_TEST(tc_multipart_chunk_create)
 
     /*Case1: data is NULL-ptr*/
     mpch = multipart_chunk_create(NULL, 4, name, filename, cont_disp, cont_type);
-    ck_assert_ptr_eq(mpch, NULL);
+    fail_if(mpch != NULL);
     multipart_chunk_destroy(mpch);
     /*Case2: data length is 0*/
     mpch = multipart_chunk_create(data, 0, name, filename, cont_disp, cont_type);
-    ck_assert_ptr_eq(mpch, NULL);
+    fail_if(mpch != NULL);
     multipart_chunk_destroy(mpch);
     /*Case3: possitive test, check if everting got assigned*/
     mpch = multipart_chunk_create(data, 4, name, filename, cont_disp, cont_type);
-    ck_assert_ptr_ne(mpch, NULL);
-    ck_assert_str_eq(mpch->name, name);
-    ck_assert_int_eq(mpch->length_name, strlen(name));
-    ck_assert_str_eq(mpch->filename, filename);
-    ck_assert_int_eq(mpch->length_filename, strlen(filename));
-    ck_assert_str_eq(mpch->content_disposition, cont_disp);
-    ck_assert_int_eq(mpch->length_content_disposition, strlen(cont_disp));
-    ck_assert_str_eq(mpch->content_type, cont_type);
-    ck_assert_int_eq(mpch->length_content_type, strlen(cont_type));
+    fail_if(mpch == NULL);
+    fail_if(strncmp(mpch->name, name, strlen(name)) != 0, "Error name in chunk");
+    fail_if(mpch->length_name != strlen(name));
+    fail_if(strncmp(mpch->filename, filename, strlen(filename)) != 0, "Error filename in chunk");
+    fail_if(mpch->length_filename != strlen(filename));
+    fail_if(strncmp(mpch->content_disposition, cont_disp, strlen(cont_disp)) != 0, "Error cont_disp in chunk");
+    fail_if(mpch->length_content_disposition != strlen(cont_disp));
+    fail_if(strncmp(mpch->content_type, cont_type, strlen(cont_type)) != 0, "Error cont_type in chunk");
+    fail_if(mpch->length_content_type != strlen(cont_type));
+    fail_if(mpch->length_data != 4);
     multipart_chunk_destroy(mpch);
-    ck_assert_int_eq(mpch->length_data, 4);
     printf("Stop: tc_multipart_chunk_create\n");
 }
 END_TEST
