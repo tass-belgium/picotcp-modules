@@ -254,10 +254,10 @@ START_TEST(tc_multipart_chunk_destroy)
     mpch = multipart_chunk_create((uint8_t *)"data", 4, "name", "filename", "cont_disp", "cont_type");
     /*Case1: free NULL-ptr*/
     ret = multipart_chunk_destroy(NULL);
-    ck_assert_int_eq(ret, -1);
+    fail_if(ret != -1);
     /*Case2: positive test*/
     ret = multipart_chunk_destroy(mpch);
-    ck_assert_int_eq(ret, 0);
+    fail_if(ret != 0);
     printf("Stop: tc_multipart_chunk_destroy\n");
 }
 END_TEST
@@ -269,15 +269,15 @@ START_TEST(tc_pico_http_client_open)
     printf("\n\nStart: tc_pico_http_client_open\n");
     /*Case1: no callback*/
     conn = pico_http_client_open(uri, NULL);
-    ck_assert_int_eq(conn, HTTP_RETURN_ERROR);
+    fail_if(conn != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case2: no uri*/
     conn = pico_http_client_open(NULL, cb);
-    ck_assert_int_eq(conn, HTTP_RETURN_ERROR);
+    fail_if(conn != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: positive test*/
     conn = pico_http_client_open(uri, cb);
-    ck_assert_int_ge(conn, 0);
+    fail_if(conn < 0);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_open\n");
 }
@@ -293,31 +293,31 @@ START_TEST(tc_pico_http_client_send_raw)
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_raw(99, request);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case2: empty request*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_raw(conn, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: positive test, everything got written at once*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_raw(conn, request);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case4: positive test, write in 2chunks*/
     write_success_cnt = 0;
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_raw(conn, request);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     //tread write event zou eigenlijk getriggerd moeten worden door de tcp callback
     treat_write_event(example_client);
     //tcp_callback(PICO_SOCK_EV_WR, &example_socket);
-    ck_assert_int_eq(write_progress_made_cnt, 1);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(write_progress_made_cnt != 1);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_send_raw\n");
 }
@@ -332,24 +332,24 @@ START_TEST(tc_pico_http_client_send_get)
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(99, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case2: unknown connection*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, "/", 99);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: positive test, everything got written at once*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_eq(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case4: empty resource*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, NULL, HTTP_CONN_CLOSE);
-    ck_assert_int_eq(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_send_get\n");
 }
@@ -368,36 +368,36 @@ START_TEST(tc_pico_http_client_send_post)
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(99, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case2: empty data*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(conn, "/", NULL, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: data_len = 0*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(conn, "/", post_data, 0, HTTP_CONN_CLOSE, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case4: unknown connection*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(conn, "/", post_data, post_data_len, 100, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case5: positive test, everything got written at once*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case6: positive test, no resource*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(conn, NULL, post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_send_post\n");
 }
@@ -419,43 +419,43 @@ START_TEST(tc_pico_http_client_send_post_multipart)
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(99, "/", chunks1, post_data_len, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case2: empty chunks (NULL)*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(conn, "/", NULL, post_data_len, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: unknown connection*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(conn, "/", chunks1, post_data_len, 100);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case4: data_len = 0*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(conn, "/", chunks1, 0, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case5: positive test, everything got written at once*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(conn, "/", chunks1, post_data_len, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case6: positive test*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(conn, "/", chunks1, post_data_len, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case7: positive test, everything got written at once, no resource*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post_multipart(conn, NULL, chunks1, post_data_len, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     multipart_chunk_destroy(chunks1[0]);
     multipart_chunk_destroy(chunks1[1]);
@@ -473,28 +473,28 @@ START_TEST(tc_pico_http_client_send_delete)
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_delete(99, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case2: unknown connection*/
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_delete(conn, "/", 100);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: positive test, everything got written at once.*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     printf("Conn: %d\n", conn);
     ret = pico_http_client_send_delete(conn, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case4: positive test, everything got written at once, no resource*/
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     printf("Conn: %d\n", conn);
     ret = pico_http_client_send_delete(conn, NULL, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_send_delete\n");
 }
@@ -508,10 +508,10 @@ START_TEST(tc_pico_http_client_close)
     conn = pico_http_client_open("http://httpbin.org/", cb);
     /*Case1: unknown client*/
     ret = pico_http_client_close(99);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     /*Case2: positive test*/
     ret = pico_http_client_close(conn);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     printf("Stop: tc_pico_http_client_close\n");
 }
 END_TEST
@@ -523,16 +523,16 @@ START_TEST(tc_pico_http_client_long_poll_send_get)
     printf("\n\nStart: tc_pico_http_client_long_poll_send_get\n");
     /*Case1: unknown client*/
     ret = pico_http_client_long_poll_send_get(99, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     /*Case2: positive test*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     ret = pico_http_client_long_poll_cancel(conn);
     /*Case3: positive test, no resource*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, NULL, HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     ret = pico_http_client_long_poll_cancel(conn);
     printf("Stop: tc_pico_http_client_long_poll_send_get\n");
 }
@@ -545,12 +545,12 @@ START_TEST(tc_pico_http_client_long_poll_cancel)
     printf("\n\nStart: tc_pico_http_client_long_poll_cancel\n");
     /*Case1: unknown client*/
     ret = pico_http_client_long_poll_cancel(99);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     /*Case2: positive test*/
     conn = pico_http_client_open("http://httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
     ret = pico_http_client_long_poll_cancel(conn);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     printf("Stop: tc_pico_http_client_long_poll_cancel\n");
 }
 END_TEST
@@ -572,38 +572,38 @@ START_TEST(tc_pico_http_client_get_write_progress)
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     ret = pico_http_client_get_write_progress(conn, &total_bytes_written, &total_bytes_to_write);
     printf("total_bytes_written: %d, total_bytes_to_write: %d\n", total_bytes_written, total_bytes_to_write);
-    ck_assert_int_ge(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     treat_write_event(example_client);
     ret = pico_http_client_get_write_progress(conn, &total_bytes_written, &total_bytes_to_write);
-    ck_assert_int_ge(ret, HTTP_RETURN_ERROR);
-    ck_assert_int_ge(total_bytes_written, 0);
-    ck_assert_int_ge(total_bytes_to_write, 0);
-    ck_assert_int_eq(write_progress_made_cnt, 1);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_ERROR);
+    fail_if(total_bytes_written < 0);
+    fail_if(total_bytes_to_write < 0);
+    fail_if(write_progress_made_cnt != 1);
+    fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
     /*Case2: No address for total_bytes_written*/
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(conn, NULL, &total_bytes_to_write);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     /*Case3: No address for total_bytes_to_write*/
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(conn, &total_bytes_written, NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     pico_http_client_close(conn);
     /*Case4: Unknown connectionID*/
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(99, &total_bytes_written, NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_get_write_progress\n");
 }
@@ -621,23 +621,23 @@ START_TEST(tc_pico_http_client_read_header)
     printf("\n\nStart: tc_pico_http_client_read_header\n");
     /*Cse1: Positive case*/
     conn = pico_http_client_open(uri, cb);
-    ck_assert_int_ge(conn, 0);
+    fail_if(conn < 0);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_ge(ret, 0);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(write_success_cnt != 1);
     treat_read_event(example_client);  //first time 10bytes will come in
     treat_read_event(example_client);  //second time de rest is available for reading.
     printf("header_ev_cnt, %d\n", header_ev_cnt); //fails here because lib can't handle the response if it comes in chunks
-    ck_assert_int_eq(header_ev_cnt, 1);
+    fail_if(header_ev_cnt != 1);
     header = pico_http_client_read_header(conn);
     printf("Received header from server...\n");
     printf("Server response : %d\n",header->response_code);
     printf("Location : %s\n",header->location);
     printf("Transfer-Encoding : %d\n",header->transfer_coding);
-    ck_assert_ptr_ne(header, NULL);
+    fail_if(header == NULL);
     /*Case2: Unknown connectionID*/
     header = pico_http_client_read_header(99);
-    ck_assert_ptr_eq(header, NULL);
+    fail_if(header != NULL);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_read_header\n");
 }
@@ -655,11 +655,11 @@ START_TEST(tc_pico_http_client_read_uri_data)
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
     urikey = pico_http_client_read_uri_data(conn);
-    ck_assert_int_eq(ret, HTTP_RETURN_OK);
-    ck_assert_ptr_ne(urikey, NULL);
+    fail_if(ret != HTTP_RETURN_OK);
+    fail_if(urikey == NULL);
     /*Case2: Unknown connectionID*/
     urikey = pico_http_client_read_uri_data(99);
-    ck_assert_ptr_eq(urikey, NULL);
+    fail_if(urikey != NULL);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_read_uri_data\n");
 }
@@ -683,22 +683,22 @@ START_TEST(tc_pico_http_client_read_body)
     body_ev_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(write_success_cnt != 1);
     treat_read_event(example_client);
-    ck_assert_int_eq(header_ev_cnt, 1);
+    fail_if(header_ev_cnt != 1);
     header = pico_http_client_read_header(conn);
     printf("Received header from server...\n");
     printf("Server response : %d\n",header->response_code);
     printf("Location : %s\n",header->location);
     printf("Transfer-Encoding : %d\n",header->transfer_coding);
     printf("Size/Chunk : %d\n",header->content_length_or_chunk);
-    ck_assert_int_eq(body_ev_cnt, 1);
+    fail_if(body_ev_cnt != 1);
     //then we can read the body
     ret = pico_http_client_read_body(conn, data, 1024, &body_read_done);
     write(0, data, ret);
     printf("body_read_done: %d ret: %d\n", body_read_done, ret);
-    ck_assert_int_eq(ret, 12);
-    ck_assert_int_eq(body_read_done, 1);
+    fail_if(ret != 12);
+    fail_if(body_read_done != 1);
     pico_http_client_close(conn);
     PICO_FREE(data);
     printf("Stop: tc_pico_http_client_read_body\n");
@@ -714,16 +714,16 @@ START_TEST(tc_pico_http_client_read_body)
     data = PICO_ZALLOC(1024*1024);
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
-    ck_assert_int_eq(write_success_cnt, 1);
+    fail_if(write_success_cnt != 1);
     treat_read_event(example_client);
-    ck_assert_int_eq(header_ev_cnt, 1);
+    fail_if(header_ev_cnt != 1);
     header = pico_http_client_read_header(conn);
     printf("Received header from server...\n");
     printf("Server response : %d\n",header->response_code);
     printf("Location : %s\n",header->location);
     printf("Transfer-Encoding : %d\n",header->transfer_coding);
     printf("Size/Chunk : %d\n",header->content_length_or_chunk);
-    ck_assert_int_eq(body_ev_cnt, 1);
+    fail_if(body_ev_cnt != 1);
     //then we can read the body
     int number_of_expected_chunks = 10;
     while (number_of_expected_chunks)
@@ -733,7 +733,7 @@ START_TEST(tc_pico_http_client_read_body)
         printf("body_read_done: %d ret: %d\n", body_read_done, ret);
         number_of_expected_chunks--;
     }
-    ck_assert_int_eq(body_read_done, 1);
+    fail_if(body_read_done != 1);
     pico_http_client_close(conn);
     PICO_FREE(data);
     printf("Stop: tc_pico_http_client_read_body\n");
@@ -750,13 +750,13 @@ START_TEST(tc_free_uri)
     int ret = 0;
     printf("\n\nStart: tc_free_uri\n");
     ret = free_uri(NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
 
     struct pico_http_client *client = NULL;
     client = PICO_ZALLOC(sizeof(struct pico_http_client));
     client->urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
     ret = free_uri(client);
-    ck_assert_int_eq(ret, HTTP_RETURN_OK);
+    fail_if(ret != HTTP_RETURN_OK);
     printf("Stop: tc_free_uri\n");
 }
 END_TEST
@@ -780,7 +780,7 @@ START_TEST(tc_request_parts_destroy)
    // TODO: test this: static int8_t request_parts_destroy(struct pico_http_client *client) 
     int ret = 0;
     ret = request_parts_destroy(NULL);
-    ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+    fail_if(ret != HTTP_RETURN_ERROR);
 }
 END_TEST
 START_TEST(tc_socket_write_request_parts)
@@ -793,9 +793,9 @@ START_TEST(tc_pico_process_uri)
    // TODO: test this: static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
    int ret = 0;
    ret = pico_process_uri(NULL, NULL);
-   ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+   fail_if(ret != HTTP_RETURN_ERROR);
    ret = pico_process_uri("blabla", NULL);
-   ck_assert_int_eq(ret, HTTP_RETURN_ERROR);
+   fail_if(ret != HTTP_RETURN_ERROR);
 }
 END_TEST
 START_TEST(tc_compare_clients)
