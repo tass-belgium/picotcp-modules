@@ -36,6 +36,8 @@ static int body_ev_cnt = 0;
 static int read_header_in_chunks = 0;
 static int clear_read_idx = 0;
 static int chunked_response = 0;
+static int test_404_with_body = 0;
+static int test_404_without_body = 0;
 
 /*static inline void *pico_zalloc(size_t size)
 {
@@ -106,9 +108,17 @@ int pico_socket_read(struct pico_socket *s, void *buf, int len)
     {
         strcpy(response,"HTTP/1.1 200 OK\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Fri, 09 Oct 2015 11:26:38 GMT\r\nTransfer-Encoding: chunked\r\nContent-type: text/plain\r\n\r\n12\r\nthis is chunk: 0\r\n\r\n12\r\nthis is chunk: 1\r\n\r\n12\r\nthis is chunk: 2\r\n\r\n12\r\nthis is chunk: 3\r\n\r\n12\r\nthis is chunk: 4\r\n\r\n12\r\nthis is chunk: 5\r\n\r\n12\r\nthis is chunk: 6\r\n\r\n12\r\nthis is chunk: 7\r\n\r\n12\r\nthis is chunk: 8\r\n\r\n12\r\nthis is chunk: 9\r\n\r\n0");
     }
+    else if(test_404_with_body)
+    {
+        strcpy(response, "HTTP/1.1 404 NOT FOUND\r\nServer: nginx\r\nDate: Mon, 02 Nov 2015 09:17:10 GMT\r\nContent-Type: text/html\r\nContent-Length: 233\r\nConnection: close\r\nAccess-Control-Allow-Origin: *\r\nAccess-Control-Allow-Credentials: true\r\n\r\n<!DOCTYPE HTML PUBLIC \"-//W3C//DTD HTML 3.2 Final//EN\">\r\n<title>404 Not Found</title>\r\n<h1>Not Found</h1>\r\n<p>The requested URL was not found on the server.  If you entered the URL manually please check your spelling and try again.</p>\r\n");
+    }
+    else if(test_404_without_body)
+    {
+    }
     else
     {
-        strcpy(response, "HTTP/1.1 200 get balbalba\r\nContent-Length: 12\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Thu, 01 Oct 2015 08:12:05 GMT\r\n\r\nget balbalba");
+        //strcpy(response, "HTTP/1.1 200 get balbalba\r\nContent-Length: 12\r\nServer: BaseHTTP/0.3 Python/2.7.6\r\nDate: Thu, 01 Oct 2015 08:12:05 GMT\r\n\r\nget balbalba");
+        strcpy(response, "HTTP/1.1 200\r\nContent-Length: 36\r\n\r\n{\"Colour\":\"green\", \"Flash\":\"FSHING\"}");
     }
     int length = strlen(response);
     static int idx = 0;
@@ -277,7 +287,7 @@ START_TEST(tc_pico_http_client_open)
     conn = pico_http_client_open(uri, cb);
     fail_if(conn < 0);
     pico_http_client_close(conn);
-    /*Case4: unknown protocal (no :// in hostname)*/
+    /*Case4: unknown protocol (no :// in hostname)*/
     conn = pico_http_client_open("//test.org/", cb);
     fail_if(conn > 0);
     printf("Stop: tc_pico_http_client_open\n");
@@ -296,19 +306,19 @@ START_TEST(tc_pico_http_client_send_raw)
     ret = pico_http_client_send_raw(99, request);
     fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
-    /*Case2: empty request*/
+    //Case2: empty request
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_raw(conn, NULL);
     fail_if(ret != HTTP_RETURN_ERROR);
     pico_http_client_close(conn);
-    /*Case3: positive test, everything got written at once*/
+    //Case3: positive test, everything got written at once
     write_success_cnt = 0;
     conn = pico_http_client_open(uri, cb);
     ret = pico_http_client_send_raw(conn, request);
     fail_if(ret != HTTP_RETURN_OK);
     fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
-    /*Case4: positive test, write in 2chunks*/
+    //Case4: positive test, write in 2chunks
     write_success_cnt = 0;
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
@@ -585,26 +595,29 @@ START_TEST(tc_pico_http_client_get_write_progress)
     fail_if(write_progress_made_cnt != 1);
     fail_if(write_success_cnt != 1);
     pico_http_client_close(conn);
-    /*Case2: No address for total_bytes_written*/
+    //Case2: No address for total_bytes_written
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(conn, NULL, &total_bytes_to_write);
     fail_if(ret != HTTP_RETURN_ERROR);
+    treat_write_event(example_client);
     pico_http_client_close(conn);
-    /*Case3: No address for total_bytes_to_write*/
+    //Case3: No address for total_bytes_to_write
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(conn, &total_bytes_written, NULL);
     fail_if(ret != HTTP_RETURN_OK);
+    treat_write_event(example_client);
     pico_http_client_close(conn);
-    /*Case4: Unknown connectionID*/
+    //Case4: Unknown connectionID
     write_in_chunks = 1;
     conn = pico_http_client_open(uri, cb);
     pico_http_client_send_post(conn, "/", post_data, post_data_len, HTTP_CONN_CLOSE, NULL, NULL);
     ret = pico_http_client_get_write_progress(99, &total_bytes_written, NULL);
     fail_if(ret != HTTP_RETURN_ERROR);
+    treat_write_event(example_client);
     pico_http_client_close(conn);
     printf("Stop: tc_pico_http_client_get_write_progress\n");
 }
@@ -698,7 +711,7 @@ START_TEST(tc_pico_http_client_read_body)
     ret = pico_http_client_read_body(conn, data, 1024, &body_read_done);
     write(0, data, ret);
     printf("body_read_done: %d ret: %d\n", body_read_done, ret);
-    fail_if(ret != 12);
+    fail_if(ret != 36);
     fail_if(body_read_done != 1);
     pico_http_client_close(conn);
     PICO_FREE(data);
@@ -737,8 +750,73 @@ START_TEST(tc_pico_http_client_read_body)
     fail_if(body_read_done != 1);
     pico_http_client_close(conn);
     PICO_FREE(data);
+    chunked_response = 0;
+    printf("Stop: tc_pico_http_client_read_body\n");
+    /*Case3: not chunked*/
+    test_404_with_body = 1;
+    clear_read_idx = 1;
+    printf("\n\nStart: tc_pico_http_client_read_body\n");
+    //first the header needs to come in
+    write_success_cnt = 0;
+    header_ev_cnt = 0;
+    body_ev_cnt = 0;
+    data = PICO_ZALLOC(1024*1024);
+    conn = pico_http_client_open(uri, cb);
+    ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
+    fail_if(write_success_cnt != 1);
+    treat_read_event(example_client);
+    fail_if(header_ev_cnt != 1);
+    header = pico_http_client_read_header(conn);
+    printf("Received header from server...\n");
+    printf("Server response : %d\n",header->response_code);
+    printf("Location : %s\n",header->location);
+    printf("Transfer-Encoding : %d\n",header->transfer_coding);
+    printf("Size/Chunk : %d\n",header->content_length_or_chunk);
+    //fail_if(body_ev_cnt != 1);
+    //then we can read the body
+    ret = pico_http_client_read_body(conn, data, 1024, &body_read_done);
+    write(0, data, ret);
+    printf("body_read_done: %d ret: %d\n", body_read_done, ret);
+    fail_if(ret != 233);
+    fail_if(body_read_done != 1);
+    pico_http_client_close(conn);
+    PICO_FREE(data);
     printf("Stop: tc_pico_http_client_read_body\n");
     chunked_response = 0;
+    test_404_with_body = 0;
+
+    /*Case4: not chunked
+    test_404_without_body = 1;
+    clear_read_idx = 1;
+    printf("\n\nStart: tc_pico_http_client_read_body\n");
+    //first the header needs to come in
+    write_success_cnt = 0;
+    header_ev_cnt = 0;
+    body_ev_cnt = 0;
+    data = PICO_ZALLOC(1024*1024);
+    conn = pico_http_client_open(uri, cb);
+    ret = pico_http_client_send_get(conn, "/", HTTP_CONN_CLOSE);
+    fail_if(write_success_cnt != 1);
+    treat_read_event(example_client);
+    fail_if(header_ev_cnt != 1);
+    header = pico_http_client_read_header(conn);
+    printf("Received header from server...\n");
+    printf("Server response : %d\n",header->response_code);
+    printf("Location : %s\n",header->location);
+    printf("Transfer-Encoding : %d\n",header->transfer_coding);
+    printf("Size/Chunk : %d\n",header->content_length_or_chunk);
+    //fail_if(body_ev_cnt != 1);
+    //then we can read the body
+    ret = pico_http_client_read_body(conn, data, 1024, &body_read_done);
+    write(0, data, ret);
+    printf("body_read_done: %d ret: %d\n", body_read_done, ret);
+    fail_if(ret != 233);
+    fail_if(body_read_done != 1);
+    pico_http_client_close(conn);
+    PICO_FREE(data);
+    printf("Stop: tc_pico_http_client_read_body\n");
+    chunked_response = 0;
+    test_404_without_body = 0;*/
 }
 END_TEST
 
@@ -763,7 +841,7 @@ START_TEST(tc_free_uri)
 END_TEST
 START_TEST(tc_client_open)
 {
-   // TODO: test this: static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID); 
+   // TODO: test this: static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID);
 }
 END_TEST
 START_TEST(tc_free_header)
@@ -773,12 +851,12 @@ START_TEST(tc_free_header)
 END_TEST
 START_TEST(tc_print_request_part_info)
 {
-   // TODO: test this: static void print_request_part_info(struct pico_http_client *client) 
+   // TODO: test this: static void print_request_part_info(struct pico_http_client *client)
 }
 END_TEST
 START_TEST(tc_request_parts_destroy)
 {
-   // TODO: test this: static int8_t request_parts_destroy(struct pico_http_client *client) 
+   // TODO: test this: static int8_t request_parts_destroy(struct pico_http_client *client)
     int ret = 0;
     ret = request_parts_destroy(NULL);
     fail_if(ret != HTTP_RETURN_ERROR);
@@ -856,7 +934,7 @@ START_TEST(tc_get_content_length)
 END_TEST
 START_TEST(tc_get_max_multipart_header_size)
 {
-   // TODO: test this: static int32_t get_max_multipart_header_size(struct multipart_chunk **post_data, uint16_t length) 
+   // TODO: test this: static int32_t get_max_multipart_header_size(struct multipart_chunk **post_data, uint16_t length)
 }
 END_TEST
 START_TEST(tc_add_multipart_chunks)

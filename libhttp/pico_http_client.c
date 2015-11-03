@@ -42,11 +42,13 @@
 #define RESPONSE_INDEX                      9u
 
 #define HTTP_CHUNK_ERROR    0xFFFFFFFFu
+
 #ifdef dbg
     #undef dbg
 #endif
 
 #define dbg(...) do {} while(0)
+
 #define nop() do {} while(0)
 
 #define consume_char(c)                          (pico_socket_read(client->sck, &c, 1u))
@@ -85,6 +87,7 @@ struct pico_http_client
     uint32_t request_parts_len;
     uint32_t request_parts_idx;
     uint8_t long_polling_state;
+    uint8_t conn_state;
 };
 
 /* HTTP Client internal states */
@@ -100,6 +103,12 @@ struct pico_http_client
 #define HTTP_LONG_POLL_CONN_CLOSE       1
 #define HTTP_LONG_POLL_CONN_KEEP_ALIVE  2
 #define HTTP_LONG_POLL_CANCEL           3
+
+/* HTTP Conn States */
+#define HTTP_CONNECTION_CONNECTED               1
+#define HTTP_CONNECTION_NOT_CONNECTED           2
+#define HTTP_CONNECTION_WAITING_FOR_NEW_CONN    3
+
 
 /* MISC */
 #define HTTP_NO_COPY_TO_HEAP    0
@@ -158,7 +167,6 @@ struct request_part *request_part_create(char *buf, uint32_t buf_len, uint8_t co
     }
 }
 /*
-#ifdef dbg
 static void print_request_part_info(struct pico_http_client *client)
 {
     uint32_t i = 0;
@@ -168,7 +176,6 @@ static void print_request_part_info(struct pico_http_client *client)
         dbg("i=%d buf_len: %d buf_len_done: %d buf: %p\n", i, client->request_parts[i]->buf_len, client->request_parts[i]->buf_len_done, client->request_parts[i]->buf);
     }
 }
-#endif
 */
 //User memory buffers will not be freed
 static int8_t request_parts_destroy(struct pico_http_client *client)
@@ -215,6 +222,7 @@ static int32_t socket_write_request_parts(struct pico_http_client *client)
             printf("client->request_parts[i]->buf[%d] = %c\n", x, client->request_parts[i]->buf[x]);
         }
 */
+        dbg("Bytes written: %d bytes_to_write: %d\n", bytes_written, bytes_to_write);
         if (bytes_written < 0)
         {
             request_parts_destroy(client);
@@ -235,6 +243,10 @@ static int32_t socket_write_request_parts(struct pico_http_client *client)
             dbg("Write success\n");
             request_parts_destroy(client);
             client->state = HTTP_START_READING_HEADER;
+            if (client->long_polling_state == HTTP_LONG_POLL_CONN_CLOSE)
+            {
+                client->conn_state = HTTP_CONNECTION_WAITING_FOR_NEW_CONN;
+            }
             client->wakeup(EV_HTTP_WRITE_SUCCESS, client->connectionID);
         }
     }
@@ -260,6 +272,7 @@ static int8_t pico_http_uri_destroy(struct pico_http_uri *urikey)
             PICO_FREE(urikey->host);
             urikey->host = NULL;
         }
+        PICO_FREE(urikey);
     }
     return HTTP_RETURN_OK;
 }
@@ -334,7 +347,6 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
         /* no protocol specified, assuming by default it's http */
         urikey->protoHttp = 1;
     }
-
     /* detect hostname */
     index = last_index;
     while (uri[index] && uri[index] != '/' && uri[index] != ':') index++;
@@ -400,7 +412,16 @@ PICO_TREE_DECLARE(pico_client_list, compare_clients);
 static int8_t parse_header_from_server(struct pico_http_client *client, struct pico_http_header *header);
 static int8_t read_chunk_line(struct pico_http_client *client);
 /*  */
-
+/*
+void print_header(struct pico_http_header * header)
+{
+    printf("In lib: Received header from server...\n");
+    printf("In lib: Server response : %d\n",header->response_code);
+    printf("In lib: Location : %s\n",header->location);
+    printf("In lib: Transfer-Encoding : %d\n",header->transfer_coding);
+    printf("In lib: Size/Chunk : %d\n",header->content_length_or_chunk);
+}
+*/
 static inline void wait_for_header(struct pico_http_client *client)
 {
     /* wait for header */
@@ -415,18 +436,19 @@ static inline void wait_for_header(struct pico_http_client *client)
     {
         client->state = HTTP_READING_HEADER;
     }
-    else if (http_ret == HTTP_RETURN_NOT_FOUND)
+    /*else if (http_ret == HTTP_RETURN_NOT_FOUND)
     {
+        print_header(client->header);
         client->state = HTTP_CONN_IDLE;
         client->body_read = 0;
         client->wakeup(EV_HTTP_REQ, client->connectionID);
     }
-    else
+    else*/
     {
         /* call wakeup */
         if (client->header->response_code != HTTP_CONTINUE)
         {
-            if (client->header->response_code == HTTP_OK)
+            /*if (client->header->response_code == HTTP_OK)
             {
                 client->wakeup((EV_HTTP_REQ | EV_HTTP_BODY), client->connectionID);
             }
@@ -434,6 +456,14 @@ static inline void wait_for_header(struct pico_http_client *client)
             {
                 client->state = HTTP_CONN_IDLE;
                 client->body_read = 0;
+                client->wakeup(EV_HTTP_REQ, client->connectionID);
+            }*/
+            if (client->header->content_length_or_chunk)
+            {
+                client->wakeup((EV_HTTP_REQ | EV_HTTP_BODY), client->connectionID);
+            }
+            else
+            {
                 client->wakeup(EV_HTTP_REQ, client->connectionID);
             }
         }
@@ -499,10 +529,25 @@ static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
     //void *wakeup = NULL;
     void (*wakeup)(uint16_t ev, uint16_t conn) = NULL;
     uint8_t cpy_long_polling_state = 0;
+    uint8_t cpy_body_read_done = 0;
     dbg("TREAT LONG POLLING\n");
-
     conn = client->connectionID;
-    if ((ev & PICO_SOCK_EV_CLOSE) || (ev & PICO_SOCK_EV_FIN))
+
+    dbg("client->body_read_done: %d client->conn_state: %d\n", client->body_read_done, client->conn_state);
+
+    if (client->body_read_done && client->conn_state == HTTP_CONNECTION_CONNECTED)
+    {
+        client->body_read_done = 0;
+        if(client->long_polling_state == HTTP_LONG_POLL_CONN_KEEP_ALIVE)
+        {
+            pico_http_client_long_poll_send_get(conn, client->urikey->resource, HTTP_CONN_KEEP_ALIVE);
+        }
+        else
+        {
+            pico_http_client_long_poll_send_get(conn, client->urikey->resource, HTTP_CONN_CLOSE);
+        }
+    }
+    else if(client->body_read_done && client->conn_state == HTTP_CONNECTION_NOT_CONNECTED)
     {
         if (client->long_polling_state != HTTP_LONG_POLL_CONN_CLOSE)
         {
@@ -527,10 +572,11 @@ static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
         strcpy(resource, client->urikey->resource);
         wakeup = client->wakeup;
         cpy_long_polling_state = client->long_polling_state;
+        cpy_body_read_done = client->body_read_done;
         pico_http_client_close(client->connectionID);
-        dbg("treat_long_polling client_open\n");
+        dbg("treat_long_polling before client_open\n");
         conn = client_open(raw_uri, wakeup, conn);
-        dbg("treat_long_polling After client_open\n");
+        dbg("treat_long_polling after client_open\n");
         if (conn < 0)
         {
             wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, conn);
@@ -551,21 +597,14 @@ static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
             wakeup(EV_HTTP_ERROR | EV_HTTP_CLOSE, conn);
             return;
         }
+        //
+        client->body_read_done = cpy_body_read_done;
         //put back the long polling state
         client->long_polling_state = cpy_long_polling_state;
         //put the correct resource back
         pico_process_resource(resource, client->urikey);
         PICO_FREE(raw_uri);
         PICO_FREE(resource);
-    }
-
-    if (client->long_polling_state == HTTP_LONG_POLL_CONN_CLOSE)
-    {
-        pico_http_client_long_poll_send_get(conn, client->urikey->resource, HTTP_CONN_CLOSE);
-    }
-    else
-    {
-        pico_http_client_long_poll_send_get(conn, client->urikey->resource, HTTP_CONN_KEEP_ALIVE);
     }
 }
 
@@ -593,12 +632,22 @@ static void tcp_callback(uint16_t ev, struct pico_socket *s)
 
     if (ev & PICO_SOCK_EV_CONN)
     {
+        client->conn_state = HTTP_CONNECTION_CONNECTED;
+        if (client->long_polling_state)
+        {
+            treat_long_polling(client, 0);
+        }
         client->wakeup(EV_HTTP_CON, client->connectionID);
     }
 
     if (ev & PICO_SOCK_EV_ERR)
     {
         r_ev = EV_HTTP_ERROR;
+        client->conn_state = HTTP_CONNECTION_NOT_CONNECTED;
+        if (client->long_polling_state)
+        {
+            treat_long_polling(client, 0);
+        }
         if (client->request_parts)
         {
             request_parts_destroy(client);
@@ -611,7 +660,12 @@ static void tcp_callback(uint16_t ev, struct pico_socket *s)
 
     if ((ev & PICO_SOCK_EV_CLOSE) || (ev & PICO_SOCK_EV_FIN))
     {
+        client->conn_state = HTTP_CONNECTION_NOT_CONNECTED;
         r_ev = EV_HTTP_CLOSE;
+        if (client->long_polling_state)
+        {
+            treat_long_polling(client, 0);
+        }
         if (client->request_parts)
         {
             request_parts_destroy(client);
@@ -620,14 +674,7 @@ static void tcp_callback(uint16_t ev, struct pico_socket *s)
         }
         client->state = HTTP_CONN_IDLE;
         dbg("long polling state %d\n", client->long_polling_state);
-        if (client->long_polling_state)
-        {
-            treat_long_polling(client, ev);
-        }
-        else
-        {
-            client->wakeup(r_ev, client->connectionID);
-        }
+        client->wakeup(r_ev, client->connectionID);
     }
 
     if (ev & PICO_SOCK_EV_WR)
@@ -1815,11 +1862,11 @@ int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, unsigned char *data, 
         dbg("Body read finished! %d\n", client->body_read);
         client->state = HTTP_CONN_IDLE;
         client->body_read = 0;
-        client->body_read_done = 0;
+        //client->body_read_done = 0;
         *body_read_done = 1;
-        if (client->long_polling_state == HTTP_LONG_POLL_CONN_KEEP_ALIVE)
+        if (client->long_polling_state)
         {
-            treat_long_polling(client, 0);//only on keep alive connection_types, for the close connection_type we wait for the close event in the tcp_callback
+            treat_long_polling(client, 0);
         }
     }
     return bytes_read;
@@ -2121,16 +2168,16 @@ static int8_t parse_header_from_server(struct pico_http_client *client, struct p
                                           (line[RESPONSE_INDEX + 1] - '0') * 10 +
                                           (line[RESPONSE_INDEX + 2] - '0'));
 
-        if (header->response_code == HTTP_NOT_FOUND)
+        /*if (header->response_code == HTTP_NOT_FOUND)
         {
             return HTTP_RETURN_NOT_FOUND;
         }
         else if (header->response_code >= HTTP_INTERNAL_SERVER_ERR)
         {
-            /* invalid response type */
+            // invalid response type
             header->response_code = 0;
             return HTTP_RETURN_ERROR;
-        }
+        }*/
     }
 
     dbg("Server response : %d \n", header->response_code);
