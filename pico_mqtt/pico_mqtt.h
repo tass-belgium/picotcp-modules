@@ -7,6 +7,12 @@
 #include <stdlib.h>
 
 /**
+* Macros
+**/
+
+#define PICO_MQTT_DATA_ZERO (struct pico_mqtt_data){.data = NULL, .length = 0}
+
+/**
 * Data Structures
 **/
 

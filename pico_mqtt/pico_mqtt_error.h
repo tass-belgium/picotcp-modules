@@ -1,6 +1,19 @@
 #ifndef PICO_MQTT_ERROR_H
 #define PICO_MQTT_ERROR_H
 
+/**
+* Error codes
+**/
+
+#define NO_ERROR 0
+#define TIMEOUT 1
+#define CONNECTION_BLOCKING 2
+#define URI_LOOKUP_FAILED 3
+
+/**
+* Return codes
+**/
+
 #define SUCCES 0
 #define ERROR -1
 
@@ -30,6 +43,7 @@
 #define PWARNING(args...) do{} while(0)
 #define PINFO(args...) do{} while(0)
 #define PTODO(args...) do{} while(0)
+#define EXIT_ERROR() do{} while(0)
 #define PTRACE do{} while(0)
 
 #ifdef DEBUG /* if not in debug mode, nothing should be printed */
@@ -55,6 +69,14 @@
 			#define ENABLE_INFO
 		#endif
 	#endif
+
+	#ifndef DISABLE_EXIT
+		#include <stdlib.h>
+
+		#undef EXIT_ERROR
+		#define EXIT_ERROR() exit(EXIT_FAILURE)
+	#endif
+		
 
 	#ifdef ENABLE_ERROR
 		#include <stdio.h>
@@ -105,6 +127,31 @@
 			} while(0)
 	#endif
 
+
 #endif /* defined DEBUG */
+
+/**
+* Adds extra checks for errors during development,
+* does not change code.
+**/
+
+#ifndef PEDANTIC
+
+	#define PICO_MQTT_CHECK( cond, ...) do{} while(0)
+	#define PICO_MQTT_CHECK_NULL( var ) do{} while(0)
+	#define PICO_MQTT_CHECK_NOT_NULL( var ) do{} while(0)
+
+#else
+
+	#define PICO_MQTT_CHECK( cond, ...) do{\
+		if(!(cond)){PERROR(__VA_ARGS__); EXIT_ERROR();}} while(0)
+
+	#define PICO_MQTT_CHECK_NOT_NULL( var ) do{\
+		if( var == NULL){PERROR("The pointer should not be NULL.\n"); EXIT_ERROR();}} while(0)
+
+	#define PICO_MQTT_CHECK_NULL( var ) do{\
+		if( var != NULL){PERROR("The pointer should be NULL.\n"); EXIT_ERROR();}} while(0)
+
+#endif /* ifndef PEDANTIC */
 
 #endif /* end of header file */

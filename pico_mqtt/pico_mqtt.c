@@ -25,10 +25,8 @@ static struct timeval ms_to_timeval(uint32_t timeout);
 struct pico_mqtt* pico_mqtt_create( void )
 {
 	struct pico_mqtt* mqtt = NULL;
-	int result = 0;
 
-	result = initialize( &mqtt );
-	if( result == ERROR )
+	if( initialize( &mqtt ) == ERROR )
 	{
 		PTRACE;
 		return NULL;
@@ -62,6 +60,10 @@ int pico_mqtt_set_client_id(struct pico_mqtt* mqtt, const char* client_id_string
 		return ERROR;
 	}
 
+	mqtt->error = NO_ERROR;
+
+	PTODO("Validate string.\n");
+
 	client_id = pico_mqtt_string_to_data( client_id_string );
 	if(client_id == NULL)
 	{
@@ -78,8 +80,10 @@ int pico_mqtt_is_client_id_set(struct pico_mqtt* mqtt)
 	if(mqtt == NULL)
 	{
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
-		return -1;
+		return ERROR;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	return mqtt->client_id != NULL;
 }
@@ -91,6 +95,8 @@ struct pico_mqtt_data* pico_mqtt_get_client_id(struct pico_mqtt* mqtt)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return NULL;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	return mqtt->client_id;
 }
@@ -108,6 +114,8 @@ int pico_mqtt_set_username(struct pico_mqtt* mqtt, const char* username_string)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return ERROR;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	username = pico_mqtt_string_to_data( username_string );
 	if(username == NULL)
@@ -128,6 +136,8 @@ int pico_mqtt_is_username_set(struct pico_mqtt* mqtt)
 		return -1;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	return mqtt->username != NULL;
 }
 
@@ -138,6 +148,8 @@ struct pico_mqtt_data* pico_mqtt_get_username(struct pico_mqtt* mqtt)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return NULL;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	return mqtt->username;
 }
@@ -151,6 +163,8 @@ int pico_mqtt_set_password(struct pico_mqtt* mqtt, const char* password_string)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return ERROR;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	password = pico_mqtt_string_to_data( password_string );
 	if(password == NULL)
@@ -171,6 +185,8 @@ int pico_mqtt_is_password_set(struct pico_mqtt* mqtt)
 		return -1;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	return mqtt->password != NULL;
 }
 
@@ -182,15 +198,18 @@ struct pico_mqtt_data* pico_mqtt_get_password(struct pico_mqtt* mqtt)
 		return NULL;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	return mqtt->password;
 }
 
 /* connect to the server and disconnect again */
-int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port, const uint32_t timeout)
+int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port, uint32_t time_left)
 {
-	int result = 0;
 	struct pico_mqtt_message* message = NULL;
-	struct timeval time_left = ms_to_timeval(timeout);
+	struct pico_mqtt_data connack = PICO_MQTT_DATA_ZERO;
+	uint8_t session_present_flag = 0;
+	uint8_t return_code = 0;
 	uint8_t flag = 0;
 
 	if(mqtt == NULL)
@@ -199,6 +218,8 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 		return ERROR;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	if(uri == NULL)
 	{
 		PTODO("Check that NULL is accepted as a URI.\n");
@@ -206,15 +227,13 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 	}
 
 	PTODO("write code to use a default port or service, readup on services.\n");
-	result = check_uri( uri );
-	if( result == ERROR )
+	if( check_uri(uri) == ERROR )
 	{
 		PTRACE;
 		return ERROR;
 	}
 
-	result = pico_mqtt_stream_connect( mqtt, uri, port );
-	if( result == ERROR )
+	if( pico_mqtt_stream_connect(mqtt, uri, port) == ERROR )
 	{
 		PTRACE;
 		return ERROR;
@@ -228,7 +247,7 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 	}
 #endif /* ALLOW_EMPTY_CLIENT_ID == 0 */
 
-	result = pico_mqtt_serializer_create_connect(
+	if(pico_mqtt_serializer_create_connect(
 		mqtt,
 		&message,
 		mqtt->keep_alive_time,
@@ -239,23 +258,19 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 		mqtt->will_topic,
 		mqtt->will_message,
 		mqtt->username,
-		mqtt->password);
-	
-	if(result == ERROR)
+		mqtt->password) == ERROR)
 	{
 		PTRACE;
 		return ERROR;
 	}
 
-	result = pico_mqtt_stream_set_output_message( mqtt, message);
-	if(result == ERROR)
+	if(pico_mqtt_stream_set_output_message( mqtt, message) == ERROR)
 	{
 		PTRACE;
 		return ERROR;
 	}
 
-	result = pico_mqtt_stream_send_receive( mqtt, &time_left);
-	if(result == ERROR)
+	if(pico_mqtt_stream_send_receive( mqtt, &time_left) == ERROR)
 	{
 		PTRACE;
 		return ERROR;
@@ -263,20 +278,74 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 
 	PINFO("Send the connect message.\n");
 
-	result = pico_mqtt_stream_is_input_message_set( mqtt, &flag);
-	if(result == ERROR)
+	if(pico_mqtt_stream_is_input_message_set( mqtt->stream, &flag) == ERROR)
 	{
 		PTRACE;
 		return ERROR;
 	}
 
+	PTODO("Allow the connack message to be confirmed later by a define.\n");
 	if(flag == 0)
 	{
-		PERROR("A timeout occured, could not connect to the server in the specified time.\n");
+		PERROR("A timeout occured, could not connect to the server in the specified time. Please try again.\n");
 		return ERROR;
 	}
 
-	PTODO("Check the incomming message to see if it is the connack message");
+	if(pico_mqtt_stream_get_input_message( mqtt->stream, &connack) == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
+
+	if(pico_mqtt_deserialize_connack( mqtt, &connack, &session_present_flag, &return_code) == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
+
+	if(session_present_flag)
+	{
+		mqtt->normative_error = "MQTT-3.2.2-1";
+		PERROR("Normative error [MQTT-3.2.2-1]: A clean session was requested but the session flag was set.\n");
+		return ERROR;
+	}
+
+	if(return_code != 0)
+	{
+#ifdef DEBUG
+		if(return_code == 1)
+		{
+			PERROR("Connection Refused, unacceptable protocol version.\n");
+		}
+
+		if(return_code == 2)
+		{
+			PERROR("Connection Refused, identifier rejected.\n");
+		}
+
+		if(return_code == 3)
+		{
+			PERROR("Connection Refused, server unabailable.\n");
+		}
+
+		if(return_code == 4)
+		{
+			PERROR("Connection Refused, bad user name or password.\n");
+		}
+
+		if(return_code == 5)
+		{
+			PERROR("Connection Refused, not authorized.\n");
+		}
+
+		if(return_code > 5)
+		{
+			PERROR("Connection Refused, unknown return code. Check protocol versions or server implementation.\n");
+		}
+#endif
+		return ERROR;
+	}
+
 	PINFO("Connected succesfully to the server.\n");
 
 	return SUCCES;
@@ -288,41 +357,6 @@ int pico_mqtt_disconnect(struct pico_mqtt* mqtt);
 int pico_mqtt_restart(struct pico_mqtt* mqtt, const uint32_t timeout); /* optional function */
 int pico_mqtt_ping(struct pico_mqtt* mqtt, const uint32_t timeout );
 
-/* receive a message or publis a message *//*
-int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout)
-{
-		result = 0;
-	length = 0;
-
-	CHECK_MQTT();
-	CHECK_TIME_LEFT();
-
-	if(message == NULL)
-	{
-		PERROR("Invallid input: No return pointer for the incomming message specified.\n");
-		return ERROR;
-	}
-
-#ifdef DEBUG
-	if(mqtt->completed_messages == NULL)
-	{
-		PERROR("Incomplete messages queue should be specified.\n");
-		return ERROR;
-	}
-#endif
-
-	result = pico_mqtt_list_length(mqtt->completed_messages, &length);
-	RETURN_IF_ERROR(result);
-
-	if(length > 0) *//*their are already completed messages*//*
-	{
-		RETRUN_IF_ERROR(pico_mqtt_list_pop(mqtt->completed_messages, message));
-		return SUCCES;
-	}
-
-	return SUCCES;
-}
-*/
 int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout);
 
 /* subscribe to a topic (or multiple topics) and unsubscribe */
@@ -426,20 +460,6 @@ const char* pico_mqtt_get_protocol_version( void )
 /**
 * Private Functions Implementation
 **/
-/*
-static int set_trigger_message( struct pico_mqtt* mqtt, struct pico_mqtt_message* trigger_message)
-{
-#ifdef DEBUG
-	if((mqtt == NULL) || (trigger_message == NULL))
-	{
-		PERROR("Invallid input.\n");
-		return ERROR;
-	}
-#endif
-
-	mqtt->trigger_message == message;
-	return SUCCES;
-}*/
 
 static int initialize( struct pico_mqtt** mqtt )
 {
@@ -466,10 +486,9 @@ static int initialize( struct pico_mqtt** mqtt )
 
 #if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
 		// message buffers
-		.trigger_message = NULL,
 		.output_queue = NULL,
-		.active_messages = NULL,
-		.completed_messages = NULL,
+		.wait_queue = NULL,
+		.input_queue = NULL,
 #endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
 
 		// connection related
@@ -488,6 +507,13 @@ static int initialize( struct pico_mqtt** mqtt )
 
 		// status
 		.connected = 0,
+		.connection_attempts = 0,
+		.trigger_on_receive = 0,
+		.active_output_message = NULL,
+		.trigger_message = NULL,
+
+		//errror
+		.error = NO_ERROR,
 		.normative_error = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
 		.documentation_reference = 0,
 	};
@@ -510,14 +536,14 @@ static int initialize( struct pico_mqtt** mqtt )
 		return ERROR;
 	}
 
-	result = pico_mqtt_list_create( &((*mqtt)->active_messages) );
+	result = pico_mqtt_list_create( &((*mqtt)->wait_queue) );
 	if( result == ERROR )
 	{
 		PTRACE;
 		return ERROR;
 	}
 	
-	result = pico_mqtt_list_create( &((*mqtt)->completed_messages) );
+	result = pico_mqtt_list_create( &((*mqtt)->input_queue) );
 	if( result == ERROR )
 	{
 		PTRACE;
@@ -557,14 +583,14 @@ static int destroy( struct pico_mqtt** mqtt)
 		return ERROR;
 	}
 
-	result = pico_mqtt_list_destroy( &((*mqtt)->active_messages) );
+	result = pico_mqtt_list_destroy( &((*mqtt)->wait_queue) );
 	if( result == ERROR )
 	{
 		PTRACE;
 		return ERROR;
 	}
 	
-	result = pico_mqtt_list_destroy( &((*mqtt)->completed_messages) );
+	result = pico_mqtt_list_destroy( &((*mqtt)->input_queue) );
 	if( result == ERROR )
 	{
 		PTRACE;
@@ -613,12 +639,211 @@ static int check_uri( const char* uri )
 	return SUCCES;
 }
 
-static struct timeval ms_to_timeval(uint32_t timeout)
+/**
+* Main processing loop functions
+**/
+
+static int send_message(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, int time_left)
 {
-	return (struct timeval){.tv_sec = timeout/1000, .tv_usec = (timeout%1000) *1000};
+	mqtt->trigger_message = message;
+	mqtt->trigger_on_receive = 0;
+
+	if(pico_mqtt_list_push(mqtt->output_queue, message) == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
+
+	if(main_loop() == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
 }
 
-#ifdef DEBUG
+static int receive_message(struct pico_mqtt* mqtt, struct pico_mqtt_message** message, int time_left)
+{
+	uint32_t length = 0;
+
+	if(pico_mqtt_list_length(mqtt->input_queue, &length) == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
+
+	if(length > 0)
+	{
+		if(pico_mqtt_list_pop(mqtt->input_queue, message) == ERROR)
+		{
+			PTRACE;
+			return ERROR;
+		} else {
+			return SUCCES;
+		}
+	}
+
+	mqtt->trigger_message = NULL;
+	mqtt->trigger_on_receive = 1;
+
+	if(main_loop(mqtt, time_left) == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
+}
+
+static int main_loop(struct pico_mqtt* mqtt, int time_left)
+{
+	struct pico_mqtt_message* message = NULL;
+
+	while(time_left != 0)
+	{
+		if(mqtt->connected == 1){
+			uint8_t output_message_set_flag = 0;
+			uint8_t input_message_set_flag = 0;
+			uint8_t message_ready_flag = 0;
+
+			if(pico_mqtt_stream_is_output_message_set( mqtt->stream, &output_message_set_flag) == ERROR)
+			{
+				PTRACE;
+				return ERROR;
+			}
+
+			if(!output_message_set_flag)
+			{
+				uint32_t length = 0;
+
+				if(mqtt->active_output_message != NULL)
+				{
+					++mqtt->active_output_message->status;
+
+					if(is_message_ready(mqtt, mqtt->active_output_message, &message_ready_flag) == ERROR)
+					{
+					PTRACE;
+					return ERROR;
+					}
+
+					if(message_ready_flag)
+					{
+						if(remove_message(mqtt, mqtt->active_output_message) == ERROR)
+						{
+							PTRACE;
+							return ERROR;
+						}
+
+						if(mqtt->active_output_message == mqtt->trigger_message)
+						{
+							mqtt->active_output_message = NULL;
+							return SUCCES;
+						}
+
+						mqtt->active_output_message = NULL;
+
+					}  else {
+						if(process_message(mqtt, mqtt->active_output_message) == ERROR)
+						{
+							close_connection(mqtt);
+							continue;
+						}
+					}
+				}
+
+				if(set_new_output_message(mqtt) == ERROR)
+				{
+					PTRACE;
+					return ERROR;
+				}
+			}
+
+			if(pico_mqtt_stream_is_input_message_set( mqtt->stream, &input_message_set_flag) == ERROR)
+			{
+				PTRACE;
+				return ERROR;
+			}
+
+			if(input_message_set_flag == 1)
+			{
+				if(pico_mqtt_stream_get_input_message(mqtt->stream, &message) == ERROR)
+				{
+					PTRACE;
+					return ERROR;
+				}
+
+				if(is_message_ready(mqtt, message, &message_ready_flag) == ERROR)
+				{
+					PTRACE;
+					return ERROR;
+				}
+
+				if(message_ready_flag)
+				{
+					if(pico_mqtt_list_push(mqtt->input_queue, message) == ERROR)
+					{
+						PTRACE;
+						return ERROR;
+					}
+
+					if(mqtt->trigger_on_receive)
+					{
+						return SUCCES;
+					}
+				} else {
+					if(process_message(mqtt, message) == ERROR)
+					{
+						close_connection(mqtt);
+						continue;
+					}
+				}
+			}
+
+			if(pico_mqtt_stream_send_receive(mqtt->stream, &time_left) == ERROR)
+			{
+				if(mqtt->error == CONNECTION_LOST)
+				{
+					mqtt->connected = 0;
+					reconnect(mqtt);
+				}
+
+				if(mqtt->error == CONNECTION_BROKEN)
+				{
+					mqtt->connected = 0;
+					return ERROR;
+				}
+			}
+		} else {
+			PTODO("write function to reconnect");
+		}
+	}
+}
+
+int set_new_output_message(struct pico_mqtt* mqtt)
+{
+	uint32_t length = 0;
+
+	if(pico_mqtt_list_length(mqtt->output_queue, &length) == ERROR)
+	{
+		PTRACE;
+		return ERROR;
+	}
+
+	if(length > 0)
+	{
+		if(pico_mqtt_list_pop(mqtt->output_queue, &mqtt->active_output_message) == ERROR)
+		{
+			PTRACE;
+			return ERROR;
+		}
+
+		if(pico_mqtt_stream_set_output_message(mqtt->stream, message->data) == ERROR)
+		{
+			PTRACE;
+			return ERROR;
+		}
+	}
+
+	return SUCCES;
+}
+
 /**
 * Debug Functions
 **/
