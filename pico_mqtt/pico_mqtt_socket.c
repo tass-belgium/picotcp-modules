@@ -7,6 +7,7 @@
 
 struct pico_mqtt_socket{
 	int descriptor;
+	int* error;
 };
 
 /**
@@ -22,26 +23,27 @@ static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo*
 **/
 
 /* create pico mqtt socket */
-int pico_mqtt_connection_create(struct pico_mqtt_socket** socket)
+struct pico_mqtt_socket* pico_mqtt_connection_create( struct pico_mqtt* mqtt )
 {
+	struct pico_mqtt_socket* socket = NULL;
 #ifdef DEBUG
-	if(socket == NULL)
+	if((socket == NULL) || (mqtt == NULL))
 	{
-		PERROR("Invallid arguments (%p).\n", socket);
-		return ERROR;
+		PERROR("Invallid arguments (%p, %p).\n", socket, mqtt);
+		EXIT_ERROR();
 	}
 #endif
 
-	*socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
+	socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
 	if(socket == NULL)
 	{
-		PERROR("Unable to allocate memory for socket");
-		return ERROR;
+		PERROR("Unable to allocate memory for socket.\n");
+		return NULL;
 	}
 
-	**socket = (struct pico_mqtt_socket) {.descriptor = 0};
+	*socket = /*(struct pico_mqtt_socket)*/ {.descriptor = 0, .error = &mqtt->error};
 
-	return SUCCES;
+	return socket;
 }
 
 /* create pico mqtt socket and connect to the URI*/ 
@@ -54,20 +56,21 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 	if(connection == NULL)
 	{
 		PERROR("Invallid arguments (%p).\n", connection);
-		return ERROR;
+		EXIT_ERROR();
 	}
 #endif
 
-	if(resolve_uri(&addres, URI, port) == ERROR)
+	if(resolve_uri(connection, &addres, URI, port) == ERROR)
 	{
+		PTRACE;
 		return ERROR;
 	}
 
 	if(socket_connect(connection, addres) == ERROR)
 	{
-		PERROR("Failed to connect to a socket.\n");
 		freeaddrinfo(addres);
 		free(connection);
+		PTRACE;
 		return ERROR;
 	}
 
@@ -76,6 +79,7 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 	{
 		freeaddrinfo(addres);
 		PERROR("fnctl was not able to set the socket to Nonblocking mode error (%d): %s.\n", errno, strerror(errno));
+		*connection->error = CONNECTION_BLOCKING;
 		return ERROR;
 	}
 
@@ -83,156 +87,6 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 
 	return SUCCES;
 }
-
-/* read data from the socket, add this to the read buffer */ 
-/*int pico_mqtt_connection_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* read_buffer, int time_left)
-{
-	int result = 0;
-	struct pollfd poll_descriptor = (struct pollfd) {
-		.fd = connection.descriptor,
-		.events = POLLIN,
-		.revents = 0
-	};
-
-#ifdef DEBUG
-	int flags = 0;
-
-	if((connection == NULL) || (read_buffer == NULL))
-	{
-		PERROR("invallid arugments (%p, %p).\n", connection, read_buffer);
-		return ERROR;
-	}
-
-	flags = fcntl(connection->descriptor, F_GETFL, 0);
-	if(( flags & O_NONBLOCK) == 0)
-	{
-		PERROR("Nonblocking flags should be set for the socket.\n");
-		return ERROR;
-	}
-#endif
-
-	if(read_buffer->length == 0)
-	{
-		return SUCCES;
-	}
-	
-	result = poll(&poll_descriptor, 1, time_left);
-
-	if(result == -1)
-	{
-		PERROR("Poll returned an error (%d): %s\n", errno, strerror(errno));
-		return ERROR;
-	}
-
-	if(result == 0)
-	{
-		PINFO("A timeout occurred while receiving.\n");
-		return SUCCES;
-	}
-
-#ifdef DEBUG
-	if(result > 1)
-	{
-		PERROR("It should not be possible to have more then 1 active file descriptor.\n");
-		return ERROR;
-	}
-
-	if((poll_descriptor.revents & POLLIN) == 0)
-	{
-		PERROR("Poll returned without error, data should be ready to read but is not.\n");
-		return ERROR;
-	}
-#endif
-
-	if(result == 1)
-	{
-		uint32_t bytes_written = 0;
-		bytes_written = read(connection->descriptor, read_buffer->data, read_buffer->length);
-		read_buffer->data += bytes_written;
-		read_buffer->length -= bytes_written;
-		PINFO("Written %d bytes to %d\n", bytes_written, connection->descriptor);
-	} else {
-		PERROR("Poll returned %d, only expected values are -1, 0 or 1.\n");
-		return ERROR;
-	}
-
-	return SUCCES;
-}*/
-
-/* write data to the socket, remove this from the write buffer*/ 
-/*int pico_mqtt_connection_send( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, int time_left)
-{
-	int result = 0;
-	struct pollfd poll_descriptor = (struct pollfd) {
-		.fd = connection.descriptor,
-		.events = POLLOUT,
-		.revents = 0
-	};
-
-#ifdef DEBUG
-	int flags = 0;
-
-	if((connection == NULL) || (write_buffer == NULL))
-	{
-		PERROR("invallid arugments (%p, %p).\n", connection, write_buffer);
-		return ERROR;
-	}
-
-	flags = fcntl(connection->descriptor, F_GETFL, 0);
-	if(( flags & O_NONBLOCK) == 0)
-	{
-		PERROR("Nonblocking flags should be set for the socket.\n");
-		return ERROR;
-	}
-#endif
-
-	if(write_buffer->length == 0)
-	{
-		return SUCCES;
-	}
-	
-	result = poll(&poll_descriptor, 1, time_left);
-
-	if(result == -1)
-	{
-		PERROR("Poll returned an error (%d): %s\n", errno, strerror(errno));
-		return ERROR;
-	}
-
-	if(result == 0)
-	{
-		PINFO("A timeout occurred while sending.\n");
-		return SUCCES;
-	}
-
-#ifdef DEBUG
-	if(result > 1)
-	{
-		PERROR("It should not be possible to have more then 1 active file descriptor.\n");
-		return ERROR;
-	}
-
-	if((poll_descriptor.revents & POLLOUT) == 0)
-	{
-		PERROR("Poll returned without error, data should be ready to write but is not.\n");
-		return ERROR;
-	}
-#endif
-
-	if(result == 1)
-	{
-		uint32_t bytes_written = 0;
-		bytes_written = write(connection->descriptor, write_buffer->data, write_buffer->length);
-		write_buffer->data += bytes_written;
-		write_buffer->length -= bytes_written;
-		PINFO("Written %d bytes to %d\n", bytes_written, connection->descriptor);
-	} else {
-		PERROR("Poll returned %d, only expected values are -1, 0 or 1.\n");
-		return ERROR;
-	}
-
-	return SUCCES;
-}*/
 
 int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, int time_left)
 {
@@ -249,14 +103,14 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 	if((connection == NULL) || (write_buffer == NULL) || (read_buffer == NULL))
 	{
 		PERROR("invallid arugments (%p, %p, %p).\n", connection, write_buffer, read_buffer);
-		return ERROR;
+		EXIT_ERROR();
 	}
 
 	flags = fcntl(connection->descriptor, F_GETFL, 0);
 	if(( flags & O_NONBLOCK) == 0)
 	{
 		PERROR("Nonblocking flags should be set for the socket.\n");
-		return ERROR;
+		EXIT_ERROR();
 	}
 #endif
 
@@ -294,13 +148,13 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 	if(result > 1)
 	{
 		PERROR("It should not be possible to have more then 1 active file descriptor.\n");
-		return ERROR;
+		EXIT_ERROR();
 	}
 
 	if((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0)
 	{
 		PERROR("Poll returned without error, data should be ready to write or read but is not.\n");
-		return ERROR;
+		EXIT_ERROR();
 	}
 #endif
 
@@ -325,6 +179,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		}
 	} else {
 		PERROR("Poll returned %d, only expected values are -1, 0 or 1.\n");
+		PTODO("Set a specific error.\n");
 		return ERROR;
 	}
 
@@ -351,7 +206,7 @@ int get_current_time( void  )
 **/
 
 /* return a list of IPv6 addresses */
-static int resolve_uri( struct addrinfo** addresses, const char* uri, const char* port){
+static int resolve_uri( struct pico_mqtt_socket* connection, struct addrinfo** addresses, const char* uri, const char* port){
 	const struct addrinfo hints =  lookup_configuration();
 	int result = 0;
 
@@ -361,13 +216,14 @@ static int resolve_uri( struct addrinfo** addresses, const char* uri, const char
     if((addresses == NULL) || (port == NULL))
     {
         PERROR("Invallid arguments (%p, %p).\n", addresses, port);
-        return ERROR;
+        EXIT_ERROR();
     }
 #endif
 
 	result = getaddrinfo( uri, port, &hints, addresses );
 	if(result != 0){
-		PERROR("getaddrinfo returned %d for URI %s: %s\n", result, uri, gai_strerror(result)); 
+		PERROR("getaddrinfo returned %d for URI %s: %s\n", result, uri, gai_strerror(result));
+		*connection->error = URI_LOOKUP_FAILED;
 		return ERROR;
 	}
 
@@ -414,14 +270,14 @@ static struct addrinfo lookup_configuration( void ){
 }
 
 /* return the socket file descriptor */
-static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres ){
+static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres, int* time_left){
 	struct addrinfo *current_addres = NULL;
 
 #ifdef DEBUG
 	if((connection == NULL) || (addres == NULL))
 	{
 		PERROR("Invallid arguments (%p, %p).\n", connection, addres);
-		return ERROR;
+		EXIT_ERROR();
 	}
 #endif
 

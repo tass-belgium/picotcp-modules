@@ -60,6 +60,8 @@ int pico_mqtt_set_client_id(struct pico_mqtt* mqtt, const char* client_id_string
 		return ERROR;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	PTODO("Validate string.\n");
 
 	client_id = pico_mqtt_string_to_data( client_id_string );
@@ -81,6 +83,8 @@ int pico_mqtt_is_client_id_set(struct pico_mqtt* mqtt)
 		return ERROR;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	return mqtt->client_id != NULL;
 }
 
@@ -91,6 +95,8 @@ struct pico_mqtt_data* pico_mqtt_get_client_id(struct pico_mqtt* mqtt)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return NULL;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	return mqtt->client_id;
 }
@@ -108,6 +114,8 @@ int pico_mqtt_set_username(struct pico_mqtt* mqtt, const char* username_string)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return ERROR;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	username = pico_mqtt_string_to_data( username_string );
 	if(username == NULL)
@@ -128,6 +136,8 @@ int pico_mqtt_is_username_set(struct pico_mqtt* mqtt)
 		return -1;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	return mqtt->username != NULL;
 }
 
@@ -138,6 +148,8 @@ struct pico_mqtt_data* pico_mqtt_get_username(struct pico_mqtt* mqtt)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return NULL;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	return mqtt->username;
 }
@@ -151,6 +163,8 @@ int pico_mqtt_set_password(struct pico_mqtt* mqtt, const char* password_string)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return ERROR;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	password = pico_mqtt_string_to_data( password_string );
 	if(password == NULL)
@@ -171,6 +185,8 @@ int pico_mqtt_is_password_set(struct pico_mqtt* mqtt)
 		return -1;
 	}
 
+	mqtt->error = NO_ERROR;
+
 	return mqtt->password != NULL;
 }
 
@@ -181,6 +197,8 @@ struct pico_mqtt_data* pico_mqtt_get_password(struct pico_mqtt* mqtt)
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return NULL;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	return mqtt->password;
 }
@@ -199,6 +217,8 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 		PERROR("Invallid input, MQTT object pointer not specified.\n");
 		return ERROR;
 	}
+
+	mqtt->error = NO_ERROR;
 
 	if(uri == NULL)
 	{
@@ -337,41 +357,6 @@ int pico_mqtt_disconnect(struct pico_mqtt* mqtt);
 int pico_mqtt_restart(struct pico_mqtt* mqtt, const uint32_t timeout); /* optional function */
 int pico_mqtt_ping(struct pico_mqtt* mqtt, const uint32_t timeout );
 
-/* receive a message or publis a message *//*
-int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout)
-{
-		result = 0;
-	length = 0;
-
-	CHECK_MQTT();
-	CHECK_TIME_LEFT();
-
-	if(message == NULL)
-	{
-		PERROR("Invallid input: No return pointer for the incomming message specified.\n");
-		return ERROR;
-	}
-
-#ifdef DEBUG
-	if(mqtt->completed_messages == NULL)
-	{
-		PERROR("Incomplete messages queue should be specified.\n");
-		return ERROR;
-	}
-#endif
-
-	result = pico_mqtt_list_length(mqtt->completed_messages, &length);
-	RETURN_IF_ERROR(result);
-
-	if(length > 0) *//*their are already completed messages*//*
-	{
-		RETRUN_IF_ERROR(pico_mqtt_list_pop(mqtt->completed_messages, message));
-		return SUCCES;
-	}
-
-	return SUCCES;
-}
-*/
 int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout);
 
 /* subscribe to a topic (or multiple topics) and unsubscribe */
@@ -528,6 +513,7 @@ static int initialize( struct pico_mqtt** mqtt )
 		.trigger_message = NULL,
 
 		//errror
+		.error = NO_ERROR,
 		.normative_error = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
 		.documentation_reference = 0,
 	};

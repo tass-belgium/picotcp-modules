@@ -46,6 +46,7 @@ struct pico_mqtt
         struct pico_mqtt_message* trigger_message;
 
         // error
+        int error;
         char normative_error[15];
         uint32_t documentation_reference;
 };

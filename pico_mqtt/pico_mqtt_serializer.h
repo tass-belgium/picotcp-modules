@@ -5,111 +5,66 @@
 #include "pico_mqtt.h"
 #include "pico_mqtt_private.h"
 
-int pico_mqtt_serializer_create_connect( 
-	struct pico_mqtt* mqtt, 
-	struct pico_mqtt_message** result, 
-	uint16_t keep_alive_time,
-	uint8_t retain,
-	uint8_t quality_of_service,
-	uint8_t clean_session,
-	struct pico_mqtt_data* client_id,
-	struct pico_mqtt_data* topic,
-	struct pico_mqtt_data* message,
-	struct pico_mqtt_data* username,
-	struct pico_mqtt_data* password
-	);
+/**
+* Data structures
+**/
 
-#ifdef DEBUG /* only needed for debug purposes*/
-int pico_mqtt_create_connack(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint8_t session_present,
-	uint8_t return_code
-	);
-#endif
+struct pico_mqtt_serializer
+{
+	uint8_t message_type;
+	uint8_t session_present;
+	uint8_t return_code;
+	uint16_t packet_id;
+	uint8_t quality_of_service;
+	uint8_t clean_session;
+	uint8_t retain;
+	uint8_t duplicate;
 
-int pico_mqtt_create_publish(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result, 
-	uint8_t quality_of_service,
-	uint8_t retain,
-	struct pico_mqtt_data* topic,
-	struct pico_mqtt_data* data
-	);
+	uint16_t keep_alive;
+	uint8_t client_id_flag;
+	struct pico_mqtt_data client_id;
+	uint8_t will_topic_flag;
+	struct pico_mqtt_data will_topic;
+	uint8_t will_message_flag;
+	struct pico_mqtt_data will_message;
+	uint8_t will_retain;
+	uint8_t username_flag;
+	struct pico_mqtt_data username;
+	uint8_t password_flag;
+	struct pico_mqtt_data password;
+	uint8_t	topic_ownership;
+	struct pico_mqtt_data topic;
+	uint8_t message_ownership;
+	struct pico_mqtt_data message;
+	
+	uint8_t serialized_length_data[4];
+	struct pico_mqtt_data serialized_length;
+	struct pico_mqtt_data stream;
+	uint8_t stream_ownership;
+	void* stream_index;
+	int * error;
+};
 
-int pico_mqtt_create_puback(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	);
+/**
+* Function prototypes
+**/
 
-int pico_mqtt_create_pubrec(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	);
+struct pico_mqtt_serializer* pico_mqtt_serializer_create( int* error );
+void pico_mqtt_serializer_clear( struct pico_mqtt_serializer* serializer );
+void pico_mqtt_serializer_total_reset( struct pico_mqtt_serializer* serializer );
+void pico_mqtt_serializer_destroy( struct pico_mqtt_serializer* serializer );
+struct pico_mqtt_data* pico_mqtt_serialize_length( struct pico_mqtt_serializer* serializer, uint32_t length );
+int pico_mqtt_deserialize_length( struct pico_mqtt_serializer* serializer, void* length_void, uint32_t* result);
 
-int pico_mqtt_create_pubrel(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	);
+void pico_mqtt_serializer_set_client_id( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* client_id);
+void pico_mqtt_serializer_set_username( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* username);
+void pico_mqtt_serializer_set_password( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* password);
+void pico_mqtt_serializer_set_will_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* will_topic);
+void pico_mqtt_serializer_set_will_message( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* will_message);
 
-int pico_mqtt_create_pubcomp(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	);
+int pico_mqtt_serialize_connect( struct pico_mqtt_serializer* serializer);
+int pico_mqtt_serialize_publish( struct pico_mqtt_serializer* serializer);
+int pico_mqtt_serialize_puback( struct pico_mqtt_serializer* serializer );
+int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data* message);
 
-int pico_mqtt_create_subscribe(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	struct pico_mqtt_data* topic,
-	uint8_t quality_of_service
-	);
-
-#ifdef DEBUG /* only needed for debug purposes*/
-int pico_mqtt_create_suback(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packed_id,
-	uint8_t return_code
-	);
-#endif
-
-int pico_mqtt_create_unsubscribe(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	struct pico_mqtt_data* topic
-	);
-
-#ifdef DEBUG  /* only needed for debug purposes*/
-int pico_mqtt_create_unsuback(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	);
-#endif
-
-int pico_mqtt_create_pingreq(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result
-	);
-
-#ifdef DEBUG  /* only needed for debug purposes*/
-int pico_mqtt_create_pingresp(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result
-	);
-#endif
-
-int pico_mqtt_create_disconnect(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result
-	);
-
-int pico_mqtt_deserialize(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message* message
-	);
 #endif
