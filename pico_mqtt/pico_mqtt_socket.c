@@ -23,25 +23,21 @@ static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo*
 **/
 
 /* create pico mqtt socket */
-struct pico_mqtt_socket* pico_mqtt_connection_create( struct pico_mqtt* mqtt )
+struct pico_mqtt_socket* pico_mqtt_connection_create( int* error )
 {
 	struct pico_mqtt_socket* socket = NULL;
-#ifdef DEBUG
-	if((socket == NULL) || (mqtt == NULL))
-	{
-		PERROR("Invallid arguments (%p, %p).\n", socket, mqtt);
-		EXIT_ERROR();
-	}
-#endif
+
+	PICO_MQTT_CHECK_NOT_NULL(error);
 
 	socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
 	if(socket == NULL)
 	{
+		PTODO("Set the appropriate error.\n");
 		PERROR("Unable to allocate memory for socket.\n");
 		return NULL;
 	}
 
-	*socket = /*(struct pico_mqtt_socket)*/ {.descriptor = 0, .error = &mqtt->error};
+	*socket = {.descriptor = 0, .error = error};
 
 	return socket;
 }
@@ -52,25 +48,14 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 	struct addrinfo* addres = NULL;
 	int flags = 0;
 
-#ifdef DEBUG
-	if(connection == NULL)
-	{
-		PERROR("Invallid arguments (%p).\n", connection);
-		EXIT_ERROR();
-	}
-#endif
+	PICO_MQTT_CHECK_NOT_NULL(connection);
 
 	if(resolve_uri(connection, &addres, URI, port) == ERROR)
-	{
-		PTRACE;
 		return ERROR;
-	}
 
 	if(socket_connect(connection, addres) == ERROR)
 	{
 		freeaddrinfo(addres);
-		free(connection);
-		PTRACE;
 		return ERROR;
 	}
 
@@ -97,22 +82,11 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		.revents = 0
 	};
 
-#ifdef DEBUG
-	int flags = 0;
-
-	if((connection == NULL) || (write_buffer == NULL) || (read_buffer == NULL))
-	{
-		PERROR("invallid arugments (%p, %p, %p).\n", connection, write_buffer, read_buffer);
-		EXIT_ERROR();
-	}
-
-	flags = fcntl(connection->descriptor, F_GETFL, 0);
-	if(( flags & O_NONBLOCK) == 0)
-	{
-		PERROR("Nonblocking flags should be set for the socket.\n");
-		EXIT_ERROR();
-	}
-#endif
+	PICO_MQTT_CHECK_NOT_NULL(connection);
+	PICO_MQTT_CHECK_NOT_NULL(write_buffer);
+	PICO_MQTT_CHECK_NOT_NULL(read_buffer);
+	PICO_MQTT_CHECK((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) == 0),
+		"Nonblocking flags should be set for the socket.\n");
 
 	if((write_buffer->length == 0) && (read_buffer->length == 0))
 	{
@@ -132,6 +106,10 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 
 	result = poll(&poll_descriptor, 1, time_left);
 
+	PICO_MQTT_CHECK((result > 1), "It should not be possible to have more then 1 active file descriptor.\n");
+	PICO_MQTT_CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0), 
+		"Poll returned without error, data should be ready to write or read but is not.\n");
+
 	if(result == -1)
 	{
 		PERROR("Poll returned an error (%d): %s\n", errno, strerror(errno));
@@ -143,20 +121,6 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		PINFO("A timeout occurred while sending and receiving.\n");
 		return SUCCES;
 	}
-
-#ifdef DEBUG
-	if(result > 1)
-	{
-		PERROR("It should not be possible to have more then 1 active file descriptor.\n");
-		EXIT_ERROR();
-	}
-
-	if((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0)
-	{
-		PERROR("Poll returned without error, data should be ready to write or read but is not.\n");
-		EXIT_ERROR();
-	}
-#endif
 
 	if(result == 1)
 	{
@@ -209,16 +173,12 @@ int get_current_time( void  )
 static int resolve_uri( struct pico_mqtt_socket* connection, struct addrinfo** addresses, const char* uri, const char* port){
 	const struct addrinfo hints =  lookup_configuration();
 	int result = 0;
-
 #ifdef DEBUG
 	char addres_string[100];
-
-    if((addresses == NULL) || (port == NULL))
-    {
-        PERROR("Invallid arguments (%p, %p).\n", addresses, port);
-        EXIT_ERROR();
-    }
 #endif
+
+	PICO_MQTT_CHECK_NOT_NULL(addresses);
+	PICO_MQTT_CHECK_NOT_NULL(port);
 
 	result = getaddrinfo( uri, port, &hints, addresses );
 	if(result != 0){
@@ -273,13 +233,8 @@ static struct addrinfo lookup_configuration( void ){
 static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres, int* time_left){
 	struct addrinfo *current_addres = NULL;
 
-#ifdef DEBUG
-	if((connection == NULL) || (addres == NULL))
-	{
-		PERROR("Invallid arguments (%p, %p).\n", connection, addres);
-		EXIT_ERROR();
-	}
-#endif
+	PICO_MQTT_CHECK_NOT_NULL(connection);
+	PICO_MQTT_CHECK_NOT_NULL(addres);
 
 	PTODO("Set the socket descriptor to non blocking.\n");
 

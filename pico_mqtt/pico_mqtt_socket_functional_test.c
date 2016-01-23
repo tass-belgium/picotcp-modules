@@ -16,7 +16,7 @@ int main()
 	struct pico_mqtt_data output_buffer= {.length = 12, .data = (void*) message};
 	
 	
-	pico_mqtt_connection_open(&socket, "127.0.0.1", &time_left);
+	pico_mqtt_connection_open(socket, "127.0.0.1", 1083);
 	pico_mqtt_connection_send(socket, &output_buffer, &time_left);
 	return SUCCES;
 }

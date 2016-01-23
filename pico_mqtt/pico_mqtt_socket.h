@@ -26,7 +26,7 @@
 struct pico_mqtt_socket;
 
 /* create pico mqtt socket */
-int pico_mqtt_connection_create(struct pico_mqtt_socket** socket);
+struct pico_mqtt_socket* pico_mqtt_connection_create( int* error );
 
 /* connect to the URI*/ 
 int pico_mqtt_connection_open(struct pico_mqtt_socket* socket, const char* URI, const char* port);
