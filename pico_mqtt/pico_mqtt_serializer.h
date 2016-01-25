@@ -22,13 +22,7 @@ void pico_mqtt_serializer_set_password( struct pico_mqtt_serializer* serializer,
 void pico_mqtt_serializer_set_will_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* will_topic);
 void pico_mqtt_serializer_set_will_message( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* will_message);
 
-int pico_mqtt_serialize_connect( struct pico_mqtt_serializer* serializer);
-int pico_mqtt_serialize_publish( struct pico_mqtt_serializer* serializer);
-int pico_mqtt_serialize_puback( struct pico_mqtt_serializer* serializer );
-int pico_mqtt_serialize_pubrec( struct pico_mqtt_serializer* serializer );
-int pico_mqtt_serialize_pubrel( struct pico_mqtt_serializer* serializer );
-int pico_mqtt_serialize_pubcomp( struct pico_mqtt_serializer* serializer );
-int pico_mqtt_serialize_subscribe( struct pico_mqtt_serializer* serializer );
+int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* messagae); /* NO UT */
 int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data message); /* NO UT */
 
 #endif
