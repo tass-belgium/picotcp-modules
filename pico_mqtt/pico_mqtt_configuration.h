@@ -4,6 +4,9 @@
 * Library Configuration
 **/
 
+/* set to production mode to strip all macro's and debug related code */
+/* #define PRODUCTION */
+
 #define ALLOW_WILDCARDS 0
 #define ALLOW_SYSTEM_TOPICS 0
 #define AUTO_RECONNECT 1

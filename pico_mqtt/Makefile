@@ -14,8 +14,8 @@ serializer.o: pico_mqtt_serializer.c pico_mqtt_serializer.h
 serializer_test: pico_mqtt_serializer_test.c pico_mqtt_serializer.c pico_mqtt_serializer.h
 	$(CC) $(CC_FLAGS) pico_mqtt_serializer_test.c -o serializer_test.out $(TEST_FLAGS)
 	./serializer_test.out
-	gcov pico_mqtt_serializer_test.c
 	complexity --score --thresh=3 pico_mqtt_serializer.c
+	gcov pico_mqtt_serializer_test.c
 
 #To remove generated files
 clean:
