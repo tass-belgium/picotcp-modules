@@ -1,17 +1,86 @@
-#include "pico_mqtt_serializer.h"
 #include "pico_mqtt_error.h"
+#include "pico_mqtt_serializer.h"
 
 /**
-* Lengths
+* Private data types
 **/
 
-#define FIXED_HEADER_SIZE 1
-#define LENGTH_SIZE 2
-#define PACKET_ID_SIZE 2
-#define FLAG_SIZE 1
-#define RETURN_CODE_SIZE 1
-#define QUALITY_OF_SERVICE_SIZE 1
-#define MESSAGE_ID_SIZE 2
+struct pico_mqtt_serializer
+{
+	uint8_t message_type;
+	uint8_t session_present;
+	uint8_t return_code;
+	uint16_t packet_id;
+	uint8_t quality_of_service;
+	uint8_t clean_session;
+	uint8_t retain;
+	uint8_t duplicate;
+	uint8_t will_retain;
+
+	uint16_t keep_alive;
+	uint8_t client_id_flag;
+	struct pico_mqtt_data client_id;
+	uint8_t will_topic_flag;
+	struct pico_mqtt_data will_topic;
+	uint8_t will_message_flag;
+	struct pico_mqtt_data will_message;
+	uint8_t username_flag;
+	struct pico_mqtt_data username;
+	uint8_t password_flag;
+	struct pico_mqtt_data password;
+	uint8_t	topic_ownership;
+	struct pico_mqtt_data topic;
+	uint8_t message_ownership;
+	struct pico_mqtt_data message;
+	
+	uint8_t serialized_length_data[4];
+	struct pico_mqtt_data serialized_length;
+	struct pico_mqtt_data stream;
+	uint8_t stream_ownership;
+	void* stream_index;
+	int * error;
+};
+
+/**
+* Private function prototypes
+**/
+
+static int create_serializer_stream( struct pico_mqtt_serializer* serializer, const uint32_t length ); /* UT */
+static void destroy_serializer_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+static uint32_t get_bytes_left_stream( struct pico_mqtt_serializer* serializer); /* UT */
+static void add_byte_stream( struct pico_mqtt_serializer* serializer, const uint8_t data_byte); /* UT */
+static uint8_t get_byte_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+static void add_2_byte_stream( struct pico_mqtt_serializer* serializer, const uint16_t data); /*UT */
+static uint16_t get_2_byte_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+static void add_data_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data); /* UT */
+static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+static void add_data_and_length_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data); /* UT */
+static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+static void add_array_stream( struct pico_mqtt_serializer* serializer, void* array, uint32_t length); /* UT */
+static void skip_length_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+/*static int get_length_stream( struct pico_mqtt_serializer* serializer, uint32_t* result);*/
+static int serialize_acknowledge( struct pico_mqtt_serializer* serializer, const uint8_t packet_type); /* UT */
+static int check_serialize_connect( struct pico_mqtt_serializer* serializer); /* UT */
+static uint32_t serialize_connect_get_length( struct pico_mqtt_serializer* serializer); /* UT */
+static uint8_t serialize_connect_get_flags( struct pico_mqtt_serializer* serializer); /* UT */
+static int deserialize_connack(struct pico_mqtt_serializer* serializer ); /* UT */
+static int deserialize_publish(struct pico_mqtt_serializer* serializer ); /* UT */
+static int deserialize_acknowledge(struct pico_mqtt_serializer* serializer ); /* UT */
+static int deserialize_suback(struct pico_mqtt_serializer* serializer ); /* UT */
+static int serialize_subscribtion( struct pico_mqtt_serializer* serializer, uint8_t subscribe); /* UT */
+static int serialize_connect( struct pico_mqtt_serializer* serializer);
+static int serialize_publish( struct pico_mqtt_serializer* serializer);
+static int serialize_puback( struct pico_mqtt_serializer* serializer );
+static int serialize_pubrec( struct pico_mqtt_serializer* serializer );
+static int serialize_pubrel( struct pico_mqtt_serializer* serializer );
+static int serialize_pubcomp( struct pico_mqtt_serializer* serializer );
+static int serialize_subscribe( struct pico_mqtt_serializer* serializer );
+static int serialize_unsubscribe( struct pico_mqtt_serializer* serializer );
+static int serialize_pingreq( struct pico_mqtt_serializer* serializer );
+static int serialize_pingresp( struct pico_mqtt_serializer* serializer );
+static int serialize_disconnect( struct pico_mqtt_serializer* serializer );
+static int deserialize_pingreq( struct pico_mqtt_serializer* serializer );
+static int deserialize_pingresp( struct pico_mqtt_serializer* serializer );
 
 /**
 * Fixed header flags
@@ -40,870 +109,1261 @@
 
 #define RETAIN (1)
 
-/**
-* Local function prototypes
-**/
-static int create_header(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint8_t fixed_header
-	);
-
-static int create_acknowledge(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint8_t fixed_header,
-	uint16_t packet_id
-	);
-
-static int create_message(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	size_t length,
-	void** stream,
-	uint8_t fixed_header,
-	uint16_t message_id);
-
-static inline void set_publish_flags(
-	uint8_t* fixed_header,
-	uint8_t retain,
-	uint8_t quality_of_service);
-
-static inline void set_connect_flags(
-	uint8_t* header,
-	uint8_t username,
-	uint8_t password,
-	uint8_t retain,
-	uint8_t quality_of_service,
-	uint8_t will,
-	uint8_t clean_session);
-
-static inline uint16_t get_next_message_id(struct pico_mqtt* mqtt);
-static uint16_t get_data_length(struct pico_mqtt_data* data);
-static uint32_t get_buffer_length(struct pico_mqtt_data* data);
-static int convert_length(struct pico_mqtt_data** converted, uint32_t length);
-static inline void destroy_length(struct pico_mqtt_data* converted_length);
-static inline void add_header_stream(void** stream, uint8_t fixed_header, struct pico_mqtt_data* length);
-static inline void add_message_id_stream(void** stream, uint16_t message_id);
-static inline void add_quality_of_service_stream(void** stream, uint8_t quality_of_service);
-static inline void add_payload_stream(void** stream, struct pico_mqtt_data* data);
-static inline void add_data_and_length_stream(void** stream, struct pico_mqtt_data* data);
-static void add_data_stream(void** stream, void* data, uint32_t length);
-
-/**
-* Deserialization Funcitons
-**/
-
-static int deserialize_connect( struct pico_mqtt* mqtt, struct pico_mqtt_message* message);
-
-/**
-* Message types
-**/
-
-__attribute__((packet)) struct connect_header{
-	uint8_t length_MSB;
-	uint8_t length_LSB;
-	char protocol[4];
-	uint8_t version;
-	uint8_t flags;
-	uint16_t keep_alive;
-};
-
-__attribute__((packed)) struct acknowledge{
-	uint8_t fixed_header;
-	uint8_t remaining_length;
-	uint16_t packet_id;
-};
-
-#ifdef DEBUG
-__attribute__((packed)) struct connack{
-	uint8_t fixed_header;
-	uint8_t length;
-	uint8_t flag;
-	uint8_t return_code;
-};
-#endif
-
-#ifdef DEBUG
-__attribute__((packed)) struct suback{
-	uint8_t fixed_header;
-	uint8_t length;
-	uint16_t packet_id;
-	uint8_t return_code;
-};
-#endif
-
-__attribute__((packed)) struct header{
-	uint8_t fixed_header;
-	uint8_t length;
-};
-
-/**
-* Public Function Implemantation
-**/
-
-int pico_mqtt_serializer_create_connect( 
-	struct pico_mqtt* mqtt, 
-	struct pico_mqtt_message** result, 
-	uint16_t keep_alive_time,
-	uint8_t retain,
-	uint8_t quality_of_service,
-	uint8_t clean_session,
-	struct pico_mqtt_data* client_id,
-	struct pico_mqtt_data* topic,
-	struct pico_mqtt_data* message,
-	struct pico_mqtt_data* username,
-	struct pico_mqtt_data* password
-	)
+struct pico_mqtt_serializer* pico_mqtt_serializer_create( int* error )
 {
-	uint32_t length = 0;
-	uint32_t total_length = 0;
-	void* stream = NULL;
-	uint8_t fixed_header = CONNECT;
-	struct pico_mqtt_data* converted_length = NULL;
-	struct connect_header header = {
-		.length_MSB = 0,
-		.length_LSB = 4,
-		.protocol = {'M','Q','T','T'},
-		.version = 4,
-		.flags = 0,
-		.keep_alive = keep_alive_time
+	struct pico_mqtt_serializer* serializer = NULL;
+
+	CHECK_NOT_NULL( error );
+	
+	serializer = (struct pico_mqtt_serializer*) MALLOC(sizeof(struct pico_mqtt_serializer));
+	
+	if(serializer == NULL){
+		PTODO("set the right error.\n");
+		PERROR("Unable to allocate memory for the serializer.\n");
+		return NULL;
+	}
+
+	pico_mqtt_serializer_total_reset( serializer );
+
+	serializer->error = error;
+	serializer->stream.data = NULL; /* to avoid freeing random data */
+	return serializer;
+}
+
+void pico_mqtt_serializer_clear( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL( serializer );
+
+	if(serializer->topic_ownership != 0)
+		FREE(serializer->topic.data);
+
+	if(serializer->message_ownership != 0)
+		FREE(serializer->message.data);
+
+	serializer->packet_id = 0;
+	/* minimum length 1 byte, even if length == 0 */
+	serializer->serialized_length = (struct pico_mqtt_data){.data = serializer->serialized_length_data, .length = 1};
+	serializer->serialized_length_data[0] = 0;
+	serializer->serialized_length_data[1] = 0;
+	serializer->serialized_length_data[2] = 0;
+	serializer->serialized_length_data[3] = 0;
+	serializer->message_type = 0;
+	serializer->session_present = 0;
+	serializer->return_code = 0;
+	serializer->retain = 0;
+	serializer->duplicate = 0;
+	serializer->topic_ownership = 0;
+	serializer->message_ownership = 0;
+
+	destroy_serializer_stream( serializer );
+	return;
+}
+
+void pico_mqtt_serializer_total_reset( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL( serializer );
+
+	*serializer = (struct pico_mqtt_serializer){
+	.keep_alive = 0,
+	.client_id = PICO_MQTT_DATA_ZERO,
+	.client_id_flag = 0,
+	.will_topic = PICO_MQTT_DATA_ZERO,
+	.will_topic_flag = 0,
+	.will_message = PICO_MQTT_DATA_ZERO,
+	.will_message_flag = 0,
+	.username = PICO_MQTT_DATA_ZERO,
+	.username_flag = 0,
+	.password = PICO_MQTT_DATA_ZERO,
+	.password_flag = 0,
+	.will_retain = 0,
+	.packet_id = 0,
+	.error = serializer->error /* pointer should not be cleared */
 	};
 
-#ifdef DEBUG /* this check should only be performed during debug */
-	if(
-		(mqtt == NULL) || 
-		(result == NULL) || 
+	pico_mqtt_serializer_clear(serializer);
+	return;
+}
+
+void pico_mqtt_serializer_destroy( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL( serializer );
+
+	destroy_serializer_stream( serializer );
+	FREE(serializer);
+	return;
+}
+
+struct pico_mqtt_data* pico_mqtt_serialize_length( struct pico_mqtt_serializer* serializer, uint32_t length )
+{
+ 	uint32_t mask = 0x0000007F;
+	uint32_t index = 0;
+	uint8_t* converted_length = serializer->serialized_length_data;
+	struct pico_mqtt_data* result = &serializer->serialized_length;
+
+	CHECK_NOT_NULL( serializer );
+	CHECK( length <= 0x0FFFFFFF, "Requested length is to big for mqtt protocol.\n");
+
+	/* minimum length 1 byte, even if length == 0 */
+	serializer->serialized_length = (struct pico_mqtt_data){.data = serializer->serialized_length_data, .length = 1};
+	serializer->serialized_length_data[0] = 0;
+	serializer->serialized_length_data[1] = 0;
+	serializer->serialized_length_data[2] = 0;
+	serializer->serialized_length_data[3] = 0;
+
+	for(index = 0; index < 4; ++index)
+	{
+		converted_length[index] = (uint8_t)((length & mask) >> 7 * index);
+		if(converted_length[index] != 0)
+			result->length = index + 1;
+
+		mask = mask << 7;
+	}
+
+	for(index = 0; index < result->length; ++index)
+	{
+		uint8_t buffer = 0x00;
+		if(index != result->length - 1)
+		{
+			buffer = converted_length[index];
+			/* set continuation bit */
+			buffer |= 0x80;
+		} else {
+			buffer = converted_length[index];
+		}
+		 
+		*(((uint8_t*) result->data) + index) = buffer;
+	}
+
+	return result;
+}
+
+int pico_mqtt_deserialize_length( struct pico_mqtt_serializer* serializer, void* length_void, uint32_t* result)
+{
+	uint8_t* length = (uint8_t*) length_void;
+	uint8_t index = 0;
+
+	CHECK_NOT_NULL( length );
+	CHECK_NOT_NULL( result );
+
+	*result = 0;
+
+	for(index = 0; index < 4; ++index)
+	{
+		uint32_t buffer = *(length + index);
+		*result += (buffer & 0x7F) << (7 * index);
+		if((buffer & 0x80) != 0)
+		{
+			if(index == 3)
+			{
+				PTODO("Set appropriate error.\n");
+				*(serializer->error) = 1;
+				PERROR("The length is to long for the MQTT protocol.\n");
+				return ERROR;
+			}
+		} else {
+			index = 4;
+		}
+	}
+
+	return SUCCES;
+}
+
+void pico_mqtt_serializer_set_client_id( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data client_id)
+{
+	CHECK_NOT_NULL(serializer);
+
 #if ALLOW_EMPTY_CLIENT_ID == 0
-		(client_id == NULL) || 
-#endif /* ALLOW_EMPTY_CLIENT_ID == 0 */
-		(retain > 1) || 
-		(quality_of_service > 2) || 
-		(clean_session > 1) ||
-		((topic == NULL) && (message != NULL)) ||
-		((topic != NULL) && (message == NULL)))
+	CHECK((client_id.length != 0), "The client_id cannot be 0-length.\n");
+	serializer->client_id = client_id;
+#else
+	if(client_id == NULL)
 	{
-		PERROR("Invallid input parameters.\n");
-		return ERROR;
+		serializer->client_id = PICO_MQTT_DATA_ZERO;
+	} else {
+		if((client_id.length == 0) || (client_id.data == NULL))
+		{
+			CHECK_NULL(client_id.data);
+			CHECK((client_id.length != 0), "The client_id has an invallid structure.\n");
+			serializer->client_id = PICO_MQTT_DATA_ZERO;
+		} else {
+			serializer->client_id = client_id;
+		}
 	}
 #endif
 
-	if((mqtt->password != NULL) && (mqtt->username == NULL))
-	{
-		PERROR("Not allowed to set a password without setting the username.\n");
-		return ERROR;
-	}
-
-	set_connect_flags(
-		&(header.flags), 
-		(username != NULL), 
-		(password != NULL), 
-		(retain != 0), 
-		quality_of_service, 
-		(topic != NULL),
-		(clean_session != 0));
-
-	length += sizeof(struct connect_header);
-	length += get_buffer_length(client_id);
-	length += get_buffer_length(topic);
-	length += get_buffer_length(message);
-	length += get_buffer_length(username);
-	length += get_buffer_length(password);
-
-	if(convert_length(&converted_length, length))
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
-	if(create_message(mqtt, result, total_length, &stream, fixed_header, 0) != SUCCES)
-	{
-		destroy_length(converted_length);
-		PTRACE;
-		return ERROR;
-	}
-
-	PINFO("Succesfully created the connect package.\n");
-
-	add_header_stream(&stream, fixed_header, converted_length);
-	add_data_stream(&stream, (void*) &header, sizeof(struct connect_header));
-	add_data_and_length_stream(&stream, client_id);
-	add_data_and_length_stream(&stream, topic);
-	add_data_and_length_stream(&stream, message);
-	add_data_and_length_stream(&stream, username);
-	add_data_and_length_stream(&stream, password);
-	
-	destroy_length(converted_length);
-
-	return SUCCES;
+	serializer->client_id_flag = 1;
 }
 
-#ifdef DEBUG /* only needed for debug purposes*/
-int pico_mqtt_create_connack(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint8_t session_present,
-	uint8_t return_code
-	)
+void pico_mqtt_serializer_set_username( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data username)
 {
-	void* stream = NULL;
-	struct connack message = 
-	{
-		.fixed_header = CONNACK,
-		.length = FLAG_SIZE + RETURN_CODE_SIZE,
-		.flag = session_present,
-		.return_code = return_code
-	};
+	CHECK_NOT_NULL(serializer);
 
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL) || (session_present > 1) || (return_code > 5))
+#if ALLOW_EMPTY_USERNAME == 0
+	CHECK((username.length != 0), "The username cannot be 0-length.\n");
+	serializer->username = username;
+#else
+	if(username == NULL)
 	{
-		PTRACE;
-		return ERROR;
+		serializer->username = PICO_MQTT_DATA_ZERO;
+	} else {
+		if((username.length == 0) || (username.data == NULL))
+		{
+			CHECK_NULL(username.data);
+			CHECK((username.length != 0), "The username has an invallid structure.\n");
+			serializer->username = PICO_MQTT_DATA_ZERO;
+		} else {
+			serializer->username = username;
+		}
 	}
 #endif
 
-	if(create_message(mqtt, result, sizeof(struct connack), &stream, message.fixed_header, 0) != SUCCES)
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	add_data_stream(&stream, (void*) &message, sizeof(struct connack));
-	return SUCCES;	
-}
-#endif
-
-int pico_mqtt_create_publish(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result, 
-	uint8_t quality_of_service,
-	uint8_t retain,
-	struct pico_mqtt_data* topic,
-	struct pico_mqtt_data* data
-	)
-{
-	uint8_t fixed_header = PUBLISH;
-	uint32_t length = 0;
-	uint32_t total_length = 0;
-	uint16_t message_id = 0;
-	struct pico_mqtt_data* converted_length = NULL;
-	void* stream = NULL;
-
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL) || (topic == NULL) || (quality_of_service > 2) || (retain > 1))
-	{
-		PTRACE;
-		return ERROR;
-	}
-#endif
-	set_publish_flags(&fixed_header, retain, quality_of_service);
-
-	length += get_buffer_length(topic);
-	if(quality_of_service > 0)
-	{
-		length += MESSAGE_ID_SIZE;
-		message_id = get_next_message_id(mqtt);
-	}
-	length += get_data_length(data);
-
-	if(convert_length(&converted_length, length))
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
-	if(create_message(mqtt, result, total_length, &stream, fixed_header, message_id) != SUCCES)
-	{
-		destroy_length(converted_length);
-		return ERROR;
-	}
-
-	/* add data to stream */
-	add_header_stream(&stream, fixed_header, converted_length);
-	add_data_and_length_stream(&stream, topic);
-	if(quality_of_service > 0)
-	{
-		add_message_id_stream(&stream, (*result)->message_id);
-	}
-	add_payload_stream(&stream, data);
-
-	/* destroy the length object */
-	destroy_length(converted_length);
-
-	return SUCCES;	
+	serializer->username_flag = 1;
 }
 
-int pico_mqtt_create_puback(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	)
+void pico_mqtt_serializer_set_password( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data password)
 {
-	return create_acknowledge(mqtt, result, PUBACK, packet_id);
-}
+	CHECK_NOT_NULL(serializer);
 
-int pico_mqtt_create_pubrec(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	)
-{
-	return create_acknowledge(mqtt, result, PUBREC, packet_id);
-}
-
-int pico_mqtt_create_pubrel(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	)
-{
-	return create_acknowledge(mqtt, result, PUBREL | QUALITY_OF_SERVICE_1, packet_id);
-}
-
-int pico_mqtt_create_pubcomp(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	)
-{
-	return create_acknowledge(mqtt, result, PUBCOMP, packet_id);
-}
-
-int pico_mqtt_create_subscribe(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	struct pico_mqtt_data* topic,
-	uint8_t quality_of_service
-	)
-{
-	uint8_t fixed_header = SUBSCRIBE | QUALITY_OF_SERVICE_1;
-	void* stream = NULL;
-	struct pico_mqtt_data* converted_length = NULL;
-	uint32_t length = 0;
-	uint32_t total_length = 0;
-	uint16_t message_id = 0;
-
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL) || (topic == NULL) || (quality_of_service > 2))
+#if ALLOW_EMPTY_PASSWORD == 0
+	CHECK((password.length != 0), "The password cannot be 0-length.\n");
+	serializer->password = password;
+#else
+	if(password == NULL)
 	{
-		PTRACE;
-		return ERROR;
-	}
-#endif
-	message_id = get_next_message_id(mqtt);
-
-	length += MESSAGE_ID_SIZE;
-	length += get_buffer_length(topic);
-	length += QUALITY_OF_SERVICE_SIZE;
-
-
-	if(convert_length(&converted_length, length))
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
-	if(create_message(mqtt, result, total_length, &stream, fixed_header, message_id) != SUCCES)
-	{
-		destroy_length(converted_length);
-		return ERROR;
-	}
-
-	add_header_stream(&stream, fixed_header, converted_length);
-	add_message_id_stream(&stream, message_id);
-	add_data_and_length_stream(&stream, topic);
-	add_quality_of_service_stream(&stream, quality_of_service);
-
-	/* destroy the length object */
-	destroy_length(converted_length);
-
-	return SUCCES;	
-}
-
-#ifdef DEBUG /* only needed for debug purposes*/
-int pico_mqtt_create_suback(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id,
-	uint8_t return_code
-	)
-{
-	void* stream = NULL;
-	struct suback message = 
-	{
-		.fixed_header = SUBACK,
-		.length = PACKET_ID_SIZE + RETURN_CODE_SIZE,
-		.packet_id = packet_id,
-		.return_code = return_code
-	};
-
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL) || ((return_code > 2) && (return_code != 0x80)))
-	{
-		PTRACE;
-		return ERROR;
+		serializer->password = PICO_MQTT_DATA_ZERO;
+	} else {
+		if((password.length == 0) || (password.data == NULL))
+		{
+			CHECK_NULL(password.data);
+			CHECK((password.length != 0), "The password has an invallid structure.\n");
+			serializer->password = PICO_MQTT_DATA_ZERO;
+		} else {
+			serializer->password = password;
+		}
 	}
 #endif
 
-	if(create_message(mqtt, result, sizeof(struct suback), &stream, message.fixed_header, packet_id) != SUCCES)
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	add_data_stream(&stream, (void*) &message, sizeof(struct suback));
-	
-	return SUCCES;	
+	serializer->password_flag = 1;
 }
-#endif
 
-int pico_mqtt_create_unsubscribe(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	struct pico_mqtt_data* topic
-	)
+void pico_mqtt_serializer_set_will_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data will_topic)
 {
-	void* stream = NULL;
-	uint8_t fixed_header = UNSUBSCRIBE | QUALITY_OF_SERVICE_1;
-	struct pico_mqtt_data* converted_length = NULL;
-	uint32_t length = PACKET_ID_SIZE;
-	uint32_t total_length = 0;
-	uint16_t message_id = 0;
+	CHECK_NOT_NULL(serializer);
 
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL) || (topic == NULL))
+#if ALLOW_EMPTY_TOPIC == 0
+	CHECK((will_topic.length != 0), "The will_topic cannot be 0-length.\n");
+	serializer->will_topic = will_topic;
+#else
+	if(will_topic == NULL)
 	{
-		PTRACE;
-		return ERROR;
+		serializer->will_topic = PICO_MQTT_DATA_ZERO;
+	} else {
+		if((will_topic.length == 0) || (will_topic.data == NULL))
+		{
+			CHECK_NULL(will_topic.data);
+			CHECK((will_topic.length != 0), "The will_topic has an invallid structure.\n");
+			serializer->will_topic = PICO_MQTT_DATA_ZERO;
+		} else {
+			serializer->will_topic = will_topic;
+		}
 	}
 #endif
-	length += get_buffer_length(topic);
-	message_id = get_next_message_id(mqtt);
 
-	if(convert_length(&converted_length, length))
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	total_length = FIXED_HEADER_SIZE + converted_length->length + length;
-	if(create_message(mqtt, result, total_length, &stream, fixed_header, message_id) != SUCCES)
-	{
-		destroy_length(converted_length);
-		return ERROR;
-	}
-
-	add_header_stream(&stream, fixed_header, converted_length);
-	add_message_id_stream(&stream, message_id);
-	add_data_and_length_stream(&stream, topic);
-	
-	/* destroy the length object */
-	destroy_length(converted_length);
-
-	return SUCCES;	
+	serializer->will_topic_flag = 1;
 }
 
-#ifdef DEBUG  /* only needed for debug purposes*/
-int pico_mqtt_create_unsuback(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint16_t packet_id
-	)
+void pico_mqtt_serializer_set_will_message( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data will_message)
 {
-	return create_acknowledge(mqtt, result, UNSUBACK, packet_id);
-}
+	CHECK_NOT_NULL(serializer);
+
+#if ALLOW_EMPTY_MESSAGE == 0
+	CHECK((will_message.length != 0), "The will_message cannot be 0-length.\n");
+	serializer->will_message = will_message;
+#else
+	if(will_message == NULL)
+	{
+		serializer->will_message = PICO_MQTT_DATA_ZERO;
+	} else {
+		if((will_message.length == 0) || (will_message.data == NULL))
+		{
+			CHECK_NULL(will_message.data);
+			CHECK((will_message.length != 0), "The will_message has an invallid structure.\n");
+			serializer->will_message = PICO_MQTT_DATA_ZERO;
+		} else {
+			serializer->will_message = will_message;
+		}
+	}
 #endif
 
-int pico_mqtt_create_pingreq(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result
-	)
-{
-	return create_header(mqtt, result, PINGREQ);
-}
-
-#ifdef DEBUG  /* only needed for debug purposes*/
-int pico_mqtt_create_pingresp(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result
-	)
-{
-	return create_header(mqtt, result, PINGRESP);
-}
-#endif
-
-int pico_mqtt_create_disconnect(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result
-	)
-{
-	return create_header(mqtt, result, DISCONNECT);
+	serializer->will_message_flag = 1;
 }
 
 /**
-* Deserializer Implementation
+* Packet serialization
 **/
 
-int pico_mqtt_deserialize(
-        struct pico_mqtt* mqtt,
-        struct pico_mqtt_message* message
-        )
+int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message)
 {
-	int result = 0;
-	uint8_t message_type;
-	int (*deserializer_function)(struct pico_mqtt* mqtt, struct pico_mqtt_message* message);
-	
-	/**
-	* Lookup table for custom deserialization funcitons
-	*
-	* NULL means not yet defined
-	**/
-
-#ifdef DEBUG
-	static int (* const deserializer_functions[16])(struct pico_mqtt* mqtt, struct pico_mqtt_message* message) =
+	int(* const serializers[16])(struct pico_mqtt_serializer* serializer ) = 
 	{
-		NULL, /* invallid packed ID */
-		NULL, /* CONNECT - not supported */
-		deserialize_connect, /* CONNACK */
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL
+		/* 00 - RESERVED    */ NULL,
+		/* 01 - CONNECT     */ serialize_connect,
+		/* 02 - CONNACK     */ NULL,
+		/* 03 - PUBLISH     */ serialize_publish,
+		/* 04 - PUBACK      */ serialize_puback,
+		/* 05 - PUBREC      */ serialize_pubrec,
+		/* 06 - PUBREL      */ serialize_pubrel,
+		/* 07 - PUBCOMP     */ serialize_pubcomp,
+		/* 08 - SUBSCRIBE   */ serialize_subscribe,
+		/* 09 - SUBACK      */ NULL,
+		/* 10 - UNSUBSCRIBE */ serialize_unsubscribe,
+		/* 11 - UNSUBACK    */ NULL,
+		/* 12 - PINGREQ     */ serialize_pingreq,
+		/* 13 - PINGRESP    */ serialize_pingresp,
+		/* 14 - DISCONNECT  */ serialize_disconnect,
+		/* 15 - RESERVED    */ NULL,
 	};
-#else
-	static int (* const deserializer_functions[16])(struct pico_mqtt* mqtt, struct pico_mqtt_message* message) =
-	{
-		NULL, /* invallid packet ID */
-		NULL, /* CONNECT - not supported */
-		deserialize_connect, /* CONNACK */
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL,
-		NULL
-	};
-#endif /* defined DEBUG */
 
-#ifdef DEBUG
-	if((mqtt == NULL) || (message == NULL))
-	{
-		PERROR("Invallid input.\n");
-		return ERROR;
-	}
-#endif
-	
-	message_type = (message->header) >> 4;
-	deserializer_function = deserializer_functions[message_type];
+	CHECK_NOT_NULL(serializer);
+	CHECK_NOT_NULL(message);
+	CHECK( serializer->message_type < 16, "Invallid message type, outside array bounds.\n");
 
-	if(deserializer_function == NULL)
-	{
-		PERROR("Deserializing a message of type %d is not supported.\n", message_type);
-		return ERROR;
-	}
-
-	result = deserializer_function(mqtt, message);
-	if(result == ERROR)
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	return SUCCES;
-}
-
-static int deserialize_connect( struct pico_mqtt* mqtt, struct pico_mqtt_message* message)
-{
-	PTODO("Write implementation.\n");
-
-	mqtt++;
+	PTODO("Use the message as a return.\n");
 	message++;
 
-	return SUCCES;
+	if(serializers[serializer->message_type] == NULL)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The message cannot be serialized.\n");
+		return ERROR;
+	}
+
+	/*printf("the error: %d, message type: %d\n", serializers[serializer->message_type](serializer), serializer->message_type);*/
+	return serializers[serializer->message_type](serializer);
 }
+
+int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data message)
+{
+	uint8_t message_type = 0;
+
+	int(* const deserializers[16])(struct pico_mqtt_serializer* serializer ) = 
+	{
+		/* 00 - RESERVED    */ NULL,
+		/* 01 - CONNECT     */ NULL,
+		/* 02 - CONNACK     */ deserialize_connack,
+		/* 03 - PUBLISH     */ deserialize_publish,
+		/* 04 - PUBACK      */ deserialize_acknowledge,
+		/* 05 - PUBREC      */ deserialize_acknowledge,
+		/* 06 - PUBREL      */ deserialize_acknowledge,
+		/* 07 - PUBCOMP     */ deserialize_acknowledge,
+		/* 08 - SUBSCRIBE   */ NULL,
+		/* 09 - SUBACK      */ deserialize_suback,
+		/* 10 - UNSUBSCRIBE */ NULL,
+		/* 11 - UNSUBACK    */ deserialize_acknowledge,
+		/* 12 - PINGREQ     */ deserialize_pingreq,
+		/* 13 - PINGRESP    */ deserialize_pingresp,
+		/* 14 - DISCONNECT  */ NULL,
+		/* 15 - RESERVED    */ NULL,
+	};
+
+	CHECK_NOT_NULL(serializer);
+	CHECK(message.data != NULL, "Attempting to deserialize message without data.\n");
+	CHECK(message.length != 0, "Attempting to deserialize 0-length message.\n");
+
+	pico_mqtt_serializer_clear( serializer );
+	serializer->stream = message;
+	serializer->stream_index = serializer->stream.data;
+	PTODO("Check if you want ownership stream.\n");
+	/*serializer->stream_ownership = 1;*/
+
+	message_type = (*(uint8_t*)(message.data)) >> 4;
+
+	if(deserializers[message_type] == NULL)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The message cannot be deserialized.\n");
+		return ERROR;
+	}
+
+	return deserializers[message_type](serializer);
+}
+
 
 /**
-* Private Function Implementation
+* Private functions implementation
 **/
-
-static int create_header(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint8_t fixed_header
-	)
+static int create_serializer_stream( struct pico_mqtt_serializer* serializer, const uint32_t length )
 {
-	void* stream = NULL;
-	struct header message = 
-	{
-		.fixed_header = fixed_header,
-		.length = 0
-	};
+	CHECK_NOT_NULL(serializer);
+	CHECK_NULL(serializer->stream.data);
+	CHECK((serializer->stream.length == 0), 
+		"The stream is not freed correct yet, by calling create stream a memory leak can be created.\n");
 
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL))
-	{
-		PTRACE;
-		return ERROR;
-	}
-#endif
+	serializer->stream.data = MALLOC(length);
+	serializer->stream_ownership = 1;
+	serializer->stream.length = length;
+	serializer->stream_index = serializer->stream.data;
 
-	if(create_message(mqtt, result, sizeof(struct header), &stream, fixed_header, 0) != SUCCES)
-	{
-		PTRACE;
+	if(serializer->stream.data == NULL){
+		PTODO("set the right error.\n");
+		PERROR("Unable to allocate memory.\n");
+		serializer->stream.length = 0;
 		return ERROR;
 	}
 
-	add_data_stream(&stream, (void*) &message, sizeof(struct header));
-	return SUCCES;	
-}
-
-static int create_acknowledge(
-	struct pico_mqtt* mqtt,
-	struct pico_mqtt_message** result,
-	uint8_t fixed_header,
-	uint16_t packet_id
-	)
-{
-	void* stream = NULL;
-	struct acknowledge message = 
-	{
-		.fixed_header = fixed_header,
-		.remaining_length = PACKET_ID_SIZE,
-		.packet_id = packet_id
-	};
-
-#ifdef DEBUG /* this check should only be performed during debug */
-	if((mqtt == NULL) || (result == NULL))
-	{
-		PTRACE;
-		return ERROR;
-	}
-#endif
-
-	if(create_message(mqtt, result, sizeof(struct acknowledge), &stream, fixed_header, 0) != SUCCES)
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	add_data_stream(&stream, (void*) &message, sizeof(struct acknowledge));
-	return SUCCES;	
-}
-
-static int create_message(struct pico_mqtt* mqtt, struct pico_mqtt_message** result, size_t length, void** stream, uint8_t fixed_header, uint16_t message_id)
-{
-#ifdef DEBUG
-	if( (mqtt == NULL) || (result == NULL) || (stream == NULL))
-	{
-		PERROR("invallid input parameters.\n");
-		return ERROR;
-	}
-#endif
-
-	PTODO("Use a global method to create the message.\n");
-	*result = (struct pico_mqtt_message*) malloc(sizeof(struct pico_mqtt_message));
-	**result = (struct pico_mqtt_message) {
-		.header = fixed_header,
-		.status = 0,
-		.message_id = message_id,
-		.topic = {.length = 0, .data = NULL},
-		.data = {.length = 0, .data = NULL}};
-
-	/*
-	if(mqtt->malloc(mqtt, &((*result)->data.data), length) != SUCCES)
-	{
-		PTRACE;
-		return ERROR;
-	}
-	*/
-	(*result)->data.data = malloc(length);
-
-	(*result)->data.length = length;
-	*stream = (*result)->data.data;
 	return SUCCES;
 }
 
-static inline void set_publish_flags(uint8_t* fixed_header, uint8_t retain, uint8_t quality_of_service)
+static void destroy_serializer_stream( struct pico_mqtt_serializer* serializer )
 {
-	if(retain != 0)
+	CHECK_NOT_NULL(serializer);
+
+	if(serializer->stream_ownership != 0)
 	{
-		*fixed_header |= RETAIN;
+		FREE(serializer->stream.data);
+		serializer->stream_ownership = 0;
 	}
 
-	if(quality_of_service == 1)
+	serializer->stream = PICO_MQTT_DATA_ZERO;
+	serializer->stream_index = NULL;
+	return;
+}
+
+static uint32_t get_bytes_left_stream( struct pico_mqtt_serializer* serializer)
+{
+	long int length = 0;
+
+	CHECK_NOT_NULL( serializer );
+	CHECK_NOT_NULL( serializer->stream.data );
+	CHECK_NOT_NULL( serializer->stream_index );
+	CHECK(serializer->stream_index >= serializer->stream.data,
+		"Start position cannot be before start of data.\n");
+	CHECK((serializer->stream.length != 0),
+		"Attempting to get the length left of a stream with an error.\n");
+
+	length = serializer->stream.length - (serializer->stream_index - serializer->stream.data);
+	if(length <= 0)
 	{
-		*fixed_header |= QUALITY_OF_SERVICE_1;
-	}
-
-	if(quality_of_service == 2)
-	{
-		*fixed_header |= QUALITY_OF_SERVICE_2;
-	}
-}
-
-static inline void set_connect_flags(
-	uint8_t* header,
-	uint8_t username,
-	uint8_t password,
-	uint8_t retain,
-	uint8_t quality_of_service,
-	uint8_t will,
-	uint8_t clean_session)
-{
-	*header = 0;
-	*header |= username << 7;
-	*header |= password << 6; 
-	*header |= retain << 5;
-	*header |= quality_of_service << 3;
-	*header |= will << 2;
-	*header |= clean_session << 1;
-}
-
-static inline uint16_t get_next_message_id(struct pico_mqtt* mqtt)
-{
-	return (mqtt->next_message_id)++;
-}
-
-/* only get the length of the data itself */
-static uint16_t get_data_length(struct pico_mqtt_data* data)
-{
-	if(data == NULL)
 		return 0;
-	
-	return data->length;
+	} else
+	{
+		return (uint32_t) length;
+	}
 }
 
-/* get the data length with the sizeof the length */
-static uint32_t get_buffer_length(struct pico_mqtt_data* data)
+static void add_byte_stream( struct pico_mqtt_serializer* serializer, const uint8_t data_byte)
 {
-	if(data == NULL)
-		return 0;
+	CHECK_NOT_NULL( serializer );
+	CHECK_NOT_NULL( serializer->stream.data );
+	CHECK_NOT_NULL( serializer->stream_index );
+	CHECK((serializer->stream.length != 0),
+		"Attempting to get the length left of a stream with an error.\n");
+	CHECK((get_bytes_left_stream( serializer ) > 0),
+		"Attempting to write outside the stream buffer length.\n");
 
-	return data->length + LENGTH_SIZE;
+	*((uint8_t*) serializer->stream_index) = data_byte;
+	(serializer->stream_index)++;
+	return;
 }
 
-static int convert_length(struct pico_mqtt_data** converted, uint32_t length)
+static uint8_t get_byte_stream( struct pico_mqtt_serializer* serializer )
 {
-	PTODO("cleanup this function.\n");
-	PTODO("check where this memory is reclaimed");
+	uint8_t byte = 0;
+	CHECK_NOT_NULL( serializer );
+	CHECK_NOT_NULL( serializer->stream.data );
+	CHECK_NOT_NULL( serializer->stream_index );
+	CHECK((serializer->stream.length != 0),
+		"Attempting to get the length left of a stream with an error.\n");
+	CHECK((get_bytes_left_stream( serializer ) > 0),
+		"Attempting to read outside the stream buffer length.\n");
 
-	struct pico_mqtt_data* data = NULL;
-	data = (struct pico_mqtt_data*) malloc(sizeof(struct pico_mqtt_data));
-	if(data == NULL)
+	byte = *((uint8_t*) serializer->stream_index);
+	(serializer->stream_index)++;
+	return byte;
+}
+
+static void add_2_byte_stream( struct pico_mqtt_serializer* serializer, const uint16_t data)
+{
+	add_byte_stream(serializer, (uint8_t)((data & 0xFF00) >> 8));
+	add_byte_stream(serializer, (uint8_t)(data & 0x00FF));
+	return;
+}
+
+static uint16_t get_2_byte_stream( struct pico_mqtt_serializer* serializer )
+{
+	uint16_t data = 0;
+
+	CHECK_NOT_NULL( serializer );
+	CHECK((get_bytes_left_stream( serializer ) >= 2),
+		"Attempting to read outside the stream buffer length.\n");
+
+	data = (uint16_t) (data + (uint16_t) get_byte_stream(serializer));
+	data = (uint16_t) (data << 8u);
+	data = (uint16_t) (data + (uint16_t) get_byte_stream(serializer));
+	return data;
+}
+
+static void add_data_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data)
+{
+	uint32_t index = 0;
+
+	CHECK_NOT_NULL( serializer );
+	CHECK_NOT_NULL( data.data );
+	CHECK((get_bytes_left_stream(serializer) >= data.length), 
+		"Stream is not long enough to accept the data.\n");
+
+	for(index = 0; index < data.length; ++index)
 	{
-		PERROR("Unable to allocate memory.\n");
-		return ERROR;
+		add_byte_stream(serializer, *(((uint8_t*) data.data) + index));
 	}
-	int8_t i;
-	uint32_t mask = 0x00200000;
-	uint8_t continue_flag = 0;
-	data->length = 0;
 
-	if(converted == NULL)
+	return;
+}
+
+static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* serializer )
+{
+	uint32_t index = 0;
+	uint32_t bytes_left = 0;
+	struct pico_mqtt_data result = PICO_MQTT_DATA_ZERO;
+
+	CHECK_NOT_NULL( serializer );
+	bytes_left = get_bytes_left_stream(serializer);
+
+	result.data = MALLOC(bytes_left);
+	if(result.data == NULL)
 	{
-		PERROR("Invallid input, receive NULL.\n");
+		PERROR("Failed to allocate the memory needed.\n");
+		return PICO_MQTT_DATA_ZERO;
+	}
+
+	result.length = bytes_left;
+	for(index = 0; index < bytes_left; ++index)
+	{
+		*(((uint8_t*)(result.data)) + index) = get_byte_stream( serializer );
+	}
+
+	return result;
+}
+
+static void add_data_and_length_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data)
+{
+	CHECK((data.length) <= 0xFFFF, 
+		"Can not add data longer than 65535.\n");
+
+	add_2_byte_stream(serializer, (uint16_t) data.length);
+
+	if(data.length != 0)
+		add_data_stream(serializer, data);
+
+	return;
+}
+
+static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serializer* serializer )
+{
+	uint32_t index = 0;
+	uint32_t bytes_left = 0;
+	uint16_t length = 0;
+	struct pico_mqtt_data result = PICO_MQTT_DATA_ZERO;
+	CHECK_NOT_NULL(serializer);
+
+	bytes_left = get_bytes_left_stream(serializer);
+	if(bytes_left < 2)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("Message is not long enough to read a 2 byte length field.\n");
+		return PICO_MQTT_DATA_ZERO;
+	}
+
+	length = get_2_byte_stream(serializer);
+	if(((int32_t)bytes_left - length - 2) < 0)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("Invallid length, the stream is not long enough to contain the indicated data.\n");
+		return PICO_MQTT_DATA_ZERO;
+	}
+
+	result.data = MALLOC(length);
+	if(result.data == NULL)
+	{
+		PERROR("Failed to allocate the memory needed.\n");
+		return PICO_MQTT_DATA_ZERO;
+	}
+
+	result.length = length;
+	for(index = 0; index < length; ++index)
+	{
+		*(((uint8_t*)(result.data)) + index) = get_byte_stream( serializer );
+	}
+
+	return result;
+}
+
+static void add_array_stream( struct pico_mqtt_serializer* serializer, void* array, uint32_t length)
+{
+	struct pico_mqtt_data data;
+
+	CHECK_NOT_NULL( serializer );
+	CHECK_NOT_NULL( array );
+
+	data = (struct pico_mqtt_data) {.data = array, .length = length};
+	add_data_stream( serializer, data);
+	return;
+}
+
+static void skip_length_stream( struct pico_mqtt_serializer* serializer )
+{
+	uint8_t index = 0;
+	while(((get_byte_stream(serializer) & 0x80) != 0) && (index < 4))
+	{
+		++index;
+	}
+}
+
+/*
+static int get_length_stream( struct pico_mqtt_serializer* serializer, uint32_t* result)
+{
+	CHECK_NOT_NULL( serializer );
+	CHECK_NOT_NULL( result );
+
+	if(pico_mqtt_deserialize_length( serializer, serializer->stream_index, result) == ERROR)
+	{
+		PTRACE();
 		return ERROR;
 	}
 
-	if(length >= 0x10000000){
-		PERROR("Requested size to long.\n");
+	skip_length_stream(serializer);
+	return SUCCES;
+}*/
+
+static int serialize_connect( struct pico_mqtt_serializer* serializer)
+{
+	const uint8_t fixed_header = 0x10;
+	uint32_t length = 0;
+	uint8_t variable_header[10] = {0x00, 0x04, 0x4D, 0x51, 0x54, 0x54, 0x04, 0x00, 0x00, 0x00};
+
+	CHECK_NOT_NULL(serializer);
+
+	if(check_serialize_connect( serializer ) == ERROR)
+	{
+		PTRACE();
 		return ERROR;
 	}
 
-	data->length = 0;
-	for(i = 3; i >=0; --i){
-		if(length >= mask){
-			if(data->length == 0){
-				data->length = i+1;
-				data->data = malloc(data->length);
-				if(data->data == NULL)
-				{
-					PERROR("Unable to allocate memory.\n");
-					return ERROR;
-				}
-			}
-			
-			*(((uint8_t*) data->data) + i) = length / mask;
-			length = length % mask;
-			if(continue_flag == 1)
-				*(((uint8_t*) data->data) + i) |= 0x80;
-			continue_flag = 1;
+	length = serialize_connect_get_length( serializer );
+	variable_header[7] = serialize_connect_get_flags( serializer );
+
+	variable_header[8] = (uint8_t) ((serializer->keep_alive & 0xFF00) >> 8);
+	variable_header[9] = (uint8_t) (serializer->keep_alive & 0x00FF);
+
+	pico_mqtt_serialize_length( serializer, length );
+
+	if(create_serializer_stream( serializer, length + 1 + serializer->serialized_length.length) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	add_byte_stream( serializer, fixed_header );
+	add_data_stream( serializer, serializer->serialized_length);
+	add_array_stream( serializer, variable_header, 10);
+
+	if(serializer->client_id_flag)
+		add_data_and_length_stream( serializer, serializer->client_id);
+
+	if(	(serializer->will_topic_flag) &&
+		(serializer->will_message_flag))
+	{
+		add_data_and_length_stream( serializer, serializer->will_topic);
+		add_data_and_length_stream( serializer, serializer->will_message);
+	}
+
+	if(serializer->username_flag)
+		add_data_and_length_stream( serializer, serializer->username);
+
+	if(serializer->password_flag)
+		add_data_and_length_stream( serializer, serializer->password);
+
+	return SUCCES;
+}
+
+/*int pico_mqtt_serializer_set_duplicate_flag( struct pico_mqtt_serializer* serializer, struct pico_mqtt_packet* packet)*/
+
+static int serialize_publish( struct pico_mqtt_serializer* serializer)
+{
+	uint8_t fixed_header = 0x30;
+	uint32_t length = 0;
+
+	CHECK_NOT_NULL(serializer);
+	CHECK((serializer->quality_of_service < 3), "The quality of service can be at most 2.\n");
+
+	PTODO("Check for wildcards or system topics, check if topic has length 0");
+
+#if ALLOW_EMPTY_TOPIC == 0
+	if(serializer->topic.length == 0)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("Empty topics are not allowed.\n");
+		return ERROR;
+	}
+#endif
+
+#if ALLOW_EMPTY_MESSAGE == 0
+	if(serializer->message.length == 0)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("Empty messages are not allowed.\n");
+		return ERROR;
+	}
+#endif
+
+	length = serializer->topic.length + 2 + serializer->message.length;
+	if(serializer->quality_of_service != QUALITY_OF_SERVICE_0)
+		length += 2; /* add packet id */
+
+	if(serializer->retain != 0)
+		fixed_header |= RETAIN;
+
+	if(serializer->quality_of_service == 0)
+		fixed_header |= QUALITY_OF_SERVICE_0;
+
+	if(serializer->quality_of_service == 1)
+		fixed_header |= QUALITY_OF_SERVICE_1;
+
+	if(serializer->quality_of_service == 2)
+		fixed_header |= QUALITY_OF_SERVICE_2;
+
+	if(serializer->duplicate != 0)
+		fixed_header |= DUPLICATE;
+
+	pico_mqtt_serialize_length( serializer, length );
+
+	if(create_serializer_stream( serializer, length + 1 + serializer->serialized_length.length) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	add_byte_stream( serializer, fixed_header );
+	add_data_stream( serializer, serializer->serialized_length);
+	add_data_and_length_stream( serializer, serializer->topic);
+
+	if(serializer->quality_of_service != 0)
+	{
+		add_2_byte_stream( serializer, serializer->packet_id );
+	}
+
+	if((serializer->message.data != NULL) && (serializer->message.length != 0))
+		add_data_stream( serializer, serializer->message);
+
+	return SUCCES;
+}
+
+static int serialize_puback( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+
+	return serialize_acknowledge( serializer, PUBACK );
+}
+
+static int serialize_pubrec( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+
+	return serialize_acknowledge( serializer, PUBREC );
+}
+
+static int serialize_pubrel( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+
+	return serialize_acknowledge( serializer, PUBREL );
+}
+
+static int serialize_pubcomp( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+
+	return serialize_acknowledge( serializer, PUBCOMP );
+}
+
+static int serialize_subscribe( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+
+	return serialize_subscribtion( serializer, 1 );
+}
+
+static int serialize_unsubscribe( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+
+	return serialize_subscribtion( serializer, 0 );
+}
+
+static int serialize_acknowledge( struct pico_mqtt_serializer* serializer, const uint8_t packet_type)
+{
+	uint8_t flags = 0x00;
+	uint8_t packet[4] = {0x00, 0x02, 0x00, 0x00};
+
+	CHECK_NOT_NULL( serializer );
+	CHECK(
+		(packet_type == PUBACK) || 
+		(packet_type == PUBREC) ||
+		(packet_type == PUBREL) ||
+		(packet_type == PUBCOMP)||
+		(packet_type == UNSUBACK)
+		,"The requested packet type cannot be serialized as an acknowledge message.\n");
+
+	if(packet_type != PUBREL) /* table 2.2 - Flag Bits */
+	{
+		flags = 0x00;
+	} else
+	{
+		flags = 0x02;
+	}
+
+	if(create_serializer_stream( serializer, 4 ) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	packet[0] |= packet_type;
+	packet[0] |= flags;
+	PTODO("Check little and big endian.\n");
+	packet[2] |= (uint8_t)((serializer->packet_id & 0xFF00) >> 8); /* MSB */
+	packet[3] |= (uint8_t)(serializer->packet_id & 0x00FF); /* LSB */
+	add_array_stream( serializer, packet, 4 );
+
+	return SUCCES;
+}
+
+static int check_serialize_connect( struct pico_mqtt_serializer* serializer)
+{
+	CHECK_NOT_NULL(serializer);
+	CHECK((
+		serializer->quality_of_service == 0 ||
+		serializer->quality_of_service == 1 ||
+		serializer->quality_of_service == 2 ),
+		"Will QoS not wihtin range.\n");
+
+#if ALLOW_EMPTY_CLIENT_ID == 0
+	if(serializer->client_id_flag == 0)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The client_id is not set but is obliged.\n");
+		return ERROR;
+	}
+#endif /* ALLOW_EMPTY_CLIENT_ID == 0 */
+
+	if(serializer->username_flag == 0)
+	{
+		if(serializer->password_flag != 0)
+		{
+			PTODO("set appropriate error.\n");
+			PERROR("Password can not be set without username.\n");
+			return ERROR;
 		}
-		mask = mask >> 7;
 	}
 
-	*converted = data;
-	return SUCCES;	
-}
-
-static inline void destroy_length(struct pico_mqtt_data* converted_length)
-{
-	free(converted_length->data);
-	free(converted_length);
-}
-
-static inline void add_header_stream(void** stream, uint8_t fixed_header, struct pico_mqtt_data* length)
-{
-	if(length != NULL)
+	if(	(serializer->will_topic_flag!= 0) !=
+		(serializer->will_message_flag != 0))
 	{
-		add_data_stream(stream, (void*) &fixed_header, FIXED_HEADER_SIZE);
-		add_data_stream(stream, length->data, length->length);
+		PTODO("set appropriate error.\n");
+		PERROR("If will topic is set, will message must be set as well.\n");
+		return ERROR;
 	}
+
+	return SUCCES;
 }
 
-static inline void add_message_id_stream(void** stream, uint16_t message_id)
+static uint32_t serialize_connect_get_length( struct pico_mqtt_serializer* serializer)
 {
-	add_data_stream(stream, (void*) &message_id, MESSAGE_ID_SIZE);
-}
+	uint32_t length = 10; /* add 10 length for standard variable header */
 
-static inline void add_quality_of_service_stream(void** stream, uint8_t quality_of_service)
-{
-	add_data_stream(stream, (void*) &quality_of_service, QUALITY_OF_SERVICE_SIZE);
-}
+	CHECK_NOT_NULL(serializer);
 
-static inline void add_payload_stream(void** stream, struct pico_mqtt_data* data)
-{
-	if(data != NULL)
-		add_data_stream(stream, data->data, data->length);
-}
+	length += serializer->client_id.length + 2;
 
-static inline void add_data_and_length_stream(void** stream, struct pico_mqtt_data* data)
-{
-	PTODO("Encode litle and big endian.\n");
-	if(data != NULL)
+	if(serializer->username_flag != 0){
+		length += serializer->username.length + 2;
+
+		if(serializer->password_flag != 0)
+			length += serializer->password.length + 2;
+	}
+
+	if(	(serializer->will_topic_flag != 0) &&
+		(serializer->will_message_flag != 0))
 	{
-		add_data_stream(stream, (uint8_t*) &(data->length) + 1, 1);
-		add_data_stream(stream, (uint8_t*) &(data->length), 1);
-		add_data_stream(stream, data->data, data->length);
+		length += serializer->will_topic.length + 2;
+		length += serializer->will_message.length + 2;
 	}
+
+	return length;
 }
 
-static void add_data_stream(void** stream, void* data, uint32_t length)
+static uint8_t serialize_connect_get_flags( struct pico_mqtt_serializer* serializer)
 {
-	uint32_t i = 0;
-	for(i=0; i<length; ++i){
-		**((uint8_t**)stream) = *((uint8_t*)data);
-		(*((uint8_t**)stream))++;
-		++data;
+	uint8_t flags = 0;
+
+	CHECK_NOT_NULL(serializer);
+
+	if(serializer->username_flag != 0){
+		flags |= 0x80; /* User Name Flag */
+
+		if(serializer->password_flag != 0)
+			flags |= 0x40; /* password Flag */
 	}
+
+	if((serializer->clean_session != 0) ||
+		(serializer->client_id_flag == 0))
+		flags |= 0x02; /* Clean Session */
+
+	if(	(serializer->will_topic_flag != 0) &&
+		(serializer->will_message_flag != 0))
+	{
+		flags |= 0x04; /* Will Flag */
+		flags |= (uint8_t)((serializer->quality_of_service & 0x03) << 3); /* Will QoS */
+
+		if(serializer->will_retain != 0)
+			flags |= 0x20; /* Will Retain */
+	}
+
+	return flags;
+}
+
+static int deserialize_connack(struct pico_mqtt_serializer* serializer )
+{
+	uint8_t byte = 0;
+	CHECK_NOT_NULL(serializer);
+
+	serializer->message_type = 0x02;
+	byte = get_byte_stream( serializer );
+
+	CHECK( byte >> 4 == 0x02, "The message is not a CONNACK message as expected.\n");
+	CHECK( byte == 0x20, "The CONNACK message doesn't have the correct fixed header flags set.\n");
+	
+	if(serializer->stream.length != 4)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the CONNACK message is not correct.\n");
+		return ERROR;
+	}
+
+	byte = get_byte_stream( serializer );
+
+	if( byte != 2)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the CONNACK message is not correct.\n");
+		return ERROR;
+	}
+
+	byte = get_byte_stream( serializer );
+
+	CHECK((byte & 0xFE) == 0x00, "The CONNACK message doesn't have the correct acknowledge flags set.\n");
+
+	serializer->session_present = (byte & 0x01) == 0x01;
+
+	serializer->return_code = get_byte_stream( serializer );
+
+	if(serializer->return_code > 5)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The return code of the CONNACK message is unknown.\n");
+		return ERROR;
+	}
+
+	return SUCCES;
+}
+
+static int deserialize_publish(struct pico_mqtt_serializer* serializer )
+{
+	uint8_t byte = 0;
+	CHECK_NOT_NULL(serializer);
+
+	if(get_bytes_left_stream(serializer) < 4)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the PUBLISH message is to short to be valid.\n");
+		return ERROR;
+	}
+
+	serializer->message_type = 0x03;
+	byte = get_byte_stream(serializer);
+
+	CHECK((byte >> 4 == 0x03), "The message is not a PUBLISH message as expected.\n");
+
+	serializer->duplicate = (byte & 0x08) != 0;
+	serializer->quality_of_service = (uint8_t) ((byte & 0x06) >> 1);
+	serializer->retain = (byte & 0x01) != 0;
+
+	if(serializer->quality_of_service == 3)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The quality of service cannot be 3.\n");
+		return ERROR;
+	}
+
+	skip_length_stream(serializer); /* assuming the stream length is correct */
+
+	serializer->topic = get_data_and_length_stream( serializer );
+
+#if ALLOW_EMPTY_TOPIC == 0
+	if(serializer->topic.length == 0)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The topic cannot be 0-length (ALLOW_EMPTY_TOPIC == 0).\n");
+		return ERROR;
+	}
+#endif
+
+	if(serializer->topic.length != 0)
+		serializer->topic_ownership = 1;
+
+	if(serializer->quality_of_service != 0)
+		serializer->packet_id = get_2_byte_stream(serializer);
+
+	serializer->message = get_data_stream( serializer );
+
+#if ALLOW_EMPTY_MESSAGE == 0
+	if(serializer->message.length == 0)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The message cannot be 0-length (ALLOW_EMPTY_MESSAGE == 0).\n");
+
+		if(serializer->topic_ownership == 1)
+		{
+			FREE(serializer->topic.data);
+			serializer->topic_ownership = 0;
+		}
+		return ERROR;
+	}
+#endif
+	
+	if(serializer->message.length != 0)
+	{
+		serializer->message_ownership = 1;
+	}
+
+	return SUCCES;
+}
+
+static int deserialize_acknowledge(struct pico_mqtt_serializer* serializer )
+{
+	uint8_t byte = 0;
+	CHECK_NOT_NULL(serializer);
+
+	serializer->message_type = 0x04;
+	byte = get_byte_stream( serializer );
+
+	CHECK(
+		(byte >> 4 == 0x04) ||
+		(byte >> 4 == 0x05) ||
+		(byte >> 4 == 0x06) ||
+		(byte >> 4 == 0x07) ||
+		(byte >> 4 == 0x0B),
+		"The message is not an acknowledge message as expected.\n");
+
+	CHECK( 
+		(byte == 0x40) ||
+		(byte == 0x50) ||
+		(byte == 0x62) ||
+		(byte == 0x70) ||
+		(byte == 0xB0),
+		"The acknowledge message doesn't have the correct fixed header flags set.\n");
+	
+	if(serializer->stream.length != 4)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the acknowledge message is not correct.\n");
+		return ERROR;
+	}
+
+	byte = get_byte_stream( serializer );
+
+	if(byte != 2)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the acknowledge message is not correct.\n");
+		return ERROR;
+	}
+
+	serializer->packet_id = get_2_byte_stream( serializer );
+
+	return SUCCES;
+}
+
+static int deserialize_suback(struct pico_mqtt_serializer* serializer )
+{
+	uint8_t byte = 0;
+	CHECK_NOT_NULL(serializer);
+
+	serializer->message_type = 0x09;
+	byte = get_byte_stream( serializer );
+
+	CHECK( byte >> 4 == 0x09, "The message is not a SUBACK message as expected.\n");
+	CHECK( byte == 0x90, "The SUBACK message doesn't have the correct fixed header flags set.\n");
+	
+	if(serializer->stream.length != 5)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the SUBACK message is not correct.\n");
+		return ERROR;
+	}
+
+	byte = get_byte_stream( serializer );
+
+	if( byte != 3)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The length of the SUBACK message is not correct.\n");
+		return ERROR;
+	}
+
+	serializer->packet_id = get_2_byte_stream( serializer );
+
+	byte = get_byte_stream( serializer );
+
+	if( byte == 0x80 )
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The SUBACK indicated a failure.\n");
+		return ERROR;
+	}
+
+	if( byte > 2)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The return value is not valid.\n");
+		return ERROR;
+	}
+
+	serializer->quality_of_service = byte;
+
+	return SUCCES;
+}
+
+static int serialize_subscribtion( struct pico_mqtt_serializer* serializer, uint8_t subscribe)
+{
+	CHECK_NOT_NULL(serializer);
+
+#if ALLOW_EMPTY_TOPIC == 0
+	if(serializer->topic.length == 0)
+	{
+		CHECK_NULL(serializer->topic.data);
+		PTODO("Set appropriate error.\n");
+		PERROR("The topic should be set.\n");
+		return ERROR;
+	}
+#endif
+
+	pico_mqtt_serialize_length( serializer, serializer->topic.length + 5 );
+
+	if(create_serializer_stream( serializer, serializer->topic.length + 6 + serializer->serialized_length.length) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	if(subscribe != 0)
+	{
+		add_byte_stream( serializer, 0x82 );
+	} else 
+	{
+		add_byte_stream( serializer, 0xA2 );
+	}
+
+	add_data_stream( serializer, serializer->serialized_length );
+	add_2_byte_stream( serializer, serializer->packet_id);
+	add_data_and_length_stream( serializer, serializer->topic );
+	add_byte_stream( serializer, serializer->quality_of_service );
+
+	return SUCCES;
+}
+
+static int serialize_pingreq( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+	if(create_serializer_stream(serializer, 2) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	add_2_byte_stream( serializer, 0xC000);
+
+	return SUCCES;
+}
+
+static int serialize_pingresp( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+	if(create_serializer_stream(serializer, 2) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	add_2_byte_stream( serializer, 0xD000);
+
+	return SUCCES;
+}
+
+static int serialize_disconnect( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+	if(create_serializer_stream(serializer, 2) == ERROR)
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	add_2_byte_stream( serializer, 0xE000);
+
+	return SUCCES;
+}
+
+static int deserialize_pingreq( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+	serializer->message_type = 0x0C;
+
+	if(serializer->stream.length != 2)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The PINGREQ packet should be 2 byte long, not %d.\n", serializer->stream.length);
+		return ERROR;
+	}
+
+	if(get_2_byte_stream(serializer) != 0xC000)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The PINGREQ packet is not formed correctly.\n");
+		return ERROR;
+	}
+
+	return SUCCES;
+}
+
+static int deserialize_pingresp( struct pico_mqtt_serializer* serializer )
+{
+	CHECK_NOT_NULL(serializer);
+	serializer->message_type = 0x0D;
+
+	if(serializer->stream.length != 2)
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The PINGRESP packet should be 2 byte long, not %d.\n", serializer->stream.length);
+		return ERROR;
+	}
+
+	if(get_2_byte_stream(serializer) != 0xD000)
+	{
+		PTODO("Set appropriate error.\n");
+		PERROR("The PINGRESP packet is not formed correctly.\n");
+		return ERROR;
+	}
+
+	return SUCCES;
 }

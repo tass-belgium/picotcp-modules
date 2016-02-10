@@ -18,10 +18,9 @@ struct pico_mqtt
 
 #if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
         // message buffers
-        struct pico_mqtt_message* trigger_message;
         struct pico_mqtt_list* output_queue;
-        struct pico_mqtt_list* active_messages;
-        struct pico_mqtt_list* completed_messages;
+        struct pico_mqtt_list* wait_queue;
+        struct pico_mqtt_list* input_queue;
 #endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
 
         // connection related
@@ -41,6 +40,13 @@ struct pico_mqtt
 
         // status
         uint8_t connected;
+        uint32_t connection_attempts;
+        uint8_t trigger_on_receive;
+        struct pico_mqtt_message* active_output_message;
+        struct pico_mqtt_message* trigger_message;
+
+        // error
+        int error;
         char normative_error[15];
         uint32_t documentation_reference;
 };

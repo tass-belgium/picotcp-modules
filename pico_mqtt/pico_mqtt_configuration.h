@@ -4,12 +4,19 @@
 * Library Configuration
 **/
 
+/* set to production mode to strip all macro's and debug related code */
+/* #define PRODUCTION */
+
 #define ALLOW_WILDCARDS 0
 #define ALLOW_SYSTEM_TOPICS 0
 #define AUTO_RECONNECT 1
 
-#define ALLOW_EMPTY_CLIENT_ID 1
 #define ALLOW_LONG_CLIENT_ID 0
+#define ALLOW_EMPTY_CLIENT_ID 0
+#define ALLOW_EMPTY_TOPIC 0
+#define ALLOW_EMPTY_MESSAGE 0
+#define ALLOW_EMPTY_USERNAME 0
+#define ALLOW_EMPTY_PASSWORD 0
 #define ALLOW_NON_ALPHA_NUMERIC_CLIENT_ID 0 /* Not supported */
 
 #define MAXIMUM_MESSAGE_SIZE 500

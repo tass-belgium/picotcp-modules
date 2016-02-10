@@ -1,23 +1,22 @@
-all: pico_mqtt_socket_test.out pico_mqtt_stream_test.out pico_mqtt_list_test.out demo.out
+CC=gcc
+CC_FLAGS= -Wall -Wdeclaration-after-statement -W -Wextra -Wshadow -Wcast-qual -Wwrite-strings -Wunused-variable -Wundef -Wunused-function -Wconversion -Wcast-align -Wmissing-prototypes -Wno-missing-field-initializers -Werror
+TEST_FLAGS= -lcheck -lpthread -lm -lrt -fprofile-arcs -ftest-coverage
 
-pico_mqtt_test.out: pico_mqtt.c pico_mqtt_test.c
-	gcc -Wall -Wextra -Werror -o pico_mqtt_test.out pico_mqtt_test.c -lcheck -lpthread -lm -lrt
-	./pico_mqtt_test.out
+#Main target
+tests: serializer_test
+#serializer: serializer_test.o
+#	$(CC) serializer_test.o -o serializer
 
-#pico_mqtt_socket_test.out: pico_mqtt_socket.c pico_mqtt_socket_test.c
-#	gcc -Wall -Wextra -Werror -std=c99 -o pico_mqtt_socket_test.out pico_mqtt_socket_test.c -lcheck -lpthread -lm -lrt
+#To obtain object files
+serializer.o: pico_mqtt_serializer.c pico_mqtt_serializer.h
+	$(CC) $(CC_FLAGS) -c pico_mqtt_serializer.c -o serializer.o
 
-pico_mqtt_socket_test.out: pico_mqtt_socket.c pico_mqtt_socket_test.c
-	gcc -Wall -o pico_mqtt_socket_test.out pico_mqtt_socket_test.c -lcheck -lpthread -lm -lrt
-	./pico_mqtt_socket_test.out
+serializer_test: pico_mqtt_serializer_test.c pico_mqtt_serializer.c pico_mqtt_serializer.h
+	$(CC) $(CC_FLAGS) pico_mqtt_serializer_test.c -o serializer_test.out $(TEST_FLAGS)
+	./serializer_test.out
+	complexity --score --thresh=3 pico_mqtt_serializer.c
+	gcov pico_mqtt_serializer_test.c
 
-pico_mqtt_stream_test.out: pico_mqtt_stream.c pico_mqtt_stream_test.c
-	gcc -Wall -Wextra -Werror -o pico_mqtt_stream_test.out pico_mqtt_stream_test.c -lcheck -lpthread -lm -lrt
-	./pico_mqtt_stream_test.out
-
-pico_mqtt_list_test.out: pico_mqtt_list.c pico_mqtt_list_test.c
-	gcc -Wall -Wextra -Werror -o pico_mqtt_list_test.out pico_mqtt_list_test.c -lcheck -lpthread -lm -lrt
-
-demo.out: demo.c pico_mqtt.c pico_mqtt_list.c pico_mqtt_stream.c pico_mqtt_socket.c pico_mqtt_serializer.c
-	gcc -Wall -Wextra -Werror -o demo.out demo.c pico_mqtt.c pico_mqtt_list.c pico_mqtt_stream.c pico_mqtt_socket.c pico_mqtt_serializer.c -DDEBUG=3
-	./demo.out
+#To remove generated files
+clean:
+	rm -f *.out *.o *.gcov *.gcda *.gcno
