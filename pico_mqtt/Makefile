@@ -1,5 +1,5 @@
 CC=gcc
-CC_FLAGS= -Wall -Wdeclaration-after-statement -W -Wextra -Wshadow -Wcast-qual -Wwrite-strings -Wunused-variable -Wundef -Wunused-function -Wconversion -Wcast-align -Wmissing-prototypes -Wno-missing-field-initializers -Werror
+CC_FLAGS= -Wdeclaration-after-statement -W -Wshadow -Wcast-qual -Wwrite-strings -Wundef -Wconversion -Wcast-align -Wmissing-prototypes -Wno-missing-field-initializers -Wunused-function -Wextra -Werror -Wunused-variable -Wall
 TEST_FLAGS= -lcheck -lpthread -lm -lrt -fprofile-arcs -ftest-coverage
 
 #Main target
@@ -16,6 +16,12 @@ serializer_test: pico_mqtt_serializer_test.c pico_mqtt_serializer.c pico_mqtt_se
 	./serializer_test.out
 	complexity --score --thresh=3 pico_mqtt_serializer.c
 	gcov pico_mqtt_serializer_test.c
+
+list_test: pico_mqtt_list_test.c pico_mqtt_list.c pico_mqtt_list.h
+	$(CC) $(CC_FLAGS) pico_mqtt_list_test.c -o list_test.out $(TEST_FLAGS)
+	./list_test.out
+	complexity --score --thresh=2 pico_mqtt_list.c
+	gcov pico_mqtt_list_test.c
 
 #To remove generated files
 clean:
