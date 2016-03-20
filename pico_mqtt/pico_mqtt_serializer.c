@@ -165,15 +165,15 @@ void pico_mqtt_serializer_total_reset( struct pico_mqtt_serializer* serializer )
 
 	*serializer = (struct pico_mqtt_serializer){
 	.keep_alive = 0,
-	.client_id = PICO_MQTT_DATA_ZERO,
+	.client_id = PICO_MQTT_DATA_EMPTY,
 	.client_id_flag = 0,
-	.will_topic = PICO_MQTT_DATA_ZERO,
+	.will_topic = PICO_MQTT_DATA_EMPTY,
 	.will_topic_flag = 0,
-	.will_message = PICO_MQTT_DATA_ZERO,
+	.will_message = PICO_MQTT_DATA_EMPTY,
 	.will_message_flag = 0,
-	.username = PICO_MQTT_DATA_ZERO,
+	.username = PICO_MQTT_DATA_EMPTY,
 	.username_flag = 0,
-	.password = PICO_MQTT_DATA_ZERO,
+	.password = PICO_MQTT_DATA_EMPTY,
 	.password_flag = 0,
 	.will_retain = 0,
 	.packet_id = 0,
@@ -188,7 +188,7 @@ void pico_mqtt_serializer_destroy( struct pico_mqtt_serializer* serializer )
 {
 	CHECK_NOT_NULL( serializer );
 
-	destroy_serializer_stream( serializer );
+	pico_mqtt_serializer_clear( serializer );
 	FREE(serializer);
 	return;
 }
@@ -278,13 +278,13 @@ void pico_mqtt_serializer_set_client_id( struct pico_mqtt_serializer* serializer
 #else
 	if(client_id == NULL)
 	{
-		serializer->client_id = PICO_MQTT_DATA_ZERO;
+		serializer->client_id = PICO_MQTT_DATA_EMPTY;
 	} else {
 		if((client_id.length == 0) || (client_id.data == NULL))
 		{
 			CHECK_NULL(client_id.data);
 			CHECK((client_id.length != 0), "The client_id has an invallid structure.\n");
-			serializer->client_id = PICO_MQTT_DATA_ZERO;
+			serializer->client_id = PICO_MQTT_DATA_EMPTY;
 		} else {
 			serializer->client_id = client_id;
 		}
@@ -304,13 +304,13 @@ void pico_mqtt_serializer_set_username( struct pico_mqtt_serializer* serializer,
 #else
 	if(username == NULL)
 	{
-		serializer->username = PICO_MQTT_DATA_ZERO;
+		serializer->username = PICO_MQTT_DATA_EMPTY;
 	} else {
 		if((username.length == 0) || (username.data == NULL))
 		{
 			CHECK_NULL(username.data);
 			CHECK((username.length != 0), "The username has an invallid structure.\n");
-			serializer->username = PICO_MQTT_DATA_ZERO;
+			serializer->username = PICO_MQTT_DATA_EMPTY;
 		} else {
 			serializer->username = username;
 		}
@@ -330,13 +330,13 @@ void pico_mqtt_serializer_set_password( struct pico_mqtt_serializer* serializer,
 #else
 	if(password == NULL)
 	{
-		serializer->password = PICO_MQTT_DATA_ZERO;
+		serializer->password = PICO_MQTT_DATA_EMPTY;
 	} else {
 		if((password.length == 0) || (password.data == NULL))
 		{
 			CHECK_NULL(password.data);
 			CHECK((password.length != 0), "The password has an invallid structure.\n");
-			serializer->password = PICO_MQTT_DATA_ZERO;
+			serializer->password = PICO_MQTT_DATA_EMPTY;
 		} else {
 			serializer->password = password;
 		}
@@ -356,13 +356,13 @@ void pico_mqtt_serializer_set_will_topic( struct pico_mqtt_serializer* serialize
 #else
 	if(will_topic == NULL)
 	{
-		serializer->will_topic = PICO_MQTT_DATA_ZERO;
+		serializer->will_topic = PICO_MQTT_DATA_EMPTY;
 	} else {
 		if((will_topic.length == 0) || (will_topic.data == NULL))
 		{
 			CHECK_NULL(will_topic.data);
 			CHECK((will_topic.length != 0), "The will_topic has an invallid structure.\n");
-			serializer->will_topic = PICO_MQTT_DATA_ZERO;
+			serializer->will_topic = PICO_MQTT_DATA_EMPTY;
 		} else {
 			serializer->will_topic = will_topic;
 		}
@@ -382,13 +382,13 @@ void pico_mqtt_serializer_set_will_message( struct pico_mqtt_serializer* seriali
 #else
 	if(will_message == NULL)
 	{
-		serializer->will_message = PICO_MQTT_DATA_ZERO;
+		serializer->will_message = PICO_MQTT_DATA_EMPTY;
 	} else {
 		if((will_message.length == 0) || (will_message.data == NULL))
 		{
 			CHECK_NULL(will_message.data);
 			CHECK((will_message.length != 0), "The will_message has an invallid structure.\n");
-			serializer->will_message = PICO_MQTT_DATA_ZERO;
+			serializer->will_message = PICO_MQTT_DATA_EMPTY;
 		} else {
 			serializer->will_message = will_message;
 		}
@@ -488,10 +488,10 @@ int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, struct pico_
 	return deserializers[message_type](serializer);
 }
 
-
 /**
 * Private functions implementation
 **/
+
 static int create_serializer_stream( struct pico_mqtt_serializer* serializer, const uint32_t length )
 {
 	CHECK_NOT_NULL(serializer);
@@ -505,6 +505,7 @@ static int create_serializer_stream( struct pico_mqtt_serializer* serializer, co
 	serializer->stream_index = serializer->stream.data;
 
 	if(serializer->stream.data == NULL){
+		serializer->stream_ownership = 0;
 		PTODO("set the right error.\n");
 		PERROR("Unable to allocate memory.\n");
 		serializer->stream.length = 0;
@@ -524,7 +525,7 @@ static void destroy_serializer_stream( struct pico_mqtt_serializer* serializer )
 		serializer->stream_ownership = 0;
 	}
 
-	serializer->stream = PICO_MQTT_DATA_ZERO;
+	serializer->stream = PICO_MQTT_DATA_EMPTY;
 	serializer->stream_index = NULL;
 	return;
 }
@@ -624,7 +625,7 @@ static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* seria
 {
 	uint32_t index = 0;
 	uint32_t bytes_left = 0;
-	struct pico_mqtt_data result = PICO_MQTT_DATA_ZERO;
+	struct pico_mqtt_data result = PICO_MQTT_DATA_EMPTY;
 
 	CHECK_NOT_NULL( serializer );
 	bytes_left = get_bytes_left_stream(serializer);
@@ -633,7 +634,7 @@ static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* seria
 	if(result.data == NULL)
 	{
 		PERROR("Failed to allocate the memory needed.\n");
-		return PICO_MQTT_DATA_ZERO;
+		return PICO_MQTT_DATA_EMPTY;
 	}
 
 	result.length = bytes_left;
@@ -663,7 +664,7 @@ static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serial
 	uint32_t index = 0;
 	uint32_t bytes_left = 0;
 	uint16_t length = 0;
-	struct pico_mqtt_data result = PICO_MQTT_DATA_ZERO;
+	struct pico_mqtt_data result = PICO_MQTT_DATA_EMPTY;
 	CHECK_NOT_NULL(serializer);
 
 	bytes_left = get_bytes_left_stream(serializer);
@@ -671,7 +672,7 @@ static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serial
 	{
 		PTODO("Set appropriate error.\n");
 		PERROR("Message is not long enough to read a 2 byte length field.\n");
-		return PICO_MQTT_DATA_ZERO;
+		return PICO_MQTT_DATA_EMPTY;
 	}
 
 	length = get_2_byte_stream(serializer);
@@ -679,14 +680,20 @@ static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serial
 	{
 		PTODO("Set appropriate error.\n");
 		PERROR("Invallid length, the stream is not long enough to contain the indicated data.\n");
-		return PICO_MQTT_DATA_ZERO;
+		return PICO_MQTT_DATA_EMPTY;
+	}
+
+	if(((int32_t)bytes_left - length - 2) == 0)
+	{
+		result.data = NULL;
+		return PICO_MQTT_DATA_EMPTY;
 	}
 
 	result.data = MALLOC(length);
 	if(result.data == NULL)
 	{
 		PERROR("Failed to allocate the memory needed.\n");
-		return PICO_MQTT_DATA_ZERO;
+		return PICO_MQTT_DATA_EMPTY;
 	}
 
 	result.length = length;
@@ -718,22 +725,6 @@ static void skip_length_stream( struct pico_mqtt_serializer* serializer )
 		++index;
 	}
 }
-
-/*
-static int get_length_stream( struct pico_mqtt_serializer* serializer, uint32_t* result)
-{
-	CHECK_NOT_NULL( serializer );
-	CHECK_NOT_NULL( result );
-
-	if(pico_mqtt_deserialize_length( serializer, serializer->stream_index, result) == ERROR)
-	{
-		PTRACE();
-		return ERROR;
-	}
-
-	skip_length_stream(serializer);
-	return SUCCES;
-}*/
 
 static int serialize_connect( struct pico_mqtt_serializer* serializer)
 {

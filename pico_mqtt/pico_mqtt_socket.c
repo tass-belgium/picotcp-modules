@@ -10,6 +10,11 @@ struct pico_mqtt_socket{
 	int* error;
 };
 
+#define PICO_MQTT_SOCKET_EMPTY (struct pico_mqtt_socket){\
+	.descriptor = 0,\
+	.error = NULL\
+}
+
 /**
 * Private function prototypes
 **/
@@ -27,9 +32,9 @@ struct pico_mqtt_socket* pico_mqtt_connection_create( int* error )
 {
 	struct pico_mqtt_socket* socket = NULL;
 
-	PICO_MQTT_CHECK_NOT_NULL(error);
+	CHECK_NOT_NULL(error);
 
-	socket = (struct pico_mqtt_socket*) malloc(sizeof(struct pico_mqtt_socket));
+	socket = (struct pico_mqtt_socket*) MALLOC(sizeof(struct pico_mqtt_socket));
 	if(socket == NULL)
 	{
 		PTODO("Set the appropriate error.\n");
@@ -37,18 +42,17 @@ struct pico_mqtt_socket* pico_mqtt_connection_create( int* error )
 		return NULL;
 	}
 
-	*socket = {.descriptor = 0, .error = error};
+	*socket =PICO_MQTT_SOCKET_EMPTY;
 
 	return socket;
 }
 
-/* create pico mqtt socket and connect to the URI*/ 
 int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* URI, const char* port)
 {
 	struct addrinfo* addres = NULL;
 	int flags = 0;
 
-	PICO_MQTT_CHECK_NOT_NULL(connection);
+	CHECK_NOT_NULL(connection);
 
 	if(resolve_uri(connection, &addres, URI, port) == ERROR)
 		return ERROR;
@@ -64,7 +68,7 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 	{
 		freeaddrinfo(addres);
 		PERROR("fnctl was not able to set the socket to Nonblocking mode error (%d): %s.\n", errno, strerror(errno));
-		*connection->error = CONNECTION_BLOCKING;
+		PTODO("set the appropriate error.\n");
 		return ERROR;
 	}
 
@@ -82,10 +86,10 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		.revents = 0
 	};
 
-	PICO_MQTT_CHECK_NOT_NULL(connection);
-	PICO_MQTT_CHECK_NOT_NULL(write_buffer);
-	PICO_MQTT_CHECK_NOT_NULL(read_buffer);
-	PICO_MQTT_CHECK((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) == 0),
+	CHECK_NOT_NULL(connection);
+	CHECK_NOT_NULL(write_buffer);
+	CHECK_NOT_NULL(read_buffer);
+	CHECK((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) == 0),
 		"Nonblocking flags should be set for the socket.\n");
 
 	if((write_buffer->length == 0) && (read_buffer->length == 0))
@@ -99,15 +103,15 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		poll_descriptor.revents |= POLLOUT;
 	}
 
-	if(read_buffer->length == 0)
+	if(read_buffer->length != 0)
 	{
 		poll_descriptor.revents |= POLLIN;
 	}
 
 	result = poll(&poll_descriptor, 1, time_left);
 
-	PICO_MQTT_CHECK((result > 1), "It should not be possible to have more then 1 active file descriptor.\n");
-	PICO_MQTT_CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0), 
+	CHECK((result > 1), "It should not be possible to have more then 1 active file descriptor.\n");
+	CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0), 
 		"Poll returned without error, data should be ready to write or read but is not.\n");
 
 	if(result == -1)
@@ -124,7 +128,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 
 	if(result == 1)
 	{
-		if(((poll_descriptor.revents & POLLIN) != 0) && (read_buffer->length == 0)) /* data to read */
+		if(((poll_descriptor.revents & POLLIN) != 0) && (read_buffer->length != 0)) /* data to read */
 		{
 			uint32_t bytes_written = 0;
 			bytes_written = read(connection->descriptor, read_buffer->data, read_buffer->length);
@@ -177,8 +181,8 @@ static int resolve_uri( struct pico_mqtt_socket* connection, struct addrinfo** a
 	char addres_string[100];
 #endif
 
-	PICO_MQTT_CHECK_NOT_NULL(addresses);
-	PICO_MQTT_CHECK_NOT_NULL(port);
+	CHECK_NOT_NULL(addresses);
+	CHECK_NOT_NULL(port);
 
 	result = getaddrinfo( uri, port, &hints, addresses );
 	if(result != 0){
@@ -233,8 +237,8 @@ static struct addrinfo lookup_configuration( void ){
 static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres, int* time_left){
 	struct addrinfo *current_addres = NULL;
 
-	PICO_MQTT_CHECK_NOT_NULL(connection);
-	PICO_MQTT_CHECK_NOT_NULL(addres);
+	CHECK_NOT_NULL(connection);
+	CHECK_NOT_NULL(addres);
 
 	PTODO("Set the socket descriptor to non blocking.\n");
 

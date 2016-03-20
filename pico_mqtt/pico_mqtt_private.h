@@ -51,6 +51,31 @@ struct pico_mqtt
         uint32_t documentation_reference;
 };
 
+struct pico_mqtt_packet
+{
+        uint8_t type;
+        uint8_t duplicate;
+        uint8_t retain;
+        uint8_t quality_of_service;
+        uint8_t status;
+        uint16_t packet_id;
+        struct pico_mqtt_data topic;
+        struct pico_mqtt_data data;
+        struct pico_mqtt_data streamed;
+};
+
+#define PICO_MQTT_PACKET_EMPTY (struct pico_mqtt_packet){\
+        .type = 0,\
+        .duplicate = 0,\
+        .retain = 0,\
+        .quality_of_service = 0,\
+        .status = 0,\
+        .packet_id = 0,\
+        .topic = PICO_MQTT_DATA_EMPTY,\
+        .data = PICO_MQTT_DATA_EMPTY,\
+        .streamed = PICO_MQTT_DATA_EMPTY\
+        }
+
 /**
 * Debug Functions
 **/

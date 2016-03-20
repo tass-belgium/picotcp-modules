@@ -37,6 +37,12 @@
 #define PTRACE() do{} while(0)
 #define MALLOC(size)  malloc(size)
 #define FREE(pointer) free(pointer)
+#define CHECK_DISABLE()
+#define CHECK_ENABLE()
+#define CHECK_DISABLE_ONCE()
+#define PERROR_DISABLE()
+#define PERROR_ENABLE()
+#define PERROR_DISABLE_ONCE()
 #define MALLOC_FAIL()
 #define MALLOC_SUCCEED()
 #define MALLOC_FAIL_ONCE()
@@ -50,6 +56,33 @@
 
 	#ifdef DEBUG /* if not in debug mode, nothing should be printed */
 
+		struct debug{
+			uint8_t no_check_flag;
+			uint8_t auto_reset_no_check_flag;
+			uint8_t no_error_flag;
+			uint8_t auto_reset_no_error_flag;
+			uint8_t fail_flag;
+			uint8_t auto_reset_fail_flag;
+			uint32_t allocations;
+			uint32_t frees;
+			uint32_t total_allocated;
+			uint32_t max_bytes_allocated;
+
+		};
+
+		static struct debug debug = (struct debug){
+			.no_check_flag = 0,
+			.auto_reset_no_check_flag = 0,
+			.no_error_flag = 0,
+			.auto_reset_no_error_flag = 0,
+			.fail_flag = 0,
+			.auto_reset_fail_flag = 0,
+			.allocations = 0,
+			.frees = 0,
+			.total_allocated = 0,
+			.max_bytes_allocated = 0
+		};
+
 		#if DEBUG > 0
 			#ifndef PEDANTIC
 				#define PEDANTIC
@@ -60,7 +93,9 @@
 			#endif
 
 			#ifndef ENABLE_TRACE
-				#define ENABLE_TRACE
+				#ifndef DISABLE_TRACE
+					#define ENABLE_TRACE
+				#endif
 			#endif
 
 		#endif
@@ -94,10 +129,23 @@
 		#ifdef ENABLE_ERROR
 			#include <stdio.h>
 
-			#undef PERROR	
+			#undef PERROR
+			#undef PERROR_DISABLE
+			#undef PERROR_ENABLE
+			#undef PERROR_DISABLE_ONCE
+
+			#define PERROR_DISABLE() debug.no_error_flag = 1; debug.auto_reset_no_error_flag = 0
+			#define PERROR_ENABLE() debug.no_error_flag = 0; debug.auto_reset_no_error_flag = 0
+			#define PERROR_DISABLE_ONCE() debug.no_error_flag = 1; debug.auto_reset_no_error_flag = 1
 			#define PERROR( ...) do{\
-				printf("[ERROR] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
-				printf(__VA_ARGS__);\
+					if(debug.no_error_flag == 0){\
+						printf("[ERROR] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
+						printf(__VA_ARGS__);\
+					}else {\
+						if(debug.auto_reset_no_error_flag != 0)\
+							debug.no_error_flag = 0;\
+							debug.auto_reset_no_error_flag = 0;\
+					}\
 				} while(0)
 		#endif /* DEBUG >= 1 */
 
@@ -143,6 +191,33 @@
 
 	#endif /* defined DEBUG */
 
+	#ifdef PEDANTIC
+
+		#undef CHECK_DISABLE
+		#undef CHECK_ENABLE
+		#undef CHECK_DISABLE_ONCE
+		#undef CHECK
+		#undef CHECK_NOT_NULL
+		#undef CHECK_NULL
+
+		#define CHECK_DISABLE() debug.no_check_flag = 1;\
+								debug.auto_reset_no_check_flag = 0
+		#define CHECK_ENABLE() debug.no_check_flag = 0;\
+								debug.auto_reset_no_check_flag = 0
+		#define CHECK_DISABLE_ONCE() debug.no_check_flag = 1;\
+									 debug.auto_reset_no_check_flag = 1
+		#define CHECK( cond, ...) do{\
+			if(debug.no_check_flag != 0){\
+				if(debug.auto_reset_no_check_flag != 0){\
+					debug.auto_reset_no_check_flag = 0;\
+					debug.no_check_flag = 0;}} else {\
+				if(!(cond)){PERROR(__VA_ARGS__); EXIT_ERROR();}}} while(0)
+
+		#define CHECK_NOT_NULL( var ) CHECK( var != NULL, "The pointer should not be NULL.\n")
+		#define CHECK_NULL( var ) CHECK( var == NULL, "The pointer should be NULL.\n")
+		
+	#endif /* ifndef PEDANTIC */
+
 	#ifndef DEBUG_MALLOC
 		#define DEBUG_MALLOC
 		#include <stdio.h>
@@ -153,28 +228,11 @@
 		#undef FREE
 		#undef CHECK_ALLOCATIONS
 
-			struct debug{
-				uint8_t fail_flag;
-				uint8_t auto_reset_flag;
-				uint32_t allocations;
-				uint32_t frees;
-				uint32_t total_allocated;
-				uint32_t max_bytes_allocated;
-
-			};
-
-			static struct debug debug = (struct debug){
-				.fail_flag = 0,
-				.auto_reset_flag = 0,
-				.allocations = 0,
-				.frees = 0,
-				.total_allocated = 0,
-				.max_bytes_allocated = 0
-			};
-
 			static void* my_debug_malloc(size_t length)
 			{
 				void* return_value = NULL;
+
+				CHECK(length != 0, "Attempting to allocate 0 byte.\n");
 
 				if(debug.fail_flag == 0)
 				{
@@ -192,10 +250,10 @@
 					return return_value;
 				}
 
-				if(debug.auto_reset_flag == 1)
+				if(debug.auto_reset_fail_flag == 1)
 				{
 					debug.fail_flag = 0;
-					debug.auto_reset_flag = 0;
+					debug.auto_reset_fail_flag = 0;
 				}
 
 				return NULL;
@@ -208,9 +266,9 @@
 			}
 
 		#define MALLOC(size) my_debug_malloc(size)
-		#define MALLOC_FAIL() debug.fail_flag = 1
-		#define MALLOC_SUCCEED() debug.fail_flag = 0
-		#define MALLOC_FAIL_ONCE() debug.fail_flag = 1; debug.auto_reset_flag = 1
+		#define MALLOC_FAIL() debug.fail_flag = 1; debug.auto_reset_fail_flag = 0
+		#define MALLOC_SUCCEED() debug.fail_flag = 0; debug.auto_reset_fail_flag = 0
+		#define MALLOC_FAIL_ONCE() debug.fail_flag = 1; debug.auto_reset_fail_flag = 1
 		#define FREE(pointer) my_debug_free(pointer)
 		#define CHECK_ALLOCATIONS(var) do{\
 			int32_t allocated = (int32_t)debug.allocations - (int32_t)debug.frees;\
@@ -219,7 +277,7 @@
 				printf("Their are more frees than allocations.\n");EXIT_ERROR();}\
 			if(allocated != var){\
 				printf("[LEAK] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
-				printf("There are more chunks allocated then expected (%d instead of %d).\n", debug.allocations, var); EXIT_ERROR();}}while(0)
+				printf("There are more chunks allocated then expected (%d instead of %d).\n", debug.allocations - debug.frees, var); EXIT_ERROR();}}while(0)
 		#define ALLOCATION_REPORT() do{\
 			printf("\nMemory allocation report:\n");\
 			printf("Total memory allocated: %ld\n", (long int) debug.total_allocated);\
@@ -232,23 +290,6 @@
 	* Adds extra checks for errors during development,
 	* does not change code.
 	**/
-
-	#ifdef PEDANTIC
-
-		#undef CHECK
-		#undef CHECK_NOT_NULL
-		#undef CHECK_NULL
-
-		#define CHECK( cond, ...) do{\
-			if(!(cond)){PERROR(__VA_ARGS__); EXIT_ERROR();}} while(0)
-
-		#define CHECK_NOT_NULL( var ) do{\
-			if( var == NULL){PERROR("The pointer should not be NULL.\n"); EXIT_ERROR();}} while(0)
-
-		#define CHECK_NULL( var ) do{\
-			if( var != NULL){PERROR("The pointer should be NULL.\n"); EXIT_ERROR();}} while(0)
-
-	#endif /* ifndef PEDANTIC */
 
 #endif /* ifndef PRODUCTION */
 
