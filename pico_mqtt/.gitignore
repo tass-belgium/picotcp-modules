@@ -3,3 +3,6 @@
 *.o
 ./tests/check/*/
 ./tests/check/*.*
+*.gcda
+*.gcno
+*.gcov
