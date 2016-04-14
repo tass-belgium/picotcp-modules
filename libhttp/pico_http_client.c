@@ -2321,7 +2321,7 @@ static int8_t read_chunk_line(struct pico_http_client *client)
     return HTTP_RETURN_OK;
 }
 
-void pico_http_set_close_ev(uint16_t conn)
+static int8_t pico_http_set_close_ev(uint16_t conn)
 {
 	struct pico_http_client dummy = {
 		.connectionID = conn
