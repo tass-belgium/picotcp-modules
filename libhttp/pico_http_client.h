@@ -73,4 +73,6 @@ struct pico_http_uri *pico_http_client_read_uri_data(uint16_t conn);
 int32_t pico_http_client_read_body(uint16_t conn, unsigned char *data, uint16_t size, uint8_t *body_read_done);
 int8_t pico_http_client_close(uint16_t conn);
 
+int8_t pico_http_set_close_ev(uint16_t conn);
+
 #endif /* PICO_HTTP_CLIENT_H_ */
