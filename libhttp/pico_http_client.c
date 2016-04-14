@@ -91,6 +91,8 @@ struct pico_http_client
     uint32_t request_parts_len;
     uint32_t request_parts_idx;
     uint8_t long_polling_state;
+    uint8_t conn_state;
+    uint8_t connection_type;
 
 };
 
@@ -1324,7 +1326,6 @@ static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn)
     return client->connectionID;
 }
 
-
 /*
  * API used for opening a new HTTP Client.
  *
@@ -1485,7 +1486,7 @@ int8_t MOCKABLE pico_http_client_send_delete(uint16_t conn, char *resource, uint
 /*
  * API for sending a POST request.
  *
- * The library will build the request
+ * The library will build the requlibhttp/pico_http_client.cest
  * based on the uri passed when opening the client.
  *
  * User should not FREE the post_data until it has been written to the http_socket.
