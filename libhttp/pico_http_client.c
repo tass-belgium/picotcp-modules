@@ -11,6 +11,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <wolfssl/wolfcrypt/coding.h>
 #include "pico_tree.h"
 #include "pico_config.h"
 #include "pico_socket.h"
@@ -20,6 +21,7 @@
 #include "pico_http_util.h"
 #include "pico_ipv4.h"
 #include "pico_stack.h"
+
 /*
  * This is the size of the following header
  *
@@ -32,7 +34,9 @@
  * where <resource>,<host> and <port> will be added later.
  */
 
-#define HTTP_GET_BASIC_SIZE                 70u
+#define WOLFSSL_BASE64_ENCODE
+
+#define HTTP_GET_BASIC_SIZE                 100u   //70u
 #define HTTP_POST_BASIC_SIZE                256u
 #define HTTP_POST_MULTIPART_BASIC_SIZE      80u
 #define HTTP_POST_HEADER_BASIC_SIZE         160u
@@ -46,7 +50,9 @@
     #undef dbg
 #endif
 
-#define dbg(...) do {} while(0)
+#define dbg printf
+//#define dbg(...) do {} while(0)
+
 #define nop() do {} while(0)
 
 #define consume_char(c)                          (pico_socket_read(client->sck, &c, 1u))
@@ -85,6 +91,7 @@ struct pico_http_client
     uint32_t request_parts_len;
     uint32_t request_parts_idx;
     uint8_t long_polling_state;
+
 };
 
 /* HTTP Client internal states */
@@ -303,6 +310,12 @@ static int8_t pico_process_resource(const char *resource, struct pico_http_uri *
 static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 {
     uint16_t last_index = 0, index;
+    uint16_t credentials_index = 0;
+    uint8_t userpass_flag = 0;
+    char buffin[128];
+    char buffout[256];
+    uint32_t outLen = sizeof(buffout);
+
     dbg("Start: pico_process_uri(..) %s\n", uri);
     if (!uri || !urikey || uri[0] == '/')
     {
@@ -336,11 +349,45 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
     }
 
     /* detect hostname */
+    /*<user>:<password>@<host>:<port>/<url-path>*/
+    /* Check if the user (and password) are specified. */
+    dbg("detecting hostname\n");
     index = last_index;
+    while ( uri[index] && uri[index] != '\0' )
+    {
+    	if ( uri[index] == '@') {
+    		/* Username and password are specified */
+    		userpass_flag = 1;
+    		break;
+    	} else if ( uri[index] == '/' ) {
+    		/* End of <host>:<port> specification */
+    		userpass_flag = 0;
+    		break;
+    	}
+
+    	index++;
+    }
+
+    index = last_index;
+    credentials_index = last_index;
+    if ( userpass_flag )
+    {
+    	dbg("skipping user name and password to find host\n");
+    	/* skip username and password */
+		while ( uri[index] && uri[index] != '\0' && uri[index] != '@')
+		{
+			index++;
+		}
+		/* skip the @ */
+		index++;
+	}
+
+    last_index = index;
     while (uri[index] && uri[index] != '/' && uri[index] != ':') index++;
     if (index == last_index)
     {
         /* wrong format */
+    	dbg("wrong format\n");
         urikey->host = urikey->resource = NULL;
         urikey->port = urikey->protoHttp = 0u;
         pico_err = PICO_ERR_EINVAL;
@@ -350,6 +397,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
     else
     {
         /* extract host */
+    	dbg("extract host\n");
         urikey->host = PICO_ZALLOC((uint32_t)(index - last_index + 1));
 
         if(!urikey->host)
@@ -361,6 +409,33 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
         }
 
         memcpy(urikey->host, uri + last_index, (size_t)(index - last_index));
+
+        /* extract user credentials */
+
+
+		if ( userpass_flag ){
+			dbg("extract login and password\n");
+			memcpy(buffin, uri + credentials_index, (size_t)((last_index) - credentials_index)-1);
+			buffin[(last_index - credentials_index)-1]='\0';
+
+			if (Base64_Encode(buffin, strlen(buffin), buffout, &outLen) != 0){
+			    		/*encoding error*/
+			    		dbg("error happened while encoding\n");
+			 }
+			/* removing the trailing \n \t from the base46_Encode*/
+			buffout[strlen(buffout)-2] = '\0';
+			urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
+			if(!urikey->user_pass)
+			{
+				/* no memory */
+				pico_err = PICO_ERR_ENOMEM;
+				pico_http_uri_destroy(urikey);
+				return HTTP_RETURN_ERROR;
+			}
+			memcpy(urikey->user_pass, buffout, (size_t)(strlen(buffout)+1));
+			dbg("processed userpass = %s and lenght = %i\n", urikey->user_pass, strlen(urikey->user_pass));
+		}
+
     }
 
     if (!uri[index] || uri[index] == '/')
@@ -695,7 +770,6 @@ char *pico_http_client_build_get(const struct pico_http_uri *uri_data, uint8_t c
 {
     char *header;
     char port[6u]; /* 6 = max length of a uint16 + \0 */
-
     uint64_t header_size = HTTP_GET_BASIC_SIZE;
 
     if (!uri_data->host || !uri_data->resource || !uri_data->port)
@@ -704,25 +778,59 @@ char *pico_http_client_build_get(const struct pico_http_uri *uri_data, uint8_t c
         return NULL;
     }
 
-    /*  */
-    header_size += (header_size + strlen(uri_data->host));
-    header_size += (header_size + strlen(uri_data->resource));
-    header_size += (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
-    header = PICO_ZALLOC(header_size);
+    if (!uri_data->user_pass){
+    	dbg("USING NO USERPASS\n");
+    	header_size += (header_size + strlen(uri_data->host));
+		header_size += (header_size + strlen(uri_data->resource));
+		header_size += (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
+		header = PICO_ZALLOC(header_size);
 
-    if (!header)
-    {
-        /* not enough memory */
-        pico_err = PICO_ERR_ENOMEM;
-        return NULL;
+		if (!header)
+		{
+			/* not enough memory */
+			pico_err = PICO_ERR_ENOMEM;
+			return NULL;
+		}
+
+		/* build the actual header */
+		sprintf(header, "GET %s HTTP/1.1\r\nHost: %s:%s\r\nUser-Agent: picoTCP\r\nConnection: %s\r\n\r\n",
+				uri_data->resource,
+				uri_data->host,
+				port,
+				connection_type == HTTP_CONN_CLOSE ? "Close":"Keep-Alive");
+    } else {
+    	dbg("USING USERPASS\n");
+		printf("user_pass: %s\n",uri_data->user_pass);
+    	 /* build the header with authorization*/
+
+    	dbg("creating header length\n");
+    	header_size += (header_size + strlen(uri_data->host));
+    	header_size += (header_size + strlen(uri_data->user_pass));
+		header_size += (header_size + strlen(uri_data->resource));
+		header_size += (header_size + pico_itoa(uri_data->port, port) + 4u); /* 3 = size(CRLF + \0) */
+		header = PICO_ZALLOC(header_size);
+
+		if (!header)
+		{
+			/* not enough memory */
+			dbg("error header not created\n");
+			pico_err = PICO_ERR_ENOMEM;
+			return NULL;
+		}
+
+		/* build the actual header */
+		dbg("building the header/n");
+		sprintf(header, "GET %s HTTP/1.1\r\nAuthorization: Basic %s\r\nHost: %s:%s\r\nUser-Agent: picoTCP\r\nConnection: %s\r\n\r\n",
+						uri_data->resource,
+						uri_data->user_pass,
+		                uri_data->host,
+		                port,
+		                connection_type == HTTP_CONN_CLOSE ? "Close":"Keep-Alive");
     }
 
-    /* build the actual header */
-    sprintf(header, "GET %s HTTP/1.1\r\nHost: %s:%s\r\nUser-Agent: picoTCP\r\nConnection: %s\r\n\r\n",
-            uri_data->resource,
-            uri_data->host,
-            port,
-            connection_type == HTTP_CONN_CLOSE ? "Close":"Keep-Alive");
+
+
+
     return header;
 }
 
@@ -1647,6 +1755,7 @@ int8_t MOCKABLE pico_http_client_send_get(uint16_t conn, char *resource, uint8_t
     {
         return HTTP_RETURN_ERROR;
     }
+    http->connection_type = connection_type;
     return HTTP_RETURN_OK;
 }
 /* / */
@@ -1815,12 +1924,13 @@ int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, unsigned char *data, 
         dbg("Body read finished! %d\n", client->body_read);
         client->state = HTTP_CONN_IDLE;
         client->body_read = 0;
-        client->body_read_done = 0;
+        //client->body_read_done = 0;
         *body_read_done = 1;
-        if (client->long_polling_state == HTTP_LONG_POLL_CONN_KEEP_ALIVE)
+        if (client->long_polling_state)
         {
             treat_long_polling(client, 0);//only on keep alive connection_types, for the close connection_type we wait for the close event in the tcp_callback
         }
+
     }
     return bytes_read;
 }
@@ -1909,6 +2019,10 @@ static int8_t free_uri(struct pico_http_client *to_be_removed)
         {
             PICO_FREE(to_be_removed->urikey->raw_uri);
         }
+        if (to_be_removed->urikey->user_pass)
+	    {
+		   PICO_FREE(to_be_removed->urikey->user_pass);
+	    }
         PICO_FREE(to_be_removed->urikey);
     }
 
@@ -2206,3 +2320,25 @@ static int8_t read_chunk_line(struct pico_http_client *client)
 
     return HTTP_RETURN_OK;
 }
+
+void pico_http_set_close_ev(uint16_t conn)
+{
+	struct pico_http_client dummy = {
+		.connectionID = conn
+	};
+	struct pico_http_client *client = pico_tree_findKey(&pico_client_list, &dummy);
+
+	if (!client)
+	{
+		dbg("Wrong connection id !\n");
+		pico_err = PICO_ERR_EINVAL;
+		return HTTP_RETURN_ERROR;
+	}
+	client->wakeup(EV_HTTP_CLOSE, client->connectionID);
+
+}
+
+
+
+
+
