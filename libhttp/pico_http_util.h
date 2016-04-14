@@ -114,6 +114,7 @@ struct pico_http_uri
 {
     char *raw_uri;  /* can contain host + port + resource */
     uint8_t protoHttp;      /* is the protocol Http ? */
+    char *user_pass;		/*to also provide the login credentials in the get request*/
     char *host;             /* hostname */
     uint16_t port;          /* port if specified */
     char *resource;         /* resource , ignoring the other possible parameters */
