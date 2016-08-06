@@ -1,43 +1,22 @@
-#define _BSD_SOURCE
+/*#define _BSD_SOURCE
 #include <stdlib.h>
-#include <check.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
-#include <sys/time.h>
+#include <sys/time.h>*/
+#define DEBUG 3
+#define DISABLE_TRACE
+
+#include <check.h>
 #include "pico_mqtt.h"
-
-/**
-* test data types
-**/
-/*
-struct pico_mqtt{
-	uint32_t bytes_used;
-	struct pico_mqtt_socket* socket;
-};*/
-
-struct pico_mqtt_socket{
-	uint32_t bytes_to_read;
-	uint32_t bytes_to_write;
-	uint32_t usecs_to_use;
-	uint32_t secs_to_use;
-	int value_to_return;
-};
-
-/**
-* Mocked functions
-**/
-
-int pico_mqtt_connection_send( struct pico_mqtt_socket* socket, struct pico_mqtt_data* write_buffer, struct timeval* time_left);
-int pico_mqtt_connection_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct timeval* time_left);
-int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct pico_mqtt_data* write_buffer, struct timeval* time_left);
+#include "pico_mqtt_socket_mock.h"
+#include "pico_mqtt_serializer_mock.h"
 
 /**
 * test functions prototypes
 **/
 
-int my_malloc(struct pico_mqtt* mqtt, void** data, size_t size);
-int my_free(struct pico_mqtt* mqtt, void* data, size_t size);
+Suite * stream_test_suite(void);
 
 /**
 * file under test
@@ -48,340 +27,626 @@ int my_free(struct pico_mqtt* mqtt, void* data, size_t size);
 /**
 * tests
 **/
-/*
-START_TEST(moc_socket_test)
+
+
+START_TEST(pico_mqtt_stream_create_test)
 {
-	uint8_t indexes[10] = {0,1,2,3,4,5,6,7,8,9};
-	struct pico_mqtt_data read_buffer = {
-		.length = 10,
-		.data = (void*) indexes};
-	struct pico_mqtt_data write_buffer = {
-		.length = 10,
-		.data = (void*) indexes};
-	struct pico_mqtt_socket orders = {
-		.bytes_to_read = 0,
-		.bytes_to_write = 0,
-		.value_to_return = 0
-	};
-	struct timeval time_left = {
-		.tv_usec = 0,
-		.tv_sec = 0
-	};
-	int result;
-	
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 0, "Moc socket does not return requested result (0)\n");
-	ck_assert_msg( write_buffer.data == indexes, "Moc socket changes write buffer index when no change is asked\n");
-	ck_assert_msg( write_buffer.length == 10, "Moc socket changes write buffer length left when no change is asked\n");
-	ck_assert_msg( read_buffer.data == indexes, "Moc socket changes read buffer index when no change is asked\n");
-	ck_assert_msg( read_buffer.length == 10, "Moc socket changes read buffer length left when no change is asked\n");
-	ck_assert_msg( time_left.tv_usec == 0, "The time left should be the same (0 microsecondes).");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the same (0 seconds).");
+	int error;
+	struct pico_mqtt_stream* stream;
 
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	orders.bytes_to_read = 1;
-	orders.bytes_to_write = 0;
-	orders.value_to_return = 1;
+	MALLOC_SUCCEED();
+	stream = pico_mqtt_stream_create( &error );
+	ck_assert_msg( stream != NULL , "Should be able to create the stream succesfully\n");
+	FREE(stream->socket);
+	FREE(stream);
+	CHECK_NO_ALLOCATIONS();
 
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 1, "Moc socket does not return requested result (1)\n");
-	ck_assert_msg( write_buffer.data == indexes, "Moc socket changes write buffer index when no change is asked\n");
-	ck_assert_msg( write_buffer.length == 10, "Moc socket changes write buffer length left when no change is asked\n");
-	ck_assert_msg( read_buffer.data == &(indexes[1]), "Moc socket did not read the correct number of bytes\n");
-	ck_assert_msg( read_buffer.length == 9, "Moc socket didn't changed the read buffer length as requested\n");
-	ck_assert_msg( time_left.tv_usec == 0, "The time left should be the same (0 microsecondes).");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the same (0 seconds).");
+	MALLOC_FAIL();
+	stream = pico_mqtt_stream_create( &error );
+	ck_assert_msg( stream == NULL , "Should not be able to create the stream succesfully\n");
+	CHECK_NO_ALLOCATIONS();
+
+	MALLOC_SUCCEED();
+	socket_mock_set_create_fail(1);
+	stream = pico_mqtt_stream_create( &error );
+	ck_assert_msg( stream == NULL , "Should not be able to create the stream succesfully\n");
+	CHECK_NO_ALLOCATIONS();
 
 
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	orders.bytes_to_read = 0;
-	orders.bytes_to_write = 3;
-	orders.value_to_return = 2;
-
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 2, "Moc socket does not return requested result (2)\n");
-	ck_assert_msg( write_buffer.data == &(indexes[3]), "Moc socket did not write the correct number of bytes\n");
-	ck_assert_msg( write_buffer.length == 7, "Moc socket didn't changed the write buffer length as requested\n");
-	ck_assert_msg( read_buffer.data == indexes, "Moc socket changes read buffer index when no change is asked\n");
-	ck_assert_msg( read_buffer.length == 10, "Moc socket changes read buffer length left when no change is asked\n");
-	ck_assert_msg( time_left.tv_usec == 0, "The time left should be the same (0 microsecondes).");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the same (0 seconds).");
-
-
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	orders.bytes_to_read = 7;
-	orders.bytes_to_write = 5;
-	orders.value_to_return = 0;
-
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 0, "Moc socket does not return requested result (0)\n");
-	ck_assert_msg( write_buffer.data == &(indexes[5]), "Moc socket did not write the correct number of bytes\n");
-	ck_assert_msg( write_buffer.length == 5, "Moc socket didn't changed the write buffer length as requested\n");
-	ck_assert_msg( read_buffer.data == &(indexes[7]), "Moc socket did not read the correct number of bytes\n");
-	ck_assert_msg( read_buffer.length == 3, "Moc socket didn't changed the read buffer length as requested\n");
-	ck_assert_msg( time_left.tv_usec == 0, "The time left should be the same (0 microsecondes).");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the same (0 seconds).");
-
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	time_left = (struct timeval){.tv_usec = 0, .tv_sec = 0};
-	orders.bytes_to_read = 4;
-	orders.bytes_to_write = 3;
-	orders.value_to_return = 2;
-	orders.usecs_to_use = 1;
-	orders.secs_to_use = 0;
-
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 2, "Moc socket does not return requested result (2)\n");
-	ck_assert_msg( write_buffer.data == &(indexes[3]), "Moc socket did not write the correct number of bytes\n");
-	ck_assert_msg( write_buffer.length == 7, "Moc socket didn't changed the write buffer length as requested\n");
-	ck_assert_msg( read_buffer.data == &(indexes[4]), "Moc socket did not read the correct number of bytes\n");
-	ck_assert_msg( read_buffer.length == 6, "Moc socket didn't changed the read buffer length as requested\n");
-	ck_assert_msg( time_left.tv_usec == 0, "The time left should be 0 microsecondes, can not have a negative time.");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the same (0 seconds).");
-
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	time_left = (struct timeval){.tv_usec = 0, .tv_sec = 0};
-	orders.bytes_to_read = 4;
-	orders.bytes_to_write = 3;
-	orders.value_to_return = 2;
-	orders.usecs_to_use = 0;
-	orders.secs_to_use = 1;
-
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 2, "Moc socket does not return requested result (2)\n");
-	ck_assert_msg( write_buffer.data == &(indexes[3]), "Moc socket did not write the correct number of bytes\n");
-	ck_assert_msg( write_buffer.length == 7, "Moc socket didn't changed the write buffer length as requested\n");
-	ck_assert_msg( read_buffer.data == &(indexes[4]), "Moc socket did not read the correct number of bytes\n");
-	ck_assert_msg( read_buffer.length == 6, "Moc socket didn't changed the read buffer length as requested\n");
-	ck_assert_msg( time_left.tv_usec == 0, "The time left should be 0 microsecondes, can not have a negative time.");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the same 0 seconds, can not have a negative time.");
-
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	time_left = (struct timeval){.tv_usec = 10, .tv_sec = 10};
-	orders.bytes_to_read = 4;
-	orders.bytes_to_write = 3;
-	orders.value_to_return = 2;
-	orders.usecs_to_use = 5;
-	orders.secs_to_use = 5;
-
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 2, "Moc socket does not return requested result (2)\n");
-	ck_assert_msg( write_buffer.data == &(indexes[3]), "Moc socket did not write the correct number of bytes\n");
-	ck_assert_msg( write_buffer.length == 7, "Moc socket didn't changed the write buffer length as requested\n");
-	ck_assert_msg( read_buffer.data == &(indexes[4]), "Moc socket did not read the correct number of bytes\n");
-	ck_assert_msg( read_buffer.length == 6, "Moc socket didn't changed the read buffer length as requested\n");
-	ck_assert_msg( time_left.tv_usec == 5, "The time left should be 5 microsecondes.");
-	ck_assert_msg( time_left.tv_sec == 5, "The time left should be the 5 seconds.");
-
-	read_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	write_buffer = (struct pico_mqtt_data){.length = 10, .data = (void*) indexes};
-	time_left = (struct timeval){.tv_usec = 0, .tv_sec = 10};
-	orders.bytes_to_read = 4;
-	orders.bytes_to_write = 3;
-	orders.value_to_return = 2;
-	orders.usecs_to_use = 500000;
-	orders.secs_to_use = 9;
-
-	result = pico_mqtt_connection_send_receive(&orders, &write_buffer, &read_buffer, &time_left);
-	ck_assert_msg( result == 2, "Moc socket does not return requested result (2)\n");
-	ck_assert_msg( write_buffer.data == &(indexes[3]), "Moc socket did not write the correct number of bytes\n");
-	ck_assert_msg( write_buffer.length == 7, "Moc socket didn't changed the write buffer length as requested\n");
-	ck_assert_msg( read_buffer.data == &(indexes[4]), "Moc socket did not read the correct number of bytes\n");
-	ck_assert_msg( read_buffer.length == 6, "Moc socket didn't changed the read buffer length as requested\n");
-	ck_assert_msg( time_left.tv_usec == 500000, "The time left should be 500000 microsecondes.");
-	ck_assert_msg( time_left.tv_sec == 0, "The time left should be the 0 seconds.");
+	CHECK_NO_ALLOCATIONS();
 }
 END_TEST
 
-START_TEST(create_and_destroy_test)
+START_TEST(pico_mqtt_stream_destroy_test)
+{
+	int error;
+	struct pico_mqtt_stream* stream;
+
+	pico_mqtt_stream_destroy( NULL );
+
+	stream = pico_mqtt_stream_create( &error );
+	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
+
+	stream = pico_mqtt_stream_create( &error );
+	stream->send_message.data = MALLOC(1);
+	stream->send_message.length = 1;
+	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
+
+	stream = pico_mqtt_stream_create( &error );
+	stream->receive_message.data = MALLOC(1);
+	stream->receive_message.length = 1;
+	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(update_time_left_test)
+{
+	uint64_t previous_time = 0;
+	uint64_t time_left = 100;
+
+	previous_time = 0;
+	time_left = 100;
+	socket_mock_set_time( 0 );
+	update_time_left( &previous_time, &time_left);
+	ck_assert_msg( previous_time == 0 , "The previous_time was set incorrectly\n");
+	ck_assert_msg( time_left == 100 , "The time_left was set incorrectly, time past: 0\n");
+
+	previous_time = 0;
+	time_left = 100;
+	socket_mock_set_time( 50 );
+	update_time_left( &previous_time, &time_left);
+	ck_assert_msg( previous_time == 50 , "The previous_time was set incorrectly\n");
+	ck_assert_msg( time_left == 50 , "The time_left was set incorrectly, time past: 50\n");
+
+	previous_time = 50;
+	time_left = 100;
+	socket_mock_set_time( 50 );
+	update_time_left( &previous_time, &time_left);
+	ck_assert_msg( previous_time == 50 , "The previous_time was set incorrectly\n");
+	ck_assert_msg( time_left == 100 , "The time_left was set incorrectly, time past: 50\n");
+
+	previous_time = 50;
+	time_left = 100;
+	socket_mock_set_time( 150 );
+	update_time_left( &previous_time, &time_left);
+	ck_assert_msg( previous_time == 150 , "The previous_time was set incorrectly\n");
+	ck_assert_msg( time_left == 0 , "The time_left was set incorrectly, time past: 100\n");
+
+	previous_time = 50;
+	time_left = 100;
+	socket_mock_set_time( 200 );
+	update_time_left( &previous_time, &time_left);
+	ck_assert_msg( previous_time == 200 , "The previous_time was set incorrectly\n");
+	ck_assert_msg( time_left == 0 , "The time_left was set incorrectly, time past: 150\n");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+
+START_TEST(pico_mqtt_stream_connect_test)
 {
 	int result = 0;
+	int error = 0;
+	struct pico_mqtt_stream* stream = NULL;
+	stream = pico_mqtt_stream_create( &error );
 
-	struct pico_mqtt mqtt = {.bytes_used = 0, .stream = NULL};
 
-	result = pico_mqtt_stream_create( &mqtt, "127.0.0.1", "3200");
 
-	ck_assert_msg( result == 0, "Failed to create the stream\n");
+	socket_mock_set_return_value(SUCCES);
+	result = pico_mqtt_stream_connect( stream, NULL, NULL);
+	ck_assert_msg( result == SUCCES , "The call should have succeedded\n");
 
-	pico_mqtt_stream_destroy( &mqtt );
-}
-END_TEST*/
-/*
-START_TEST(is_output_message_set_test){
-	int result = 0;
-	struct pico_mqtt_stream* stream;
-	uint8_t indexes[10] = {0,1,2,3,4,5,6,7,8,9};
-	struct pico_mqtt_data message = {.length = 10, .data = indexes};
-	struct pico_mqtt mqtt = {.bytes_used = 0, .stream = NULL};
-	uint8_t flag = 0;
+	PERROR_DISABLE_ONCE();
+	socket_mock_set_return_value(ERROR);
+	result = pico_mqtt_stream_connect( stream, NULL, NULL);
+	ck_assert_msg( result == ERROR , "The call should not have succeedded\n");
 
-	result = pico_mqtt_stream_is_output_message_set( NULL, NULL );
-	ck_assert_msg( result == SUCCES, "If no stream is specified, the check function should return 0.");
-
-	result = pico_mqtt_stream_create( &mqtt, "127.0.0.1", "1883");
-	ck_assert_msg( result == SUCCES, "Failed to create the stream\n");
-
-	result = pico_mqtt_stream_is_output_message_set( mqtt );
-	ck_assert_msg( result == SUCCES, "If no message is set, the check function should return 0.");
-
-	stream->output_message = &message;
-
-	result = pico_mqtt_stream_is_output_message_set( mqtt, &flag );
-	ck_assert_msg( result == SUCCES, "If a message is set, the check function should return 1.");
-	
 	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
 }
 END_TEST
 
-START_TEST(is_input_message_set_test){
-	int result = 0;
-	struct pico_mqtt_stream* stream;
-	struct pico_mqtt_socket socket;
-	uint8_t indexes[10] = {0,1,2,3,4,5,6,7,8,9};
-	struct pico_mqtt_data message = {.length = 10, .data = indexes};
-	struct pico_mqtt mqtt = {.bytes_used = 0, .socket = &socket};
-
-	result = pico_mqtt_stream_is_input_message_set( NULL );
-	ck_assert_msg( result == 0, "If no stream is specified, the check function should return 0.");
-
-	result = pico_mqtt_stream_create( &mqtt, &stream, my_malloc, my_free);
-	ck_assert_msg( result == 0, "Failed to create the stream\n");
-
-	result = pico_mqtt_stream_is_input_message_set( stream );
-	ck_assert_msg( result == 0, "If no message is set, the check function should return 0.");
-
-	stream->input_message = &message;
-
-	result = pico_mqtt_stream_is_input_message_set( stream );
-	ck_assert_msg( result == 1, "If a message is set, the check function should return 1.");
-	
-	pico_mqtt_stream_destroy( stream );
-}
-END_TEST
-
-
-START_TEST(set_message_test){
-	int result = 0;
-	struct pico_mqtt_stream* stream;
-	struct pico_mqtt_socket socket;
-	uint8_t indexes[10] = {0,1,2,3,4,5,6,7,8,9};
-	struct pico_mqtt_data message = {.length = 10, .data = indexes};
-	struct pico_mqtt mqtt = {.bytes_used = 0, .socket = &socket};
-
-	result = pico_mqtt_stream_create( &mqtt, &stream, my_malloc, my_free);
-	ck_assert_msg( result == 0, "Failed to create the stream\n");
-
-	result = pico_mqtt_stream_set_output_message( stream, NULL);
-	ck_assert_msg( result ==-1, "An error should be returned when giving a invalid message\n");
-
-	result = pico_mqtt_stream_set_output_message( NULL, NULL);
-	ck_assert_msg( result ==-1, "An error should be returned when giving an invallid stream\n");
-
-	result = pico_mqtt_stream_set_output_message( stream, &message );
-	ck_assert_msg( result == 0, "No error should occur when setting a valid message\n");
-
-	result = pico_mqtt_stream_set_output_message( stream, &message );
-	ck_assert_msg( result ==-4, "An error should occur when trying to set a message when a message was already was set.\n");
-	
-	pico_mqtt_stream_destroy( stream );
-}
-END_TEST
-
-START_TEST(is_time_left_test)
+START_TEST(pico_mqtt_stream_is_message_sending_test)
 {
-	struct timeval time_left = {.tv_usec = 0, .tv_sec = 0};
-	int result;
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
 
-	result = is_time_left( NULL );
-	ck_assert_msg( result == -1, "When time left is not specified, result should be -1");
+	result = pico_mqtt_stream_is_message_sending( &stream );
+	ck_assert_msg( result == 0 , "No message is being send, incorrect result\n");
 
-	result = is_time_left( &time_left );
-	ck_assert_msg( result == 0, "When no time is left, 0 should be returned.");
+	stream.send_message.data = &result;
+	result = pico_mqtt_stream_is_message_sending( &stream );
+	ck_assert_msg( result == 1 , "A message is being send, incorrect result\n");
 
-	time_left.tv_usec = 1;
-
-	result = is_time_left( &time_left );
-	ck_assert_msg( result == 1, "When 1 microsecond is left, 1 should be returned.");
-
-	time_left.tv_usec = 0;
-	time_left.tv_sec = 1;
-
-	result = is_time_left( &time_left );
-	ck_assert_msg( result == 1, "When 1 second is left, 1 should be returned.");
-
-	time_left.tv_usec = 1;
-	time_left.tv_sec = 1;
-
-	result = is_time_left( &time_left );
-	ck_assert_msg( result == 1, "When 1 second and 1 microsecond is left, 1 should be returned.");
-}
-END_TEST*/
-
-START_TEST(send_message_test){	int result = 0;
-	struct pico_mqtt_socket socket;
-	uint8_t indexes[10] = {0,1,2,3,4,5,6,7,8,9};
-	struct pico_mqtt_data data = {.length = 10, .data = indexes};
-	struct timeval time_left = {.tv_sec = 0, .tv_usec = 0};
-	struct pico_mqtt mqtt = {.bytes_used = 0, .stream = NULL};
-
-	struct pico_mqtt_message message = {
-		.header = 0,
-		.status = 0,
-		.message_id = 0,
-		.topic = {.length = 0, .data = NULL},
-		.data = data
-	};
-
-	socket = (struct pico_mqtt_socket){
-		.bytes_to_read = 0,
-		.bytes_to_write = 0,
-		.usecs_to_use = 0,
-		.secs_to_use = 0,
-		.value_to_return = 0
-	};
-
-	result = pico_mqtt_stream_create( &mqtt );
-	ck_assert_msg( result == 0, "Failed to create the stream\n");
-
-	result = pico_mqtt_stream_connect( &mqtt, "127.0.0.1", "1883");
-	ck_assert_msg( result == 0, "Failed to create the stream\n");
-
-	mqtt.stream->socket = &socket;
-
-	result = pico_mqtt_stream_set_output_message( &mqtt, &message);
-	ck_assert_msg( result == 0, "Failed to set the message to send\n");
-
-	result = pico_mqtt_stream_send_receive( &mqtt, &time_left);
-	ck_assert_msg( result == 0, "A timeout should have occured but didn't\n");
-
-	socket = (struct pico_mqtt_socket) {
-		.bytes_to_read = 10,
-		.bytes_to_write = 0,
-		.usecs_to_use = 500000,
-		.secs_to_use = 2,
-		.value_to_return = 0
-	};
-	
-	time_left = (struct timeval) {.tv_sec = 5, .tv_usec = 0};
-
-	result = pico_mqtt_stream_send_receive( &mqtt, &time_left);
-	ck_assert_msg( result == SUCCES, "The result should be 1\n");
-	ck_assert_msg( time_left.tv_sec == 2, "2 seconds should have been left\n");
-	ck_assert_msg( time_left.tv_usec == 500000, "500000 usecs should have been left\n");
-	ck_assert_msg( message.data.length == 5, "5 bytes should have been left after reading\n");
-	ck_assert_msg( message.data.data == &(indexes[5]), "the index should have been 5\n");
-
-	pico_mqtt_stream_destroy( &mqtt );
+	CHECK_NO_ALLOCATIONS();
 }
 END_TEST
 
-Suite * tcp_suite(void)
+START_TEST(pico_mqtt_stream_is_message_received_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+
+	result = pico_mqtt_stream_is_message_received( &stream );
+	ck_assert_msg( result == 0 , "No message is received yet, incorrect result\n");
+
+	stream.receive_message.data = &result;
+	stream.receive_message_buffer.length = 1;
+	result = pico_mqtt_stream_is_message_received( &stream );
+	ck_assert_msg( result == 0 , "No message is received yet, incorrect result\n");
+
+	stream.receive_message.data = &result;
+	stream.receive_message_buffer.length = 0;
+	result = pico_mqtt_stream_is_message_received( &stream );
+	ck_assert_msg( result == 1 , "A message is received, incorrect result\n");
+
+	stream.receive_message.data = NULL;
+	stream.receive_message_buffer.length = 1;
+	result = pico_mqtt_stream_is_message_received( &stream );
+	ck_assert_msg( result == 0 , "No message is received yet, incorrect result\n");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+
+START_TEST(pico_mqtt_stream_set_send_message_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+	struct pico_mqtt_data data = PICO_MQTT_DATA_EMPTY;
+	data.data = &result;
+	data.length = 1;
+
+	pico_mqtt_stream_set_send_message( &stream, data);
+	ck_assert_msg( stream.send_message.data == &result , "data was set incorrectly\n");
+	ck_assert_msg( stream.send_message.length == 1 , "data was set incorrectly\n");
+	ck_assert_msg( stream.send_message_buffer.data == &result , "data was set incorrectly\n");
+	ck_assert_msg( stream.send_message_buffer.length == 1 , "data was set incorrectly\n");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(pico_mqtt_stream_get_received_message_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+	struct pico_mqtt_data data = PICO_MQTT_DATA_EMPTY;
+	struct pico_mqtt_data data_received = PICO_MQTT_DATA_EMPTY;
+	data.data = &result;
+	data.length = 1;
+	stream.receive_message = data;
+
+	data_received = pico_mqtt_stream_get_received_message( &stream );
+	ck_assert_msg( data_received.data == data.data , "data was set incorrectly\n");
+	ck_assert_msg( data_received.length == data.length , "data was set incorrectly\n");
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(receiving_fixed_header_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+	
+	stream.fixed_header_next_byte = 1;
+	result = receiving_fixed_header( &stream );
+	ck_assert_msg( result == 1 , "Reading fixed header not detected\n");
+
+	stream.fixed_header_next_byte = 0;
+	result = receiving_fixed_header( &stream );
+	ck_assert_msg( result == 0 , "Not reading fixed header, false detected\n");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(receiving_payload_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+	
+	stream.receive_message_buffer.length = 1;
+	result = receiving_payload( &stream );
+	ck_assert_msg( result == 1 , "Reading payload not detected\n");
+
+	stream.receive_message_buffer.length = 0;
+	result = receiving_payload( &stream );
+	ck_assert_msg( result == 0 , "Not reading payload, false detected\n");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(receive_in_progress_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message_buffer.length = 0;
+	result = receive_in_progress( &stream );
+	ck_assert_msg( result == 0 , "Inactive input falsly detected.");
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message_buffer.length = 1;
+	result = receive_in_progress( &stream );
+	ck_assert_msg( result == 1 , "Active input not detected.");
+	
+	stream.fixed_header_next_byte = 1;
+	stream.receive_message_buffer.length = 0;
+	result = receive_in_progress( &stream );
+	ck_assert_msg( result == 1 , "Active input not detected.");
+
+	stream.fixed_header_next_byte = 1;
+	stream.receive_message_buffer.length = 1;
+	result = receive_in_progress( &stream );
+	ck_assert_msg( result == 1 , "Active input not detected.");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(is_fixed_header_complete_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+
+	stream.fixed_header_next_byte = 0;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 0, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 1;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 0, "fixed header completion check failed\n");
+
+
+	stream.fixed_header_next_byte = 5;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 1, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 2;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x00;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 1, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 2;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 0, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 3;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	stream.fixed_header[2] = 0x00;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 1, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 3;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	stream.fixed_header[2] = 0x80;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 0, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 4;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	stream.fixed_header[2] = 0x80;
+	stream.fixed_header[3] = 0x00;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 1, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 4;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	stream.fixed_header[2] = 0x80;
+	stream.fixed_header[3] = 0x80;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 0, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 5;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	stream.fixed_header[2] = 0x80;
+	stream.fixed_header[3] = 0x80;
+	stream.fixed_header[4] = 0x00;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 1, "fixed header completion check failed\n");
+
+	stream.fixed_header_next_byte = 5;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 0x80;
+	stream.fixed_header[2] = 0x80;
+	stream.fixed_header[3] = 0x80;
+	stream.fixed_header[4] = 0x80;
+	result = is_fixed_header_complete( &stream );
+	ck_assert_msg(result == 1, "fixed header completion check failed\n");
+
+
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(is_send_receive_done_test)
+{
+	int result = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message.data = NULL;
+	stream.send_message.data = NULL;
+	result = is_send_receive_done( &stream, 0 );
+	ck_assert_msg( result == 1 , "send receive detection failed.");
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message.data = NULL;
+	stream.send_message.data = NULL;
+	result = is_send_receive_done( &stream, 1 );
+	ck_assert_msg( result == 0 , "send receive detection failed.");
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message.data = NULL;
+	stream.send_message.data = &result;
+	result = is_send_receive_done( &stream, 0 );
+	ck_assert_msg( result == 0 , "send receive detection failed.");
+
+	stream.fixed_header_next_byte = 1;
+	stream.receive_message.data = NULL;
+	stream.send_message.data = NULL;
+	result = is_send_receive_done( &stream, 0 );
+	ck_assert_msg( result == 0 , "send receive detection failed.");
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message.data = &result;
+	stream.send_message.data = NULL;
+	result = is_send_receive_done( &stream, 0 );
+	ck_assert_msg( result == 1 , "send receive detection failed.");
+
+	stream.fixed_header_next_byte = 0;
+	stream.receive_message.data = &result;
+	stream.send_message.data = NULL;
+	result = is_send_receive_done( &stream, 1 );
+	ck_assert_msg( result == 1 , "send receive detection failed.");
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(process_fixed_header_test)
+{
+	int result = 0;
+	int error = 0;
+	struct pico_mqtt_stream stream = PICO_MQTT_STREAM_EMPTY;
+	stream.error = &error;
+	stream.fixed_header[0] = 0;
+	stream.fixed_header[1] = 1;
+	stream.fixed_header[2] = 2;
+	stream.fixed_header[3] = 3;
+	stream.fixed_header[4] = 4;
+
+	serializer_mock_reset();
+	stream.fixed_header_next_byte = 0;
+	result = process_fixed_header( &stream );
+	ck_assert_msg( result == SUCCES , "Nothing should happen, fixed_header not yet complete");
+	ck_assert_msg( stream.receive_message.data == NULL , "Nothing should happen, fixed_header not yet complete");
+
+	stream.fixed_header_next_byte = 5;
+	serializer_mock_set_return_value( ERROR );
+	result = process_fixed_header( &stream );
+	ck_assert_msg( result == ERROR , "Nothing should happen, the fixed header has an error");
+	ck_assert_msg( stream.receive_message.data == NULL , "Nothing should happen, the fixed header has an error");
+
+	PERROR_DISABLE();
+	stream.fixed_header_next_byte = 5;
+	serializer_mock_set_return_value( SUCCES );
+	serializer_mock_set_length(MAXIMUM_MESSAGE_SIZE - 3);
+	result = process_fixed_header( &stream );
+	ck_assert_msg( result == ERROR , "Nothing should happen, the message is to long");
+	ck_assert_msg( stream.receive_message.data == NULL , "Nothing should happen, the message is to long");
+
+	MALLOC_FAIL_ONCE();
+	stream.fixed_header_next_byte = 5;
+	serializer_mock_set_return_value( SUCCES );
+	serializer_mock_set_length(MAXIMUM_MESSAGE_SIZE-5);
+	result = process_fixed_header( &stream );
+	ck_assert_msg( result == ERROR , "Nothing should happen, allocating the massage failed");
+	ck_assert_msg( stream.receive_message.data == NULL , "Nothing should happen, allocating the massage failed");
+	ck_assert_msg( stream.receive_message.length == 0 , "Nothing should happen, allocating the massage failed");
+	PERROR_ENABLE();
+
+	stream.fixed_header_next_byte = 5;
+	serializer_mock_set_return_value( SUCCES );
+	serializer_mock_set_length(MAXIMUM_MESSAGE_SIZE-5);
+	result = process_fixed_header( &stream );
+	ck_assert_msg( result == SUCCES , "The fixed header should be processed correctly");
+	ck_assert_msg( stream.receive_message.data != NULL , "The fixed header should be processed correctly");
+	ck_assert_msg( stream.receive_message.length == MAXIMUM_MESSAGE_SIZE , "The fixed header should be processed correctly");
+	ck_assert_msg( stream.receive_message_buffer.data == ((uint8_t*)(stream.receive_message.data)) + 5 , "The fixed header should be processed correctly");
+	ck_assert_msg( stream.receive_message_buffer.length == stream.receive_message.length-5, "The fixed header should be processed correctly");
+	ck_assert_msg( stream.fixed_header_next_byte == 0 , "The fixed header should be processed correctly");
+	ck_assert_msg( ((uint8_t*)(stream.receive_message.data))[0] == 0 , "The fixed header should be processed correctly");
+	ck_assert_msg( ((uint8_t*)(stream.receive_message.data))[1] == 1, "The fixed header should be processed correctly");
+	ck_assert_msg( ((uint8_t*)(stream.receive_message.data))[2] == 2 , "The fixed header should be processed correctly");
+	ck_assert_msg( ((uint8_t*)(stream.receive_message.data))[3] == 3 , "The fixed header should be processed correctly");
+	ck_assert_msg( ((uint8_t*)(stream.receive_message.data))[4] == 4 , "The fixed header should be processed correctly");
+
+	FREE(stream.receive_message.data);
+
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(send_receive_message_test)
+{
+	int result = 0;
+	uint8_t buffer_result[4] = {0,0,0,0};
+	int error = 0;
+	struct pico_mqtt_stream* stream = pico_mqtt_stream_create( &error );
+
+	// message is received
+	stream->receive_message.data = buffer_result;
+	stream->receive_message_buffer.length = 0;
+	socket_mock_set_return_value( ERROR );
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == ERROR , "Sending a message should fail\n");
+
+	// message is received
+	stream->receive_message_buffer.length = 0;
+	socket_mock_set_return_value( SUCCES );
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == SUCCES , "Sending a message should succeed\n");
+
+	// fixed header is received
+	stream->receive_message.data = buffer_result;
+	stream->receive_message_buffer.length = 1;
+	stream->fixed_header_next_byte = 0;
+	socket_mock_set_return_value( ERROR );
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == ERROR , "Sending a message should fail\n");
+
+	// fixed header is received
+	socket_mock_set_bytes_to_receive(4);
+	stream->receive_message_buffer.data = buffer_result;
+	stream->receive_message_buffer.length = 4;
+	stream->fixed_header_next_byte = 0;
+	socket_mock_set_return_value( SUCCES );
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == SUCCES , "Sending a message should succeed\n");
+
+	ck_assert_msg( buffer_result[0] == 0, "The receive_message is incorrect\n");
+	ck_assert_msg( buffer_result[1] == 1, "The receive_message is incorrect\n");
+	ck_assert_msg( buffer_result[2] == 2, "The receive_message is incorrect\n");
+	ck_assert_msg( buffer_result[3] == 3, "The receive_message is incorrect\n");
+
+	// fixed header is being received
+	socket_mock_set_bytes_to_receive(0);
+	stream->receive_message_buffer.data = buffer_result;
+	stream->receive_message_buffer.length = 0;
+	stream->fixed_header_next_byte = 1;
+	stream->fixed_header[0] = 0;
+	stream->fixed_header[1] = 0;
+	socket_mock_set_return_value( ERROR );
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == ERROR , "Sending a message should fail\n");
+
+	socket_mock_set_bytes_to_receive(1);
+	stream->receive_message.data = NULL;
+	stream->receive_message_buffer.data = NULL;
+	stream->receive_message_buffer.length = 0;
+	stream->fixed_header_next_byte = 1;
+	socket_mock_set_return_value( SUCCES );
+	serializer_mock_set_length(1);
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == SUCCES , "Sending a message should succeed\n");
+	ck_assert_msg( stream->fixed_header_next_byte == 0, "Did not set the fixed header next byte to 0.\n");
+	FREE(stream->receive_message.data);
+
+	socket_mock_set_bytes_to_receive(1);
+	stream->receive_message.data = NULL;
+	stream->receive_message_buffer.data = NULL;
+	stream->receive_message_buffer.length = 0;
+	stream->fixed_header_next_byte = 1;
+	socket_mock_set_return_value( ERROR );
+	serializer_mock_set_length(1);
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == ERROR , "Sending a message should fail\n");
+	ck_assert_msg( stream->fixed_header_next_byte == 1, "Did not set the fixed header next byte to 0.\n");
+
+	socket_mock_set_bytes_to_receive(1);
+	stream->receive_message.data = NULL;
+	stream->receive_message_buffer.data = NULL;
+	stream->receive_message_buffer.length = 0;
+	stream->fixed_header_next_byte = 5;
+	socket_mock_set_return_value( SUCCES );
+	serializer_mock_set_length(1);
+	serializer_mock_set_return_value(ERROR);
+	result = send_receive_message( stream, 1);
+	ck_assert_msg( result == ERROR , "Sending a message should fail\n");
+	ck_assert_msg( stream->fixed_header_next_byte == 6, "Did not set the fixed header next byte to 0.\n");
+
+	
+	stream->receive_message.data = NULL;
+	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(pico_mqtt_stream_send_receive_test)
+{
+	int result = 0;
+	int error = 0;
+	uint64_t time_left = 10;
+	struct pico_mqtt_stream* stream = pico_mqtt_stream_create( &error );
+	socket_mock_reset();
+	serializer_mock_reset();
+
+	socket_mock_set_time_interval( 1 );
+	//message is received
+	stream->receive_message.data = &result;
+	stream->receive_message_buffer.length = 0;
+	result = pico_mqtt_stream_send_receive( stream, &time_left, 0);
+	ck_assert_msg( result == SUCCES , "Sending a message should succeedded\n");
+	ck_assert_msg( time_left == 10, "No time should have past\n ");
+	stream->receive_message.data = NULL;
+
+	//message is received
+	stream->receive_message.data = &result;
+	stream->receive_message_buffer.length = 0;
+	stream->send_message_buffer.length = 1;
+	stream->send_message_buffer.data = &result;
+	stream->send_message.data = &result;
+	result = pico_mqtt_stream_send_receive( stream, &time_left, 0);
+	ck_assert_msg( result == SUCCES , "Sending a message should succeedded\n");
+	ck_assert_msg( time_left == 0, "Time should have past\n ");
+	stream->receive_message.data = NULL;
+	stream->send_message_buffer.data = NULL;
+	stream->send_message.data = NULL;
+
+	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+START_TEST(pico_mqtt_stream_send_receive_fail_test)
+{
+	int result = 0;
+	int error = 0;
+	uint64_t time_left = 10;
+	struct pico_mqtt_stream* stream = pico_mqtt_stream_create( &error );
+	socket_mock_reset();
+	serializer_mock_reset();
+
+	socket_mock_set_time_interval( 1 );
+	stream->receive_message_buffer.data = &result;
+	stream->receive_message_buffer.length = 0;
+	stream->send_message_buffer.length = 1;
+	stream->send_message_buffer.data = &result;
+	stream->send_message.data = &result;
+	stream->receive_message.data = &result;
+	socket_mock_set_return_value(ERROR);
+	result = pico_mqtt_stream_send_receive( stream, &time_left, 0);
+	ck_assert_msg( result == ERROR , "Sending a message should fail\n");
+	ck_assert_msg( time_left == 10, "Time should have past\n ");
+	stream->receive_message.data = NULL;
+	stream->send_message_buffer.data = NULL;
+	stream->send_message.data = NULL;
+	stream->receive_message_buffer.data = NULL;
+
+	pico_mqtt_stream_destroy( stream );
+	CHECK_NO_ALLOCATIONS();
+}
+END_TEST
+
+Suite * stream_test_suite(void)
 {
 	Suite *test_suite;
 	TCase *test_case_core;
@@ -391,13 +656,23 @@ Suite * tcp_suite(void)
 	/* Core test case */
 	test_case_core = tcase_create("Core");
 
-/*	tcase_add_test(test_case_core, moc_socket_test);
-	tcase_add_test(test_case_core, create_and_destroy_test);*/
-/*	tcase_add_test(test_case_core, is_output_message_set_test);
-	tcase_add_test(test_case_core, is_input_message_set_test);
-	tcase_add_test(test_case_core, set_message_test);
-	tcase_add_test(test_case_core, is_time_left_test);*/
-	tcase_add_test(test_case_core, send_message_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_create_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_destroy_test);
+	tcase_add_test(test_case_core, update_time_left_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_connect_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_is_message_sending_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_is_message_received_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_set_send_message_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_get_received_message_test);
+	tcase_add_test(test_case_core, receiving_fixed_header_test);
+	tcase_add_test(test_case_core, receiving_payload_test);
+	tcase_add_test(test_case_core, receive_in_progress_test);
+	tcase_add_test(test_case_core, is_fixed_header_complete_test);
+	tcase_add_test(test_case_core, is_send_receive_done_test);
+	tcase_add_test(test_case_core, process_fixed_header_test);
+	tcase_add_test(test_case_core, send_receive_message_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_send_receive_test);
+	tcase_add_test(test_case_core, pico_mqtt_stream_send_receive_fail_test);
 
 	suite_add_tcase(test_suite, test_case_core);
 
@@ -410,7 +685,7 @@ Suite * tcp_suite(void)
 	Suite *test_suite;
 	SRunner *suite_runner;
 
-	test_suite = tcp_suite();
+	test_suite = stream_test_suite();
 	suite_runner = srunner_create(test_suite);
 
 	srunner_run_all(suite_runner, CK_NORMAL);
@@ -422,97 +697,3 @@ Suite * tcp_suite(void)
 /**
 * test functions implementation
 **/
-
-int my_malloc(struct pico_mqtt* mqtt, void** data, size_t size){
-	void* result;
-	
-	if(size <= 0 || mqtt == NULL || data == NULL){
-		printf("error: malloc has invallid input\n");
-		return -1;
-	}
-
-	result = malloc(size);
-	
-	if(result == NULL){
-		printf("error: malloc failed to allocate memory\n");
-		*data = NULL;
-		return -1;
-	}
-
-	mqtt->bytes_used += size;
-	*data = result;
-	return 0;
-}
-
-int my_free(struct pico_mqtt* mqtt, void* data, size_t size){
-	if(size <= 0 || mqtt == NULL || data == NULL){
-		printf("error: free has invallid input\n");
-		return -1;
-	}
-
-	free(data);
-	
-	mqtt->bytes_used -= size;
-	return 0;
-}
-
-int pico_mqtt_connection_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* read_buffer, struct timeval* time_left){
-	struct pico_mqtt_socket saved_socket = *socket;
-	int result = 0;
-
-	socket->bytes_to_write = 0;
-	result = pico_mqtt_connection_send_receive(socket, NULL, read_buffer, time_left);
-	socket->bytes_to_read = saved_socket.bytes_to_write;
-
-	return result;
-}
-
-int pico_mqtt_connection_send( struct pico_mqtt_socket* socket, struct pico_mqtt_data* write_buffer, struct timeval* time_left){
-	struct pico_mqtt_socket saved_socket = *socket;
-	int result = 0;
-
-	socket->bytes_to_read = 0;
-	result = pico_mqtt_connection_send_receive(socket, write_buffer, NULL, time_left);
-	socket->bytes_to_read = saved_socket.bytes_to_read;
-
-	return result;
-}
-
-
-int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* socket, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, struct timeval* time_left){
-	if(read_buffer != NULL)
-	{
-		read_buffer->length -= socket->bytes_to_read;
-		read_buffer->data += socket->bytes_to_read;
-	}
-
-	if(write_buffer != NULL)
-	{
-		write_buffer->length -= socket->bytes_to_write;
-		write_buffer->data += socket->bytes_to_write;
-	}
-
-	if(time_left != NULL){
-		struct timeval b = {.tv_usec = socket->usecs_to_use, .tv_sec = socket->secs_to_use};
-		if(timercmp(time_left, &b, <)){
-			time_left->tv_sec = 0;
-			time_left->tv_usec = 0;
-		} else {
-			timersub(time_left, &b, time_left);
-		}
-	}
-	return socket->value_to_return;
-}
-
-int pico_mqtt_connection_open(struct pico_mqtt_socket** socket, const char* URI, const char* port)
-{
-	socket++;
-	URI++;
-	port++;
-	return SUCCES;
-}
-int pico_mqtt_connection_close( struct pico_mqtt_socket** socket)
-{
-	socket++;
-	return SUCCES;
-}

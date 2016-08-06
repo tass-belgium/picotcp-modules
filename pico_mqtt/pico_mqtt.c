@@ -1,6 +1,6 @@
 #include "pico_mqtt.h"
 #include "pico_mqtt_private.h"
-#include "pico_mqtt_error.h"
+#include "pico_mqtt_debug.h"
 
 /**
 * Data Structures
@@ -10,8 +10,6 @@
 * Private Function Prototypes
 **/
 
-static int initialize( struct pico_mqtt** mqtt );
-static int destroy( struct pico_mqtt** mqtt);
 static int check_uri( const char* uri );
 static struct timeval ms_to_timeval(uint32_t timeout);
 /* if this message is finished the function will return */
@@ -24,29 +22,72 @@ static struct timeval ms_to_timeval(uint32_t timeout);
 /* allocate memory for the pico_mqtt object and free it */
 struct pico_mqtt* pico_mqtt_create( void )
 {
-	struct pico_mqtt* mqtt = NULL;
+	struct pico_mqtt* mqtt = (struct pico_mqtt*) MALLOC (sizeof(struct pico_mqtt));
+	CHECK_NOT_NULL(mqtt);
 
-	if( initialize( &mqtt ) == ERROR )
+	mqtt = PICO_MQTT_EMPTY;
+
+	mqtt->stream = pico_mqtt_stream_create( &(mqtt->error) );
+	CHECK_NOT_NULL(mqtt->stream);
+	if( mqtt->stream == NULL )
 	{
-		PTRACE;
+		pico_mqtt_destroy( mqtt );
 		return NULL;
 	}
 
-	PINFO("succesfully created the MQTT object.\n");
+#if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
+
+	mqtt->output_queue = pico_mqtt_list_create( &mqtt->error );
+	CHECK_NOT_NULL(mqtt->output_queue);
+	if( mqtt->output_queue == NULL )
+	{
+		pico_mqtt_destroy( mqtt );
+		return NULL;
+	}
+
+	mqtt->wait_queue = pico_mqtt_list_create( &mqtt->error );
+	CHECK_NOT_NULL(mqtt->wait_queue);
+	if( mqtt->wait_queue == NULL )
+	{
+		pico_mqtt_destroy( mqtt );
+		return NULL;
+	}
+
+	mqtt->input_queue = pico_mqtt_list_create( &mqtt->error );
+	CHECK_NOT_NULL(mqtt->input_queue);
+	if( mqtt->input_queue == NULL )
+	{
+		pico_mqtt_destroy( mqtt );
+		return NULL;
+	}
+
+#endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
+
 	return mqtt;
 }
 
 void pico_mqtt_destroy(struct pico_mqtt* mqtt)
 {
 	if(mqtt == NULL)
-	{
-		PWARNING("The pointer is NULL, no MQTT object to destroy.\n");
 		return;
-	}
 
-	destroy(&mqtt);
+	pico_mqtt_stream_destroy(mqtt->stream);
 
-	return;
+#if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
+
+	pico_mqtt_list_destroy( mqtt->output_queue );
+	pico_mqtt_list_destroy( mqtt->wait_queue );
+	pico_mqtt_list_destroy( mqtt->input_queue );
+
+#endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
+
+	pico_mqtt_destroy_data(mqtt->client_id);
+	pico_mqtt_destroy_data(mqtt->will_topic);
+	pico_mqtt_destroy_data(mqtt->will_message);
+	pico_mqtt_destroy_data(mqtt->username);
+	pico_mqtt_destroy_data(mqtt->password);
+
+	FREE(mqtt);
 }
 
 /* getters and setters for the connection options, resenable defaults will be used */
@@ -372,21 +413,12 @@ void pico_mqtt_destroy_message(struct pico_mqtt_message * message);
 void pico_mqtt_destroy_data(struct pico_mqtt_data * data)
 {
 	if(data == NULL)
-	{
-		PWARNING("Attempting to free NULL.\n");
 		return;
-	}
 
-	if(data->data == NULL)
-	{
-		free(data);
-	} else
-	{
-		free(data->data);
-		free(data);
-	}
+	if(data->data != NULL)
+		FREE(data->data);
 
-	return;
+	FREE(data);
 }
 
 /* create and destroy custom data types */
@@ -419,7 +451,7 @@ struct pico_mqtt_data* pico_mqtt_string_to_data(const char* string)
 		if(data->length > MAXIMUM_STRING_LENGTH)
 		{
 			PERROR("String to long, please check MAXIMUM_STRING_LENGTH in configuration file.\n");
-			free(data);
+			FREE(data);
 			return NULL;
 		}
 	}
@@ -460,177 +492,6 @@ const char* pico_mqtt_get_protocol_version( void )
 /**
 * Private Functions Implementation
 **/
-
-static int initialize( struct pico_mqtt** mqtt )
-{
-	int result = 0;
-	*mqtt = (struct pico_mqtt*) malloc(sizeof(struct pico_mqtt));
-
-#ifdef DEBUG
-	if(mqtt == NULL)
-	{
-		PERROR("Failed to allocate the memory for the pico_mqtt object\n");
-		return ERROR;
-	}
-#endif
-	PTODO("Initiliaze MQTT to default values");
-
-	**mqtt = (struct pico_mqtt)
-	{
-		// stream
-		.stream = NULL,
-
-		// serializer
-		.serializer = NULL,
-		.next_message_id = 0,
-
-#if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
-		// message buffers
-		.output_queue = NULL,
-		.wait_queue = NULL,
-		.input_queue = NULL,
-#endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
-
-		// connection related
-		.keep_alive_time = 0,
-		.retain = 0,
-		.quality_of_service = 0,
-		.client_id = NULL,
-		.will_topic= NULL,
-		.will_message = NULL,
-		.username = NULL,
-		.password = NULL,
-
-		// memory
-		.malloc = NULL,
-		.free = NULL,
-
-		// status
-		.connected = 0,
-		.connection_attempts = 0,
-		.trigger_on_receive = 0,
-		.active_output_message = NULL,
-		.trigger_message = NULL,
-
-		//errror
-		.error = NO_ERROR,
-		.normative_error = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},
-		.documentation_reference = 0,
-	};
-
-	PTODO("combine the will message and topic to a message struct.\n");
-
-	result = pico_mqtt_stream_create( *mqtt);
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-#if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
-
-	result = pico_mqtt_list_create( &((*mqtt)->output_queue) );
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	result = pico_mqtt_list_create( &((*mqtt)->wait_queue) );
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-	
-	result = pico_mqtt_list_create( &((*mqtt)->input_queue) );
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-#endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
-
-	return SUCCES;
-}
-
-static int destroy( struct pico_mqtt** mqtt)
-{
-	int result = 0;
-
-#ifdef DEBUG
-	if(mqtt == NULL)
-	{
-		PERROR("The MQTT object is NULL.\n");
-		return ERROR;
-	}
-#endif
-
-	result = pico_mqtt_stream_destroy(*mqtt);
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-#if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
-
-	result = pico_mqtt_list_destroy( &((*mqtt)->output_queue) );
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-	result = pico_mqtt_list_destroy( &((*mqtt)->wait_queue) );
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-	
-	result = pico_mqtt_list_destroy( &((*mqtt)->input_queue) );
-	if( result == ERROR )
-	{
-		PTRACE;
-		return ERROR;
-	}
-
-#endif /* ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1 */
-
-	PTODO("free connection information if not null, check if you want to keep the warnings\n");
-
-	if((*mqtt)->client_id != NULL)
-	{
-		pico_mqtt_destroy_data((*mqtt)->client_id);
-	}
-
-	if((*mqtt)->will_topic != NULL)
-	{
-		pico_mqtt_destroy_data((*mqtt)->will_topic);
-	}
-
-	if((*mqtt)->will_message != NULL)
-	{
-		pico_mqtt_destroy_data((*mqtt)->will_message);
-	}
-
-	if((*mqtt)->username != NULL)
-	{
-		pico_mqtt_destroy_data((*mqtt)->username);
-	}
-
-	if((*mqtt)->password != NULL)
-	{
-		pico_mqtt_destroy_data((*mqtt)->password);
-	}
-
-	free(*mqtt);
-	*mqtt = NULL;
-
-	return SUCCES;
-}
 
 static int check_uri( const char* uri )
 {
@@ -848,6 +709,8 @@ int set_new_output_message(struct pico_mqtt* mqtt)
 * Debug Functions
 **/
 
+#ifdef DEBUG
+
 void pico_mqtt_print_data(const struct pico_mqtt_data* data)
 {
 	uint32_t column = 0;
@@ -878,7 +741,7 @@ void pico_mqtt_print_data(const struct pico_mqtt_data* data)
 	{
 		for(row=0; row <= data->length/10; row++)
 		{
-			printf("| %03d: ", index);	
+			printf("| %03d: ", index);
 			for(column=0; column<10; column++)
 			{
 				if( index >= data->length)
@@ -900,7 +763,7 @@ void pico_mqtt_print_data(const struct pico_mqtt_data* data)
 		index = 0;
 		for(row=0; row <= data->length/50; row++)
 		{
-			printf("| %03d: ", index);	
+			printf("| %03d: ", index);
 			for(column=0; column<50; column++)
 			{
 				if( index >= data->length)

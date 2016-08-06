@@ -1,4 +1,4 @@
-#include "pico_mqtt_error.h"
+#include "pico_mqtt_debug.h"
 #include "pico_mqtt_socket.h"
 
 /**
@@ -35,14 +35,13 @@ struct pico_mqtt_socket* pico_mqtt_connection_create( int* error )
 	CHECK_NOT_NULL(error);
 
 	socket = (struct pico_mqtt_socket*) MALLOC(sizeof(struct pico_mqtt_socket));
+	CHECK_NOT_NULL();
+
 	if(socket == NULL)
-	{
-		PTODO("Set the appropriate error.\n");
-		PERROR("Unable to allocate memory for socket.\n");
 		return NULL;
-	}
 
 	*socket =PICO_MQTT_SOCKET_EMPTY;
+	socket->error = error;
 
 	return socket;
 }
@@ -77,7 +76,7 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 	return SUCCES;
 }
 
-int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, int time_left)
+int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, uint64_t time_left)
 {
 	int result = 0;
 	struct pollfd poll_descriptors = (struct pollfd) {
@@ -111,7 +110,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 	result = poll(&poll_descriptor, 1, time_left);
 
 	CHECK((result > 1), "It should not be possible to have more then 1 active file descriptor.\n");
-	CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0), 
+	CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0),
 		"Poll returned without error, data should be ready to write or read but is not.\n");
 
 	if(result == -1)
@@ -154,19 +153,19 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 	return SUCCES;
 }
 
-/* close pico mqtt socket*/ 
-int pico_mqtt_connection_close( struct pico_mqtt_socket** socket)
+/* close pico mqtt socket*/
+void pico_mqtt_connection_close( struct pico_mqtt_socket* socket)
 {
 	PTODO("Write implementation.\n");
 	socket++;
 	return SUCCES;
 }
 
-int get_current_time( void  )
+uint64_t get_current_time( void  )
 {
 	struct timeval now;
 	gettimeofday(&now, NULL);
-	return (now.tv_sec * 1000) + (now.tv_usec / 1000);
+	return ((uint64_t)now.tv_sec * 1000) + ((uint64_t)now.tv_usec / 1000);
 }
 
 /**
@@ -209,7 +208,7 @@ static struct addrinfo lookup_configuration( void ){
 	hints.ai_family = AF_INET6; /* allow only IPv6 address, IPv4 will be mapped to IPv6 */
 	hints.ai_socktype = SOCK_STREAM; /* only use TCP sockets */
 	hints.ai_protocol = 0; /*allow any protocol //TODO check for restrictions */
-	
+
 	/* clear the flags before setting them*/
 	*flags = 0;
 
@@ -244,13 +243,13 @@ static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo*
 
 	for (current_addres = addres; current_addres != NULL; current_addres = current_addres->ai_next) {
 		connection->descriptor = socket(current_addres->ai_family, current_addres->ai_socktype, current_addres->ai_protocol);
-	
+
 		if(connection->descriptor == -1)
 		{
 			PINFO("Failed to create a socket.\n");
 			continue;
 		}
-		
+
 		if(connect(connection->descriptor, current_addres->ai_addr, current_addres->ai_addrlen) == ERROR)
 		{
 			PINFO("One of the addresses was not suitable for a connection\n");
@@ -261,9 +260,9 @@ static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo*
 			PINFO("Succesfully connected to a socket\n");
 			return SUCCES;
 		}
-		
+
 	}
-	
+
 	PERROR("Unable to connect to any of the addresses.\n");
 	return ERROR;
 }

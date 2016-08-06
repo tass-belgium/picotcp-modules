@@ -6,3 +6,4 @@
 *.gcda
 *.gcno
 *.gcov
+*.yml

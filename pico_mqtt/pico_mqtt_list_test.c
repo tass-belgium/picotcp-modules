@@ -81,12 +81,13 @@ START_TEST(pico_mqtt_list_create_test)
 	ck_assert_msg(list->last == NULL, "The last elements should be NULL.\n");
 	FREE(list);
 
-	MALLOC_FAIL_ONCE();
 	PERROR_DISABLE_ONCE();
+	MALLOC_FAIL_ONCE();
 
 	list = pico_mqtt_list_create( &error );
-	ck_assert_msg(list == NULL, "Creating the list should have failed\n");;
+	ck_assert_msg(list == NULL, "Creating the list should have failed\n");
 
+	ALLOCATION_REPORT();
 	CHECK_NO_ALLOCATIONS();
 }
 END_TEST
@@ -152,6 +153,11 @@ START_TEST(pico_mttq_list_destroy_test)
 	int error = 0;
 
 	MALLOC_SUCCEED();
+
+/*
+	NO LIST
+*/
+	pico_mqtt_list_destroy(NULL);
 
 /*
 	EMPTY LIST

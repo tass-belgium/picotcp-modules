@@ -51,6 +51,58 @@ struct pico_mqtt
         uint32_t documentation_reference;
 };
 
+#if ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
+#define PICO_MQTT_EMPTY (struct pico_mqtt)\
+	{\
+		.stream = NULL,\
+		.serializer = NULL,\
+		.next_message_id = 0,\
+		.output_queue = NULL,\
+		.wait_queue = NULL,\
+		.input_queue = NULL,\
+		.keep_alive_time = 0,\
+		.retain = 0,\
+		.quality_of_service = 0,\
+		.client_id = NULL,\
+		.will_topic= NULL,\
+		.will_message = NULL,\
+		.username = NULL,\
+		.password = NULL,\
+		.connected = 0,\
+		.connection_attempts = 0,\
+		.trigger_on_receive = 0,\
+		.active_output_message = NULL,\
+		.trigger_message = NULL,\
+		.error = NO_ERROR,\
+		.normative_error = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},\
+		.documentation_reference = 0,\
+	}
+#else
+#define PICO_MQTT_EMPTY (struct pico_mqtt)\
+	{\
+		.stream = NULL,\
+		.serializer = NULL,\
+		.next_message_id = 0,\
+		.keep_alive_time = 0,\
+		.retain = 0,\
+		.quality_of_service = 0,\
+		.client_id = NULL,\
+		.will_topic= NULL,\
+		.will_message = NULL,\
+		.username = NULL,\
+		.password = NULL,\
+		.connected = 0,\
+		.connection_attempts = 0,\
+		.trigger_on_receive = 0,\
+		.active_output_message = NULL,\
+		.trigger_message = NULL,\
+		.error = NO_ERROR,\
+		.normative_error = {0,0,0,0,0,0,0,0,0,0,0,0,0,0,0},\
+		.documentation_reference = 0,\
+	}
+#endif //ENABLE_QUALITY_OF_SERVICE_1_AND_2 == 1
+
+
 struct pico_mqtt_packet
 {
         uint8_t type;

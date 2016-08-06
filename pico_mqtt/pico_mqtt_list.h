@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include "pico_mqtt.h"
 #include "pico_mqtt_private.h"
+#include "pico_mqtt_debug.h"
 
 struct pico_mqtt_list;
 

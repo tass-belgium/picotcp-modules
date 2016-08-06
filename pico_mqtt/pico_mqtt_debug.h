@@ -1,6 +1,9 @@
 #ifndef PICO_MQTT_ERROR_H
 #define PICO_MQTT_ERROR_H
 
+#include <stdint.h>
+#include <stdlib.h>
+
 /**
 * Error codes
 **/
@@ -54,40 +57,45 @@
 
 #ifndef PRODUCTION
 
+	struct debug{
+		uint8_t no_check_flag;
+		uint8_t auto_reset_no_check_flag;
+		uint8_t no_error_flag;
+		uint8_t auto_reset_no_error_flag;
+		uint8_t fail_flag;
+		uint8_t auto_reset_fail_flag;
+		uint32_t allocations;
+		uint32_t frees;
+		uint32_t total_allocated;
+		uint32_t max_bytes_allocated;
+
+	};
+
+	#ifndef DEBUG_EMPTY
+	#define DEBUG_EMPTY (struct debug){\
+		.no_check_flag = 0,\
+		.auto_reset_no_check_flag = 0,\
+		.no_error_flag = 0,\
+		.auto_reset_no_error_flag = 0,\
+		.fail_flag = 0,\
+		.auto_reset_fail_flag = 0,\
+		.allocations = 0,\
+		.frees = 0,\
+		.total_allocated = 0,\
+		.max_bytes_allocated = 0\
+		};
+	#endif
+
+	extern struct debug debug;
+
+
 	#ifdef DEBUG /* if not in debug mode, nothing should be printed */
-
-		struct debug{
-			uint8_t no_check_flag;
-			uint8_t auto_reset_no_check_flag;
-			uint8_t no_error_flag;
-			uint8_t auto_reset_no_error_flag;
-			uint8_t fail_flag;
-			uint8_t auto_reset_fail_flag;
-			uint32_t allocations;
-			uint32_t frees;
-			uint32_t total_allocated;
-			uint32_t max_bytes_allocated;
-
-		};
-
-		static struct debug debug = (struct debug){
-			.no_check_flag = 0,
-			.auto_reset_no_check_flag = 0,
-			.no_error_flag = 0,
-			.auto_reset_no_error_flag = 0,
-			.fail_flag = 0,
-			.auto_reset_fail_flag = 0,
-			.allocations = 0,
-			.frees = 0,
-			.total_allocated = 0,
-			.max_bytes_allocated = 0
-		};
 
 		#if DEBUG > 0
 			#ifndef PEDANTIC
 				#define PEDANTIC
 			#endif
-			
+
 			#ifndef ENABLE_ERROR
 				#define ENABLE_ERROR
 			#endif
@@ -124,7 +132,7 @@
 			#undef EXIT_ERROR
 			#define EXIT_ERROR() exit(EXIT_FAILURE)
 		#endif
-			
+
 
 		#ifdef ENABLE_ERROR
 			#include <stdio.h>
@@ -171,7 +179,7 @@
 
 		#ifdef ENABLE_TODO
 			#include <stdio.h>
-		
+
 			#undef PTODO
 			#define PTODO(...) do{\
 				printf("[TODO] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
@@ -215,7 +223,7 @@
 
 		#define CHECK_NOT_NULL( var ) CHECK( var != NULL, "The pointer should not be NULL.\n")
 		#define CHECK_NULL( var ) CHECK( var == NULL, "The pointer should be NULL.\n")
-		
+
 	#endif /* ifndef PEDANTIC */
 
 	#ifndef DEBUG_MALLOC
@@ -228,42 +236,8 @@
 		#undef FREE
 		#undef CHECK_ALLOCATIONS
 
-			static void* my_debug_malloc(size_t length)
-			{
-				void* return_value = NULL;
-
-				CHECK(length != 0, "Attempting to allocate 0 byte.\n");
-
-				if(debug.fail_flag == 0)
-				{
-					return_value = malloc(length);
-
-					if(return_value != NULL)
-					{
-						debug.allocations++;
-						debug.total_allocated += (uint32_t) length;
-						
-						if(length > debug.max_bytes_allocated)
-							debug.max_bytes_allocated = (uint32_t) length;
-					}
-
-					return return_value;
-				}
-
-				if(debug.auto_reset_fail_flag == 1)
-				{
-					debug.fail_flag = 0;
-					debug.auto_reset_fail_flag = 0;
-				}
-
-				return NULL;
-			}
-
-			static void my_debug_free(void* pointer)
-			{
-				debug.frees++;
-				free(pointer);
-			}
+		void* my_debug_malloc(size_t length);
+		void my_debug_free(void* pointer);
 
 		#define MALLOC(size) my_debug_malloc(size)
 		#define MALLOC_FAIL() debug.fail_flag = 1; debug.auto_reset_fail_flag = 0

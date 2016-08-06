@@ -1,4 +1,3 @@
-#include "pico_mqtt_error.h"
 #include "pico_mqtt_serializer.h"
 
 /**
@@ -32,7 +31,7 @@ struct pico_mqtt_serializer
 	struct pico_mqtt_data topic;
 	uint8_t message_ownership;
 	struct pico_mqtt_data message;
-	
+
 	uint8_t serialized_length_data[4];
 	struct pico_mqtt_data serialized_length;
 	struct pico_mqtt_data stream;
@@ -45,29 +44,29 @@ struct pico_mqtt_serializer
 * Private function prototypes
 **/
 
-static int create_serializer_stream( struct pico_mqtt_serializer* serializer, const uint32_t length ); /* UT */
-static void destroy_serializer_stream( struct pico_mqtt_serializer* serializer ); /* UT */
-static uint32_t get_bytes_left_stream( struct pico_mqtt_serializer* serializer); /* UT */
-static void add_byte_stream( struct pico_mqtt_serializer* serializer, const uint8_t data_byte); /* UT */
-static uint8_t get_byte_stream( struct pico_mqtt_serializer* serializer ); /* UT */
-static void add_2_byte_stream( struct pico_mqtt_serializer* serializer, const uint16_t data); /*UT */
-static uint16_t get_2_byte_stream( struct pico_mqtt_serializer* serializer ); /* UT */
-static void add_data_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data); /* UT */
-static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* serializer ); /* UT */
-static void add_data_and_length_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data); /* UT */
-static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serializer* serializer ); /* UT */
-static void add_array_stream( struct pico_mqtt_serializer* serializer, void* array, uint32_t length); /* UT */
-static void skip_length_stream( struct pico_mqtt_serializer* serializer ); /* UT */
+static int create_serializer_stream( struct pico_mqtt_serializer* serializer, const uint32_t length );
+static void destroy_serializer_stream( struct pico_mqtt_serializer* serializer );
+static uint32_t get_bytes_left_stream( struct pico_mqtt_serializer* serializer);
+static void add_byte_stream( struct pico_mqtt_serializer* serializer, const uint8_t data_byte);
+static uint8_t get_byte_stream( struct pico_mqtt_serializer* serializer );
+static void add_2_byte_stream( struct pico_mqtt_serializer* serializer, const uint16_t data);
+static uint16_t get_2_byte_stream( struct pico_mqtt_serializer* serializer );
+static void add_data_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data);
+static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* serializer );
+static void add_data_and_length_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data);
+static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serializer* serializer );
+static void add_array_stream( struct pico_mqtt_serializer* serializer, void* array, uint32_t length);
+static void skip_length_stream( struct pico_mqtt_serializer* serializer );
 /*static int get_length_stream( struct pico_mqtt_serializer* serializer, uint32_t* result);*/
-static int serialize_acknowledge( struct pico_mqtt_serializer* serializer, const uint8_t packet_type); /* UT */
-static int check_serialize_connect( struct pico_mqtt_serializer* serializer); /* UT */
-static uint32_t serialize_connect_get_length( struct pico_mqtt_serializer* serializer); /* UT */
-static uint8_t serialize_connect_get_flags( struct pico_mqtt_serializer* serializer); /* UT */
-static int deserialize_connack(struct pico_mqtt_serializer* serializer ); /* UT */
-static int deserialize_publish(struct pico_mqtt_serializer* serializer ); /* UT */
-static int deserialize_acknowledge(struct pico_mqtt_serializer* serializer ); /* UT */
-static int deserialize_suback(struct pico_mqtt_serializer* serializer ); /* UT */
-static int serialize_subscribtion( struct pico_mqtt_serializer* serializer, uint8_t subscribe); /* UT */
+static int serialize_acknowledge( struct pico_mqtt_serializer* serializer, const uint8_t packet_type);
+static int check_serialize_connect( struct pico_mqtt_serializer* serializer);
+static uint32_t serialize_connect_get_length( struct pico_mqtt_serializer* serializer);
+static uint8_t serialize_connect_get_flags( struct pico_mqtt_serializer* serializer);
+static int deserialize_connack(struct pico_mqtt_serializer* serializer );
+static int deserialize_publish(struct pico_mqtt_serializer* serializer );
+static int deserialize_acknowledge(struct pico_mqtt_serializer* serializer );
+static int deserialize_suback(struct pico_mqtt_serializer* serializer );
+static int serialize_subscribtion( struct pico_mqtt_serializer* serializer, uint8_t subscribe);
 static int serialize_connect( struct pico_mqtt_serializer* serializer);
 static int serialize_publish( struct pico_mqtt_serializer* serializer);
 static int serialize_puback( struct pico_mqtt_serializer* serializer );
@@ -114,9 +113,9 @@ struct pico_mqtt_serializer* pico_mqtt_serializer_create( int* error )
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	CHECK_NOT_NULL( error );
-	
+
 	serializer = (struct pico_mqtt_serializer*) MALLOC(sizeof(struct pico_mqtt_serializer));
-	
+
 	if(serializer == NULL){
 		PTODO("set the right error.\n");
 		PERROR("Unable to allocate memory for the serializer.\n");
@@ -230,18 +229,19 @@ struct pico_mqtt_data* pico_mqtt_serialize_length( struct pico_mqtt_serializer* 
 		} else {
 			buffer = converted_length[index];
 		}
-		 
+
 		*(((uint8_t*) result->data) + index) = buffer;
 	}
 
 	return result;
 }
 
-int pico_mqtt_deserialize_length( struct pico_mqtt_serializer* serializer, void* length_void, uint32_t* result)
+int pico_mqtt_deserialize_length( int* error, void* length_void, uint32_t* result)
 {
 	uint8_t* length = (uint8_t*) length_void;
 	uint8_t index = 0;
 
+	CHECK_NOT_NULL( error );
 	CHECK_NOT_NULL( length );
 	CHECK_NOT_NULL( result );
 
@@ -256,7 +256,7 @@ int pico_mqtt_deserialize_length( struct pico_mqtt_serializer* serializer, void*
 			if(index == 3)
 			{
 				PTODO("Set appropriate error.\n");
-				*(serializer->error) = 1;
+				*error = 1;
 				PERROR("The length is to long for the MQTT protocol.\n");
 				return ERROR;
 			}
@@ -404,7 +404,7 @@ void pico_mqtt_serializer_set_will_message( struct pico_mqtt_serializer* seriali
 
 int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message)
 {
-	int(* const serializers[16])(struct pico_mqtt_serializer* serializer ) = 
+	int(* const serializers[16])(struct pico_mqtt_serializer* serializer ) =
 	{
 		/* 00 - RESERVED    */ NULL,
 		/* 01 - CONNECT     */ serialize_connect,
@@ -446,7 +446,7 @@ int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, struct pico_
 {
 	uint8_t message_type = 0;
 
-	int(* const deserializers[16])(struct pico_mqtt_serializer* serializer ) = 
+	int(* const deserializers[16])(struct pico_mqtt_serializer* serializer ) =
 	{
 		/* 00 - RESERVED    */ NULL,
 		/* 01 - CONNECT     */ NULL,
@@ -496,7 +496,7 @@ static int create_serializer_stream( struct pico_mqtt_serializer* serializer, co
 {
 	CHECK_NOT_NULL(serializer);
 	CHECK_NULL(serializer->stream.data);
-	CHECK((serializer->stream.length == 0), 
+	CHECK((serializer->stream.length == 0),
 		"The stream is not freed correct yet, by calling create stream a memory leak can be created.\n");
 
 	serializer->stream.data = MALLOC(length);
@@ -542,7 +542,8 @@ static uint32_t get_bytes_left_stream( struct pico_mqtt_serializer* serializer)
 	CHECK((serializer->stream.length != 0),
 		"Attempting to get the length left of a stream with an error.\n");
 
-	length = serializer->stream.length - (serializer->stream_index - serializer->stream.data);
+	length = serializer->stream.length -
+		((uint8_t*)(serializer->stream_index) - (uint8_t*)(serializer->stream.data));
 	if(length <= 0)
 	{
 		return 0;
@@ -563,7 +564,7 @@ static void add_byte_stream( struct pico_mqtt_serializer* serializer, const uint
 		"Attempting to write outside the stream buffer length.\n");
 
 	*((uint8_t*) serializer->stream_index) = data_byte;
-	(serializer->stream_index)++;
+	serializer->stream_index = (uint8_t*)(serializer->stream_index) + 1;
 	return;
 }
 
@@ -579,7 +580,7 @@ static uint8_t get_byte_stream( struct pico_mqtt_serializer* serializer )
 		"Attempting to read outside the stream buffer length.\n");
 
 	byte = *((uint8_t*) serializer->stream_index);
-	(serializer->stream_index)++;
+	serializer->stream_index = (uint8_t*)(serializer->stream_index) + 1;
 	return byte;
 }
 
@@ -610,7 +611,7 @@ static void add_data_stream( struct pico_mqtt_serializer* serializer, const stru
 
 	CHECK_NOT_NULL( serializer );
 	CHECK_NOT_NULL( data.data );
-	CHECK((get_bytes_left_stream(serializer) >= data.length), 
+	CHECK((get_bytes_left_stream(serializer) >= data.length),
 		"Stream is not long enough to accept the data.\n");
 
 	for(index = 0; index < data.length; ++index)
@@ -648,7 +649,7 @@ static struct pico_mqtt_data get_data_stream( struct pico_mqtt_serializer* seria
 
 static void add_data_and_length_stream( struct pico_mqtt_serializer* serializer, const struct pico_mqtt_data data)
 {
-	CHECK((data.length) <= 0xFFFF, 
+	CHECK((data.length) <= 0xFFFF,
 		"Can not add data longer than 65535.\n");
 
 	add_2_byte_stream(serializer, (uint16_t) data.length);
@@ -662,12 +663,12 @@ static void add_data_and_length_stream( struct pico_mqtt_serializer* serializer,
 static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serializer* serializer )
 {
 	uint32_t index = 0;
-	uint32_t bytes_left = 0;
+	int32_t bytes_left = 0;
 	uint16_t length = 0;
 	struct pico_mqtt_data result = PICO_MQTT_DATA_EMPTY;
 	CHECK_NOT_NULL(serializer);
 
-	bytes_left = get_bytes_left_stream(serializer);
+	bytes_left = (int32_t) get_bytes_left_stream(serializer);
 	if(bytes_left < 2)
 	{
 		PTODO("Set appropriate error.\n");
@@ -676,14 +677,14 @@ static struct pico_mqtt_data get_data_and_length_stream( struct pico_mqtt_serial
 	}
 
 	length = get_2_byte_stream(serializer);
-	if(((int32_t)bytes_left - length - 2) < 0)
+	if(bytes_left < length + 2)
 	{
 		PTODO("Set appropriate error.\n");
 		PERROR("Invallid length, the stream is not long enough to contain the indicated data.\n");
 		return PICO_MQTT_DATA_EMPTY;
 	}
 
-	if(((int32_t)bytes_left - length - 2) == 0)
+	if(bytes_left == length + 2)
 	{
 		result.data = NULL;
 		return PICO_MQTT_DATA_EMPTY;
@@ -898,7 +899,7 @@ static int serialize_acknowledge( struct pico_mqtt_serializer* serializer, const
 
 	CHECK_NOT_NULL( serializer );
 	CHECK(
-		(packet_type == PUBACK) || 
+		(packet_type == PUBACK) ||
 		(packet_type == PUBREC) ||
 		(packet_type == PUBREL) ||
 		(packet_type == PUBCOMP)||
@@ -922,7 +923,7 @@ static int serialize_acknowledge( struct pico_mqtt_serializer* serializer, const
 	packet[0] |= packet_type;
 	packet[0] |= flags;
 	PTODO("Check little and big endian.\n");
-	packet[2] |= (uint8_t)((serializer->packet_id & 0xFF00) >> 8); /* MSB */
+	packet[2] |= (uint8_t)((serializer->packet_id >> 8) & 0x00FF); /* MSB */
 	packet[3] |= (uint8_t)(serializer->packet_id & 0x00FF); /* LSB */
 	add_array_stream( serializer, packet, 4 );
 
@@ -1033,7 +1034,7 @@ static int deserialize_connack(struct pico_mqtt_serializer* serializer )
 
 	CHECK( byte >> 4 == 0x02, "The message is not a CONNACK message as expected.\n");
 	CHECK( byte == 0x20, "The CONNACK message doesn't have the correct fixed header flags set.\n");
-	
+
 	if(serializer->stream.length != 4)
 	{
 		PTODO("Set appropriate error.\n");
@@ -1131,7 +1132,7 @@ static int deserialize_publish(struct pico_mqtt_serializer* serializer )
 		return ERROR;
 	}
 #endif
-	
+
 	if(serializer->message.length != 0)
 	{
 		serializer->message_ownership = 1;
@@ -1156,14 +1157,14 @@ static int deserialize_acknowledge(struct pico_mqtt_serializer* serializer )
 		(byte >> 4 == 0x0B),
 		"The message is not an acknowledge message as expected.\n");
 
-	CHECK( 
+	CHECK(
 		(byte == 0x40) ||
 		(byte == 0x50) ||
 		(byte == 0x62) ||
 		(byte == 0x70) ||
 		(byte == 0xB0),
 		"The acknowledge message doesn't have the correct fixed header flags set.\n");
-	
+
 	if(serializer->stream.length != 4)
 	{
 		PTODO("Set appropriate error.\n");
@@ -1195,7 +1196,7 @@ static int deserialize_suback(struct pico_mqtt_serializer* serializer )
 
 	CHECK( byte >> 4 == 0x09, "The message is not a SUBACK message as expected.\n");
 	CHECK( byte == 0x90, "The SUBACK message doesn't have the correct fixed header flags set.\n");
-	
+
 	if(serializer->stream.length != 5)
 	{
 		PTODO("Set appropriate error.\n");
@@ -1260,7 +1261,7 @@ static int serialize_subscribtion( struct pico_mqtt_serializer* serializer, uint
 	if(subscribe != 0)
 	{
 		add_byte_stream( serializer, 0x82 );
-	} else 
+	} else
 	{
 		add_byte_stream( serializer, 0xA2 );
 	}

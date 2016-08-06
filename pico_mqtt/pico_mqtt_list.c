@@ -1,5 +1,4 @@
 #include "pico_mqtt_list.h"
-#include "pico_mqtt_error.h"
 
 /**
 * Private data types
@@ -56,11 +55,7 @@ struct pico_mqtt_list* pico_mqtt_list_create( int* error )
 
 	list = (struct pico_mqtt_list*) MALLOC (sizeof(struct pico_mqtt_list));
 	if(list == NULL)
-	{
-		PERROR("Unable to allocate memory for the list.\n");
-		PTODO("set the appropriate error.\n");
-		return NULL;
-	}
+			return NULL;
 
 	*list = PICO_MQTT_LIST_EMPTY;
 	list->error = error;
@@ -83,7 +78,7 @@ struct pico_mqtt_packet* pico_mqtt_list_get(struct pico_mqtt_list* list, uint16_
 
 	if(list->length == 0)
 		return NULL;
-	
+
 	element = list->last;
 
 	for(i = list->length; i > 0; --i)
@@ -97,7 +92,7 @@ struct pico_mqtt_packet* pico_mqtt_list_get(struct pico_mqtt_list* list, uint16_
 		element = element->previous;
 	}
 
-	return NULL;	
+	return NULL;
 }
 
 struct pico_mqtt_packet* pico_mqtt_list_pop(struct pico_mqtt_list* list)
@@ -121,7 +116,7 @@ struct pico_mqtt_packet* pico_mqtt_list_pop(struct pico_mqtt_list* list)
 	} else {
 		element->next->previous = NULL;
 	}
-	
+
 	packet = element->packet;
 	destroy_element(element);
 	return packet;
@@ -139,8 +134,9 @@ void pico_mqtt_list_destroy(struct pico_mqtt_list* list)
 	struct element* current = NULL;
 	struct element* next = NULL;
 
-	CHECK_NOT_NULL(list);
-	
+	if(list == NULL)
+		return;
+
 	current = list->first;
 	while(current != NULL)
 	{
@@ -149,7 +145,7 @@ void pico_mqtt_list_destroy(struct pico_mqtt_list* list)
 		remove_element(list, current);
 		current = next;
 	}
-	
+
 	FREE(list);
 }
 
@@ -164,7 +160,7 @@ static struct element* create_element(struct pico_mqtt_packet* packet)
 	CHECK_NOT_NULL( packet );
 
 	element = (struct element*) MALLOC(sizeof(struct element));
-	
+
 	if(element == NULL)
 	{
 		PERROR("Unable to allocate the memory for the element.\n");
@@ -229,7 +225,7 @@ static int list_add(struct pico_mqtt_list* list, struct pico_mqtt_packet* packet
 	}
 
 	list->length += 1;
-	
+
 	if(list->length == 1)
 	{
 		list->first = element;
@@ -261,7 +257,7 @@ static int list_add(struct pico_mqtt_list* list, struct pico_mqtt_packet* packet
 	} else {
 		list->first = element;
 	}
-	
+
 	return SUCCES;
 }
 
@@ -286,7 +282,7 @@ static void remove_element(struct pico_mqtt_list* list, struct element* element)
 	} else {
 		element->next->previous = element->previous;
 	}
-	
+
 	destroy_element(element);
 }
 
