@@ -1,8 +1,7 @@
 #ifndef PICO_MQTT_SERIALIZER_H
 #define PICO_MQTT_SERIALIZER_H
 
-#include <stdint.h>
-#include "pico_mqtt.h"
+#include "pico_mqtt_data_types.h"
 #include "pico_mqtt_private.h"
 #include "pico_mqtt_debug.h"
 

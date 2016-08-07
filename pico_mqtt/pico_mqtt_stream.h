@@ -1,9 +1,8 @@
-#include "pico_mqtt.h"
+#include "pico_mqtt_data_types.h"
 #include "pico_mqtt_private.h"
 #include "pico_mqtt_socket.h"
 #include "pico_mqtt_serializer.h"
 #include "pico_mqtt_debug.h"
-#include <stdint.h>
 
 /**
 * Data structures

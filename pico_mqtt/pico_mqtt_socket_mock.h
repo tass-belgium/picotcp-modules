@@ -1,7 +1,7 @@
 #ifndef PICO_MQTT_SOCKET_MOCK_H
 #define PICO_MQTT_SOCKET_MOCK_H
 
-#include <stdint.h>
+#include "pico_mqtt_data_types.h"
 
 void socket_mock_reset( void );
 void socket_mock_set_create_fail( uint8_t result );

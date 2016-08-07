@@ -21,7 +21,8 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
-#include "pico_mqtt.h"
+#include "pico_mqtt_data_types.h"
+#include "pico_mqtt_configuration.h"
 #include "pico_mqtt_debug.h"
 
 struct pico_mqtt_socket;

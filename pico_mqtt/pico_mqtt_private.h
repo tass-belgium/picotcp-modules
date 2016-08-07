@@ -1,7 +1,8 @@
 #ifndef PICO_MQTT_PRIVATE_H
 #define PICO_MQTT_PRIVATE_H
 
-#include "pico_mqtt.h"
+#include "pico_mqtt_data_types.h"
+#include "pico_mqtt_configuration.h"
 
 /**
 * Data Types
@@ -34,8 +35,8 @@ struct pico_mqtt
         struct pico_mqtt_data* password;
 
         // memory
-        int (*malloc)(struct pico_mqtt*, void**, size_t);
-        int (*free)(struct pico_mqtt*, void*, size_t);
+/*        int (*malloc)(struct pico_mqtt*, void**, size_t);
+        int (*free)(struct pico_mqtt*, void*, size_t);*/
         uint32_t bytes_used;
 
         // status

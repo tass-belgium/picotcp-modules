@@ -1,8 +1,7 @@
 #ifndef PICO_MQTT_SERIALIZER_MOCK_H
 #define PICO_MQTT_SERIALIZER_MOCK_H
 
-#include <stdint.h>
-#include "pico_mqtt.h"
+#include "pico_mqtt_data_types.h"
 
 void serializer_mock_reset( void );
 void serializer_mock_set_create_fail( uint8_t result );

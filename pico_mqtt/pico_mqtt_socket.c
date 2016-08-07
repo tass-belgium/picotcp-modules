@@ -1,4 +1,4 @@
-#include "pico_mqtt_debug.h"
+
 #include "pico_mqtt_socket.h"
 
 /**
@@ -20,8 +20,8 @@ struct pico_mqtt_socket{
 **/
 
 static struct addrinfo lookup_configuration( void );
-static int resolve_uri( struct addrinfo** addresses, const char* uri, const char* port);
-static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres );
+static int resolve_uri( struct pico_mqtt_socket* connection, struct addrinfo** addresses, const char* uri, const char* port);
+static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres);
 
 /**
 * Public function implementation
@@ -35,7 +35,6 @@ struct pico_mqtt_socket* pico_mqtt_connection_create( int* error )
 	CHECK_NOT_NULL(error);
 
 	socket = (struct pico_mqtt_socket*) MALLOC(sizeof(struct pico_mqtt_socket));
-	CHECK_NOT_NULL();
 
 	if(socket == NULL)
 		return NULL;
@@ -79,8 +78,8 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, uint64_t time_left)
 {
 	int result = 0;
-	struct pollfd poll_descriptors = (struct pollfd) {
-		.fd = connection.descriptor,
+	struct pollfd poll_descriptor = (struct pollfd) {
+		.fd = connection->descriptor,
 		.events = 0,
 		.revents = 0
 	};
@@ -88,7 +87,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 	CHECK_NOT_NULL(connection);
 	CHECK_NOT_NULL(write_buffer);
 	CHECK_NOT_NULL(read_buffer);
-	CHECK((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) == 0),
+	CHECK(((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) == 0),
 		"Nonblocking flags should be set for the socket.\n");
 
 	if((write_buffer->length == 0) && (read_buffer->length == 0))
@@ -107,7 +106,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		poll_descriptor.revents |= POLLIN;
 	}
 
-	result = poll(&poll_descriptor, 1, time_left);
+	result = poll(&poll_descriptor, 1, (int32_t)time_left);
 
 	CHECK((result > 1), "It should not be possible to have more then 1 active file descriptor.\n");
 	CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0),
@@ -130,7 +129,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		if(((poll_descriptor.revents & POLLIN) != 0) && (read_buffer->length != 0)) /* data to read */
 		{
 			uint32_t bytes_written = 0;
-			bytes_written = read(connection->descriptor, read_buffer->data, read_buffer->length);
+			bytes_written = (uint32_t) read(connection->descriptor, read_buffer->data, read_buffer->length);
 			read_buffer->data += bytes_written;
 			read_buffer->length -= bytes_written;
 			PINFO("Written %d bytes to %d\n", bytes_written, connection->descriptor);
@@ -139,13 +138,13 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		if(((poll_descriptor.revents & POLLOUT) != 0) && (write_buffer->length != 0))/* data to write */
 		{
 			uint32_t bytes_written = 0;
-			bytes_written = write(connection->descriptor, write_buffer->data, write_buffer->length);
+			bytes_written = (uint32_t) write(connection->descriptor, write_buffer->data, write_buffer->length);
 			write_buffer->data += bytes_written;
 			write_buffer->length -= bytes_written;
 			PINFO("Written %d bytes to %d\n", bytes_written, connection->descriptor);
 		}
 	} else {
-		PERROR("Poll returned %d, only expected values are -1, 0 or 1.\n");
+		PERROR("Poll returned %d, only expected values are -1, 0 or 1.\n", result);
 		PTODO("Set a specific error.\n");
 		return ERROR;
 	}
@@ -158,7 +157,6 @@ void pico_mqtt_connection_close( struct pico_mqtt_socket* socket)
 {
 	PTODO("Write implementation.\n");
 	socket++;
-	return SUCCES;
 }
 
 uint64_t get_current_time( void  )
@@ -233,7 +231,7 @@ static struct addrinfo lookup_configuration( void ){
 }
 
 /* return the socket file descriptor */
-static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres, int* time_left){
+static int socket_connect( struct pico_mqtt_socket* connection, struct addrinfo* addres){
 	struct addrinfo *current_addres = NULL;
 
 	CHECK_NOT_NULL(connection);

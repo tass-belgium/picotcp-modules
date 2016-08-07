@@ -7,3 +7,5 @@
 *.gcno
 *.gcov
 *.yml
+/.d
+make_log.txt

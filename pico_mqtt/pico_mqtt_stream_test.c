@@ -8,7 +8,6 @@
 #define DISABLE_TRACE
 
 #include <check.h>
-#include "pico_mqtt.h"
 #include "pico_mqtt_socket_mock.h"
 #include "pico_mqtt_serializer_mock.h"
 

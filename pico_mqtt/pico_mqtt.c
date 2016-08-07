@@ -1,7 +1,6 @@
 #include "pico_mqtt.h"
-#include "pico_mqtt_private.h"
 #include "pico_mqtt_debug.h"
-
+#if 1== 0
 /**
 * Data Structures
 **/
@@ -784,5 +783,5 @@ void pico_mqtt_print_data(const struct pico_mqtt_data* data)
 	printf("+---------------------------------------------------------+\n");
 	return;
 }
-
+#endif
 #endif /* defined DEBUG */

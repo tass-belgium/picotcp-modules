@@ -1,9 +1,8 @@
 #ifndef PICO_MQTT_LIST_H
 #define PICO_MQTT_LIST_H
 
-#include <stdint.h>
 #include <stdlib.h>
-#include "pico_mqtt.h"
+#include "pico_mqtt_data_types.h"
 #include "pico_mqtt_private.h"
 #include "pico_mqtt_debug.h"
 

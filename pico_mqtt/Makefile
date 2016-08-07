@@ -1,46 +1,84 @@
 CC=gcc
-CC_FLAGS= -Wdeclaration-after-statement -W -Wshadow -Wcast-qual -Wwrite-strings -Wundef -Wconversion -Wcast-align -Wmissing-prototypes -Wno-missing-field-initializers -Wunused-function -Wextra -Werror -Wunused-variable -Wall
-TEST_FLAGS= -lcheck -lpthread -lm -lrt -fprofile-arcs -ftest-coverage -lsubunit
+C_FLAGS= -Wdeclaration-after-statement -W -Wshadow -Wcast-qual -Wwrite-strings -Wundef -Wconversion -Wcast-align -Wmissing-prototypes -Wno-missing-field-initializers -Wunused-function -Wextra -Werror -Wunused-variable -Wall
+TEST_FLAGS= -lcheck -lpthread -lm -lrt -lsubunit
+COVERAGE_FLAGS= -fprofile-arcs -ftest-coverage
 COMPLEXITY_THRESHOLD= 3
-EXTENSION= out
 
-#Main target
-tests: serializer_test
-#serializer: serializer_test.o
-#	$(CC) serializer_test.o -o serializer
+OUTPUT_LOG= make_log.txt
 
-#To obtain object files
+#####################################################################################
+# List of all files per category													#
+#####################################################################################
 
-debug.o: pico_mqtt_debug.c pico_mqtt_debug.h
-	$(CC) $(CC_FLAGS) -c pico_mqtt_debug.c -o $@
+SOURCE_FILES = $(wildcard *.c)
 
-serializer.o: pico_mqtt_serializer.c pico_mqtt_serializer.h
-	$(CC) $(CC_FLAGS) -c pico_mqtt_serializer.c -o $@
+MOCK_OBJECT_FILES = $(addsuffix .o, $(basename $(wildcard *_mock.c)))
+TEST_OBJECT_FILES = $(addsuffix .o, $(basename $(wildcard *_test.c)))
+BASE_OBJECT_FILES = $(filter-out $(MOCK_OBJECT_FILES) $(TEST_OBJECT_FILES), $(addsuffix .o, $(basename $(wildcard *.c))))
+ALL_OBJECT_FILES =  $(BASE_OBJECT_FILES) $(MOCK_OBJECT_FILES) $(TEST_OBJECT_FILES) 
 
-serializer_mock.o: pico_mqtt_serializer_mock.c pico_mqtt_serializer.h pico_mqtt_serializer_mock.h
-	$(CC) $(CC_FLAGS) -c pico_mqtt_serializer_mock.c -o $@
+UNIT_TESTS = $(addsuffix .out, $(basename $(TEST_OBJECT_FILES)))
 
-socket_mock.o: pico_mqtt_socket.h pico_mqtt_socket_mock.c pico_mqtt_socket_mock.h
-	$(CC) $(CC_FLAGS) -c pico_mqtt_socket_mock.c -o $@
+#####################################################################################
+# Main command for unit testing														#
+#####################################################################################
 
-serializer_test: pico_mqtt_serializer_test.c pico_mqtt_serializer.c pico_mqtt_serializer.h debug.o
-	$(CC) $(CC_FLAGS) pico_mqtt_$(basename $@).c $(filter %.o,$^) -o $@.$(EXTENSION) $(TEST_FLAGS)
-	./$@.$(EXTENSION)
-	complexity --score --thresh=$(COMPLEXITY_THRESHOLD) pico_mqtt_serializer.c
-	gcov pico_mqtt_serializer_test.c
+unit_test: $(ALL_OBJECT_FILES) $(UNIT_TESTS)
 
-list_test: pico_mqtt_list_test.c pico_mqtt_list.c pico_mqtt_list.h debug.o
-	$(CC) $(CC_FLAGS) pico_mqtt_$(basename $@).c $(filter %.o,$^) -o $@.$(EXTENSION) $(TEST_FLAGS)
-	./$@.$(EXTENSION)
-	complexity --score --thresh=$(COMPLEXITY_THRESHOLD) pico_mqtt_list.c
-	gcov pico_mqtt_list_test.c
+#####################################################################################
+# Automatically generate dependencies												#
+#####################################################################################
 
-stream_test: pico_mqtt_stream_test.c pico_mqtt_stream.c pico_mqtt_stream.h socket_mock.o serializer_mock.o debug.o
-	$(CC) $(CC_FLAGS) pico_mqtt_$(basename $@).c $(filter %.o,$^) -o $@.$(EXTENSION) $(TEST_FLAGS)
-	./$@.$(EXTENSION)
-	complexity --score --thresh=$(COMPLEXITY_THRESHOLD) pico_mqtt_stream.c
-	gcov pico_mqtt_$(basename $@).c
+#http://make.mad-scientist.net/papers/advanced-auto-dependency-generation/
 
-#To remove generated files
+DEPDIR := .d
+$(shell mkdir -p $(DEPDIR) >/dev/null)
+DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
+
+COMPILE.c = $(CC) $(DEPFLAGS) $(C_FLAGS) $(COVERAGE_FLAGS) -c
+POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
+
+%.o : %.c
+%.o : %.c $(DEPDIR)/%.d
+		@$(COMPILE.c) $(OUTPUT_OPTION) $<
+		@$(POSTCOMPILE)
+
+$(DEPDIR)/%.d: ;
+.PRECIOUS: $(DEPDIR)/%.d
+
+-include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SOURCE_FILES)))
+
+#####################################################################################
+# Run the unit test and print to file												#
+#####################################################################################
+
+%_test.out: %_test.o $(MOCK_OBJECT_FILES) pico_mqtt_debug.o
+	@$(CC) $(CC_FLAGS) $(filter-out $(subst _test.out,_mock.o, $@), $^) -o $@ $(TEST_FLAGS) $(COVERAGE_FLAGS)
+	@printf "+-------------------------------------------+\n" 						> $(OUTPUT_LOG)
+	@printf "| %-40s  |\n" "$@"														>> $(OUTPUT_LOG)
+	@printf "+-------------------------------------------+\n"						>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@./$@																			>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
+	@printf "| Complexity  threshold:%2d    |\n" $(COMPLEXITY_THRESHOLD)			>> $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@complexity --score --thresh=$(COMPLEXITY_THRESHOLD) $(subst _test.out,.c, $@)	>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
+	@printf "| Unit test coverage          |\n"										>> $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@gcov $(subst _test.out,_test.c, $@)											>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@echo																			>> $(OUTPUT_LOG)
+	@cat $(OUTPUT_LOG)
+
+#####################################################################################
+# Cleaning up the generated files 													#
+#####################################################################################
+
 clean:
-	rm -f *.$(EXTENSION) *.o *.gcov *.gcda *.gcno *.h.gch
+	rm -f *.$(EXTENSION) *.o *.gcov *.gcda *.gcno *.h.gch ./.d/*.d *.out make_log.txt
+	rmdir .d
