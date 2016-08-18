@@ -1,4 +1,5 @@
 CC=gcc
+DEBUG_FLAGS= -DDEBUG=3 -g 
 C_FLAGS= -Wdeclaration-after-statement -W -Wshadow -Wcast-qual -Wwrite-strings -Wundef -Wconversion -Wcast-align -Wmissing-prototypes -Wno-missing-field-initializers -Wunused-function -Wextra -Werror -Wunused-variable -Wall
 TEST_FLAGS= -lcheck -lpthread -lm -lrt -lsubunit
 COVERAGE_FLAGS= -fprofile-arcs -ftest-coverage
@@ -23,7 +24,7 @@ UNIT_TESTS = $(addsuffix .out, $(basename $(TEST_OBJECT_FILES)))
 # Main command for unit testing														#
 #####################################################################################
 
-unit_test: $(ALL_OBJECT_FILES) $(UNIT_TESTS)
+unit_test: clear_log $(ALL_OBJECT_FILES) $(UNIT_TESTS) 
 
 #####################################################################################
 # Automatically generate dependencies												#
@@ -35,7 +36,7 @@ DEPDIR := .d
 $(shell mkdir -p $(DEPDIR) >/dev/null)
 DEPFLAGS = -MT $@ -MMD -MP -MF $(DEPDIR)/$*.Td
 
-COMPILE.c = $(CC) $(DEPFLAGS) $(C_FLAGS) $(COVERAGE_FLAGS) -c
+COMPILE.c = $(CC) $(DEPFLAGS) $(C_FLAGS) $(COVERAGE_FLAGS) $(DEBUG_FLAGS) -c
 POSTCOMPILE = mv -f $(DEPDIR)/$*.Td $(DEPDIR)/$*.d
 
 %.o : %.c
@@ -51,34 +52,35 @@ $(DEPDIR)/%.d: ;
 #####################################################################################
 # Run the unit test and print to file												#
 #####################################################################################
+clear_log:
+	@rm -f $(OUTPUT_LOG)
 
 %_test.out: %_test.o $(MOCK_OBJECT_FILES) pico_mqtt_debug.o
-	@$(CC) $(CC_FLAGS) $(filter-out $(subst _test.out,_mock.o, $@), $^) -o $@ $(TEST_FLAGS) $(COVERAGE_FLAGS)
-	@printf "+-------------------------------------------+\n" 						> $(OUTPUT_LOG)
-	@printf "| %-40s  |\n" "$@"														>> $(OUTPUT_LOG)
-	@printf "+-------------------------------------------+\n"						>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@./$@																			>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
-	@printf "| Complexity  threshold:%2d    |\n" $(COMPLEXITY_THRESHOLD)			>> $(OUTPUT_LOG)
-	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@complexity --score --thresh=$(COMPLEXITY_THRESHOLD) $(subst _test.out,.c, $@)	>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
-	@printf "| Unit test coverage          |\n"										>> $(OUTPUT_LOG)
-	@printf "+-----------------------------+\n"										>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@gcov $(subst _test.out,_test.c, $@)											>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@echo																			>> $(OUTPUT_LOG)
-	@cat $(OUTPUT_LOG)
+	@$(CC) $(C_FLAGS) $(filter-out $(subst _test.out,_mock.o, $@), $^) -o $@ $(TEST_FLAGS) $(COVERAGE_FLAGS) $(DEBUG_FLAGS)
+	@printf "+---------------------------------------------------------------+\n" 	| tee -a $(OUTPUT_LOG)
+	@printf "| %-60s  |\n" "$@"														| tee -a $(OUTPUT_LOG)
+	@printf "+---------------------------------------------------------------+\n"	| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
+	@./$@																			| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										| tee -a $(OUTPUT_LOG)
+	@printf "| Complexity  threshold:%2d    |\n" $(COMPLEXITY_THRESHOLD)			| tee -a $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
+	@complexity --score --thresh=$(COMPLEXITY_THRESHOLD) $(subst _test.out,.c, $@)	| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										| tee -a $(OUTPUT_LOG)
+	@printf "| Unit test coverage          |\n"										| tee -a $(OUTPUT_LOG)
+	@printf "+-----------------------------+\n"										| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
+	@gcov $(subst _test.out,_test.c, $@)											| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
+	@echo																			| tee -a $(OUTPUT_LOG)
 
 #####################################################################################
 # Cleaning up the generated files 													#
 #####################################################################################
 
 clean:
-	rm -f *.$(EXTENSION) *.o *.gcov *.gcda *.gcno *.h.gch ./.d/*.d *.out make_log.txt
-	rmdir .d
+	rm -f *.$(EXTENSION) *.o *.gcov *.gcda *.gcno $(DEPDIR)/* *.out $(OUTPUT_LOG) $(OUTPUT_LOG_TMP)
+	rmdir $(DEPDIR)
