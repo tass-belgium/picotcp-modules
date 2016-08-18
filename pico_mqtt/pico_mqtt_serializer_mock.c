@@ -46,11 +46,6 @@ void pico_mqtt_serializer_clear( struct pico_mqtt_serializer* serializer )
 	CHECK_NOT_NULL(serializer);
 	*serializer->error = serializer_mock.error_value;
 }
-void pico_mqtt_serializer_total_reset( struct pico_mqtt_serializer* serializer )
-{
-	CHECK_NOT_NULL(serializer);
-	*serializer->error = serializer_mock.error_value;
-}
 
 /* close and free pico mqtt serializer*/
 void pico_mqtt_serializer_destroy( struct pico_mqtt_serializer* serializer)
@@ -82,42 +77,34 @@ int pico_mqtt_deserialize_length( int* error, void* length_void, uint32_t* resul
 	return serializer_mock.return_value;
 }
 
-void pico_mqtt_serializer_set_client_id( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data client_id)
+void pico_mqtt_serializer_set_client_id( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* client_id)
 {
 	CHECK_NOT_NULL(serializer);
-	client_id.length++;
+	client_id++;
 
 	*serializer->error = serializer_mock.error_value;
 }
 
-void pico_mqtt_serializer_set_username( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data username)
+void pico_mqtt_serializer_set_username( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* username)
 {
 	CHECK_NOT_NULL(serializer);
-	username.length++;
+	username++;
 
 	*serializer->error = serializer_mock.error_value;
 }
 
-void pico_mqtt_serializer_set_password( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data password)
+void pico_mqtt_serializer_set_password( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* password)
 {
 	CHECK_NOT_NULL(serializer);
-	password.length++;
+	password++;
 
 	*serializer->error = serializer_mock.error_value;
 }
 
-void pico_mqtt_serializer_set_will_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data will_topic)
+void pico_mqtt_serializer_set_message( struct pico_mqtt_serializer* serializer, struct pico_mqtt_message* message)
 {
 	CHECK_NOT_NULL(serializer);
-	will_topic.length++;
-
-	*serializer->error = serializer_mock.error_value;
-}
-
-void pico_mqtt_serializer_set_will_message( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data will_message)
-{
-	CHECK_NOT_NULL(serializer);
-	will_message.length++;
+	message++;
 
 	*serializer->error = serializer_mock.error_value;
 }

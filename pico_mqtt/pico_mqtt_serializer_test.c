@@ -27,7 +27,7 @@ Suite * functional_list_suite(void);
 * tests
 **/
 
-START_TEST(compare_arrays_test)
+START(compare_arrays_test)
 {
 	uint8_t a1[5] = {1, 2, 3, 4, 5};
 	uint8_t a2[5] = {1, 2, 4, 4, 5};
@@ -36,11 +36,10 @@ START_TEST(compare_arrays_test)
 	ck_assert_msg(!compare_arrays(a1, a2, 5), "The arrays should not match.\n");
 	ck_assert_msg(!compare_arrays(a2, a1, 5), "The arrays should not match.\n");
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(debug_malloc_test)
+START(debug_malloc_test)
 {
 	void* result = NULL;
 
@@ -64,11 +63,10 @@ START_TEST(debug_malloc_test)
 	ck_assert_msg(result != NULL, "Malloc not should have failed\n");
 	FREE(result);
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(create_serializer)
+START(create_serializer)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
@@ -84,16 +82,15 @@ START_TEST(create_serializer)
 	serializer = pico_mqtt_serializer_create( &error );
 	ck_assert_msg( serializer == NULL , "Should return NULL due to malloc error.\n");
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(destroy_stream)
+START(destroy_stream)
 {
 	int error = 0;
 	struct pico_mqtt_serializer serializer =
 	{
-		.packet_id = 1,
+		.message_id = 1,
 		.stream = {.data = MALLOC(1), .length = 1},
 		.stream_ownership = 1,
 		.stream_index = (void*)1,
@@ -107,52 +104,49 @@ START_TEST(destroy_stream)
 	ck_assert_msg( serializer.stream_index == 0 , "The stream_index should be cleared.\n");
 	ck_assert_msg( serializer.stream_ownership == 0, "The stream was owned by the serializer and shouldn't be any more.\n");
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(clear_serializer)
+START(clear_serializer)
 {
 	int error = 0;
 	struct pico_mqtt_serializer serializer =
 	{
-		.packet_id = 1,
+		.message_id = 1,
 		.stream = {.data = (void*)1, .length = 1},
 		.stream_index = (void*)1,
 		.error = &error
 	};
 
-	pico_mqtt_serializer_total_reset( &serializer );
+	pico_mqtt_serializer_clear( &serializer );
 
 	ck_assert_msg( serializer.error != NULL , "Clearing the serializer also removed the pointer to the error, this is incorrect.\n");
-	ck_assert_msg( serializer.packet_id == 0 , "The packet_id should be cleared.\n");
+	ck_assert_msg( serializer.message_id == 0 , "The message_id should be cleared.\n");
 	ck_assert_msg( serializer.stream.data == NULL , "The stream.data should be cleared.\n");
 	ck_assert_msg( serializer.stream.length == 0 , "The stream.length should be cleared.\n");
 	ck_assert_msg( serializer.stream_index == 0 , "The stream_index should be cleared.\n");
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(destroy_serializer)
+START(destroy_serializer)
 {
 	struct pico_mqtt_serializer* serializer = MALLOC(sizeof(struct pico_mqtt_serializer));
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(create_stream)
+START(create_stream_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 2 );
+	create_stream( serializer, 2 );
 
 	ck_assert_msg( serializer->stream.data != NULL , "The stream.data should be allocated, not NULL.\n");
 	ck_assert_msg( *(uint8_t*)serializer->stream.data == 0x00 , "The stream.data should be 0x00 at index 0.\n");
@@ -162,19 +156,18 @@ START_TEST(create_stream)
 	ck_assert_msg( serializer->stream_ownership == 1, "Once a stream is created, the serializer owns it until ownership transfer (get).\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(bytes_left_stream)
+START(bytes_left_stream)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	uint32_t bytes_left = 0;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
-	create_serializer_stream( serializer, 2 );
+	pico_mqtt_serializer_clear( serializer );
+	create_stream( serializer, 2 );
 
 	bytes_left = get_bytes_left_stream(serializer);
 
@@ -196,19 +189,18 @@ START_TEST(bytes_left_stream)
 	ck_assert_msg( bytes_left == 0 , "The number of bytes left should be zero, even if the difference is negative.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(add_byte_stream_test)
+START(add_byte_stream_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 2 );
+	create_stream( serializer, 2 );
 
 	add_byte_stream(serializer, 0xC5);
 
@@ -225,11 +217,10 @@ START_TEST(add_byte_stream_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data+2 , "The stream_index should be at the beginning+1 of the allocated memory.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(get_byte_stream_test)
+START(get_byte_stream_test)
 {
 	int error = 0;
 	uint8_t byte = 0;
@@ -237,9 +228,9 @@ START_TEST(get_byte_stream_test)
 	uint8_t message_data[2] = { 0xC5, 0x5C };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 2 );
+	create_stream( serializer, 2 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 
@@ -258,19 +249,18 @@ START_TEST(get_byte_stream_test)
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x5C , "The stream.data should be 0x5C at index 1.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(add_2_byte_stream_test)
+START(add_2_byte_stream_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 2 );
+	create_stream( serializer, 2 );
 
 	add_2_byte_stream(serializer, 0xC5A2);
 
@@ -280,11 +270,10 @@ START_TEST(add_2_byte_stream_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 2 , "The stream_index should be at the beginning + 2 of the allocated memory.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(get_2_byte_stream_test)
+START(get_2_byte_stream_test)
 {
 	int error = 0;
 	uint16_t byte = 0;
@@ -292,9 +281,9 @@ START_TEST(get_2_byte_stream_test)
 	uint8_t message_data[4] = { 0xC5, 0x5C, 0x44, 0x78 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 4 );
+	create_stream( serializer, 4 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
@@ -321,11 +310,10 @@ START_TEST(get_2_byte_stream_test)
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 3) == 0x78 , "The stream.data should be 0x78 at index 3.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(add_data_stream_test)
+START(add_data_stream_test)
 {
 	int error = 0;
 	uint8_t data_sample_1[2] = {0x48, 0x6E};
@@ -336,9 +324,9 @@ START_TEST(add_data_stream_test)
 	struct pico_mqtt_data sample_2 = {.data = data_sample_2, .length = 3};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 5 );
+	create_stream( serializer, 5 );
 
 	add_data_stream(serializer, sample_1);
 
@@ -358,61 +346,54 @@ START_TEST(add_data_stream_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 5 , "The stream_index should be at the beginning + 5 of the allocated memory.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(get_data_stream_test)
+START(get_data_stream_test)
 {
 	int error = 0;
-	struct pico_mqtt_data data = PICO_MQTT_DATA_EMPTY;
+	struct pico_mqtt_data* data = NULL;
 	struct pico_mqtt_serializer* serializer = NULL;
 	uint8_t message_data[4] = { 0xC5, 0x5C, 0x44, 0x78 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
 
-	create_serializer_stream( serializer, 4 );
-	*((uint8_t*) serializer->stream.data) = message_data[0];
-	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
-	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
-	*((uint8_t*) serializer->stream.data + 3) = message_data[3];
-	serializer->stream_index++;
+	create_stream( serializer, 4 );
+	add_data_stream(serializer, (struct pico_mqtt_data){.length = 4, .data = &message_data});
+	serializer->stream_index = serializer->stream.data;
+	get_byte_stream( serializer );
 
 	data = get_data_stream(serializer);
 
-	ck_assert_msg( data.length == 3 , "The data from the stream should be 3.\n");
-	ck_assert_msg( *((uint8_t*)data.data + 0) == 0x5C , "The data.data should be 0x5C at index 0.\n");
-	ck_assert_msg( *((uint8_t*)data.data + 1) == 0x44 , "The data.data should be 0x44 at index 1.\n");
-	ck_assert_msg( *((uint8_t*)data.data + 2) == 0x78 , "The data.data should be 0x78 at index 2.\n");
+	ck_assert_msg( data->length == 3 , "The data from the stream should be 3.\n");
+	ck_assert_msg( *((uint8_t*)data->data + 0) == 0x5C , "The data.data should be 0x5C at index 0.\n");
+	ck_assert_msg( *((uint8_t*)data->data + 1) == 0x44 , "The data.data should be 0x44 at index 1.\n");
+	ck_assert_msg( *((uint8_t*)data->data + 2) == 0x78 , "The data.data should be 0x78 at index 2.\n");
 	ck_assert_msg( serializer->stream.length == 4 , "The stream.length should be 4.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 4 , "The stream_index should be at the beginning + 4 of the allocated memory.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data) == 0xC5 , "The stream.data should be 0xC5 at index 0.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x5C , "The stream.data should be 0x5C at index 1.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 2) == 0x44 , "The stream.data should be 0x44 at index 2.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 3) == 0x78 , "The stream.data should be 0x78 at index 3.\n");
-	FREE(data.data);
+	FREE(data->data);
+	FREE(data);
 	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 4 );
-	*((uint8_t*) serializer->stream.data) = message_data[0];
-	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
-	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
-	*((uint8_t*) serializer->stream.data + 3) = message_data[3];
-	serializer->stream_index++;
+	create_stream( serializer, 4 );
+	add_data_stream(serializer, (struct pico_mqtt_data){.length = 4, .data = &message_data});
+	serializer->stream_index = serializer->stream.data;
+	get_byte_stream( serializer );
 
 	MALLOC_FAIL_ONCE();
 	PERROR_DISABLE_ONCE();
 	data = get_data_stream(serializer);
-	ck_assert_msg( data.length == 0 , "The data from the stream empty.\n");
-
+	ck_assert_msg( data == NULL , "The serializer should return NULL.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(add_data_and_length_stream_test)
+START(add_data_and_length_stream_test)
 {
 	int error = 0;
 	uint8_t data_sample_1[2] = {0x48, 0x6E};
@@ -424,18 +405,18 @@ START_TEST(add_data_and_length_stream_test)
 	struct pico_mqtt_data sample_2 = {.data = data_sample_2, .length = 3};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 11 );
+	create_stream( serializer, 11 );
 
-	add_data_and_length_stream(serializer, sample_0);
+	add_data_and_length_stream(serializer, &sample_0);
 
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 0) == 0x00 , "The stream.data at index 0 should be 0x00.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x00 , "The stream.data at index 1 should be 0x00.\n");
 	ck_assert_msg( serializer->stream.length == 11 , "The stream.length should be 11.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 2 , "The stream_index should be at the beginning + 2 of the allocated memory.\n");
 
-	add_data_and_length_stream(serializer, sample_1);
+	add_data_and_length_stream(serializer, &sample_1);
 
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 0) == 0x00 , "The stream.data at index 0 should be 0x00.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x00 , "The stream.data at index 1 should be 0x00.\n");
@@ -446,7 +427,7 @@ START_TEST(add_data_and_length_stream_test)
 	ck_assert_msg( serializer->stream.length == 11 , "The stream.length should be 11.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 6 , "The stream_index should be at the beginning + 6 of the allocated memory.\n");
 
-	add_data_and_length_stream(serializer, sample_2);
+	add_data_and_length_stream(serializer, &sample_2);
 
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 0) == 0x00 , "The stream.data at index 0 should be 0x00.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x00 , "The stream.data at index 1 should be 0x00.\n");
@@ -464,21 +445,19 @@ START_TEST(add_data_and_length_stream_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(get_data_and_length_stream_test)
+START(get_data_and_length_stream_test)
 {
 	int error = 0;
-	struct pico_mqtt_data data = PICO_MQTT_DATA_EMPTY;
+	struct pico_mqtt_data* data = NULL;
 	struct pico_mqtt_serializer* serializer = NULL;
 	uint8_t message_data[6] = { 0x57, 0x00, 0x02, 0x5C, 0x44, 0x78 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
 
-	create_serializer_stream( serializer, 6 );
+	create_stream( serializer, 6 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
@@ -488,9 +467,9 @@ START_TEST(get_data_and_length_stream_test)
 	serializer->stream_index++;
 
 	data = get_data_and_length_stream(serializer);
-	ck_assert_msg( data.length == 2 , "The data from the stream should be 2 long.\n");
-	ck_assert_msg( *((uint8_t*)data.data + 0) == 0x5C , "The data.data should be 0x5C at index 0.\n");
-	ck_assert_msg( *((uint8_t*)data.data + 1) == 0x44 , "The data.data should be 0x44 at index 1.\n");
+	ck_assert_msg( data->length == 2 , "The data from the stream should be 2 long.\n");
+	ck_assert_msg( *((uint8_t*)data->data + 0) == 0x5C , "The data.data should be 0x5C at index 0.\n");
+	ck_assert_msg( *((uint8_t*)data->data + 1) == 0x44 , "The data.data should be 0x44 at index 1.\n");
 	ck_assert_msg( serializer->stream.length == 6 , "The stream.length should be 6.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 5 , "The stream_index should be at the beginning + 5 of the allocated memory.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data) == 0x57 , "The stream.data should be 0x57 at index 0.\n");
@@ -499,10 +478,11 @@ START_TEST(get_data_and_length_stream_test)
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 3) == 0x5C , "The stream.data should be 0x5C at index 3.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 4) == 0x44 , "The stream.data should be 0x44 at index 4.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 5) == 0x78 , "The stream.data should be 0x78 at index 5.\n");
-	FREE(data.data);
+	FREE(data->data);
+	FREE(data);
 	pico_mqtt_serializer_clear(serializer);
 
-	create_serializer_stream( serializer, 4 );
+	create_stream( serializer, 4 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
@@ -511,32 +491,30 @@ START_TEST(get_data_and_length_stream_test)
 
 	PERROR_DISABLE_ONCE();
 	data = get_data_and_length_stream(serializer);
-	ck_assert_msg( data.length == 0 , "The data from the stream should be empty.\n");
+	ck_assert_msg( data == NULL , "The data from the stream should be empty.\n");
 	ck_assert_msg( serializer->stream.length == 4 , "The stream.length should be 4.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 3 , "The stream_index should be at the beginning + 3 of the allocated memory.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data) == 0x57 , "The stream.data should be 0x57 at index 0.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x00 , "The stream.data should be 0x00 at index 1.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 2) == 0x02 , "The stream.data should be 0x02 at index 2.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 3) == 0x5C , "The stream.data should be 0x5C at index 3.\n");
-	FREE(data.data);
 	pico_mqtt_serializer_clear(serializer);
 
-	create_serializer_stream( serializer, 2 );
+	create_stream( serializer, 2 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 	serializer->stream_index++;
 
 	PERROR_DISABLE_ONCE();
 	data = get_data_and_length_stream(serializer);
-	ck_assert_msg( data.length == 0 , "The data from the stream should be empty.\n");
+	ck_assert_msg( data == NULL , "The data from the stream should be empty.\n");
 	ck_assert_msg( serializer->stream.length == 2 , "The stream.length should be 2.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 1 , "The stream_index should be at the beginning + 1 of the allocated memory.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data) == 0x57 , "The stream.data should be 0x57 at index 0.\n");
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 1) == 0x00 , "The stream.data should be 0x00 at index 1.\n");
-	FREE(data.data);
 	pico_mqtt_serializer_clear(serializer);
 
-	create_serializer_stream( serializer, 6 );
+	create_stream( serializer, 6 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
@@ -548,15 +526,14 @@ START_TEST(get_data_and_length_stream_test)
 	MALLOC_FAIL_ONCE();
 	PERROR_DISABLE_ONCE();
 	data = get_data_and_length_stream(serializer);
-	ck_assert_msg( data.length == 0 , "The data from the stream should be empty.\n");;
+	ck_assert_msg( data == NULL , "The data from the stream should be empty.\n");;
 	pico_mqtt_serializer_clear(serializer);
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(add_array_stream_test)
+START(add_array_stream_test)
 {
 	int error = 0;
 	uint8_t data_sample_1[2] = {0x48, 0x6E};
@@ -564,9 +541,9 @@ START_TEST(add_array_stream_test)
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 5 );
+	create_stream( serializer, 5 );
 
 	add_array_stream(serializer, data_sample_1, 2);
 
@@ -585,21 +562,19 @@ START_TEST(add_array_stream_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 5 , "The stream_index should be at the beginning + 5 of the allocated memory.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(skip_length_test)
+START(skip_length_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	uint8_t message_data[6] = { 0x08, 0x81, 0x82, 0x83, 0x84, 0x85 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	create_serializer_stream( serializer, 6 );
+	create_stream( serializer, 6 );
 	*((uint8_t*) serializer->stream.data) = message_data[0];
 	*((uint8_t*) serializer->stream.data + 1) = message_data[1];
 	*((uint8_t*) serializer->stream.data + 2) = message_data[2];
@@ -630,11 +605,10 @@ START_TEST(skip_length_test)
 	ck_assert_msg( *((uint8_t*)serializer->stream.data + 5) == 0x85 , "The stream.data should be 0x85 at index 5.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_acknowledge_test)
+START(serialize_acknowledge_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
@@ -654,9 +628,9 @@ START_TEST(serialize_acknowledge_test)
 	ck_assert_msg( serializer->stream.length == 0 , "The stream.length should be 0 bytes long.\n");
 	ck_assert_msg( serializer->stream_index == serializer->stream.data , "The stream_index should be beginning.\n");
 
-	/* puback */
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x1458;
+	// puback 
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x1458;
 
 	serialize_acknowledge( serializer, PUBACK );
 
@@ -665,10 +639,9 @@ START_TEST(serialize_acknowledge_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 4 , "The stream_index should be beginning + 4.\n");
 	ck_assert_msg( compare_arrays(serializer->stream.data, reference_message_puback, 4), "The generated output does not match the specifications.\n");
 
-	FREE(serializer->stream.data);
-	/* pubrec */
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0xAF7D;
+	// pubrec
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0xAF7D;
 
 	serialize_acknowledge( serializer, PUBREC );
 
@@ -677,10 +650,9 @@ START_TEST(serialize_acknowledge_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 4 , "The stream_index should be beginning + 4.\n");
 	ck_assert_msg( compare_arrays(serializer->stream.data, reference_message_pubrec, 4), "The generated output does not match the specifications.\n");
 
-	FREE(serializer->stream.data);
-	/* pubrel */
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x1D5D;
+	// pubrel 
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x1D5D;
 
 	serialize_acknowledge( serializer, PUBREL );
 
@@ -689,10 +661,9 @@ START_TEST(serialize_acknowledge_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 4 , "The stream_index should be beginning + 4.\n");
 	ck_assert_msg( compare_arrays(serializer->stream.data, reference_message_pubrel, 4), "The generated output does not match the specifications.\n");
 
-	FREE(serializer->stream.data);
-	/* pubcomp */
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x9CC2;
+	// pubcomp 
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x9CC2;
 
 	serialize_acknowledge( serializer, PUBCOMP );
 
@@ -701,10 +672,9 @@ START_TEST(serialize_acknowledge_test)
 	ck_assert_msg( serializer->stream_index == serializer->stream.data + 4 , "The stream_index should be beginning + 4.\n");
 	ck_assert_msg( compare_arrays(serializer->stream.data, reference_message_pubcomp, 4), "The generated output does not match the specifications.\n");
 
-	FREE(serializer->stream.data);
-	/* unsuback */
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x438A;
+	// unsuback 
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x438A;
 
 	serialize_acknowledge( serializer, UNSUBACK );
 
@@ -715,11 +685,10 @@ START_TEST(serialize_acknowledge_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_puback_test)
+START(serialize_puback_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -728,9 +697,9 @@ START_TEST(serialize_puback_test)
 
 	serializer = pico_mqtt_serializer_create( &error );
 
-	/* puback */
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x1458;
+	// puback
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x1458;
 
 	return_code = serialize_puback( serializer );
 
@@ -742,11 +711,10 @@ START_TEST(serialize_puback_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_pubrec_test)
+START(serialize_pubrec_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -755,8 +723,8 @@ START_TEST(serialize_pubrec_test)
 
 	serializer = pico_mqtt_serializer_create( &error );
 
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0xAF7D;
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0xAF7D;
 
 	return_code = serialize_pubrec( serializer );
 
@@ -768,11 +736,10 @@ START_TEST(serialize_pubrec_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_pubrel_test)
+START(serialize_pubrel_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -781,8 +748,8 @@ START_TEST(serialize_pubrel_test)
 
 	serializer = pico_mqtt_serializer_create( &error );
 
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x1D5D;
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x1D5D;
 
 	return_code = serialize_pubrel( serializer );
 
@@ -794,11 +761,10 @@ START_TEST(serialize_pubrel_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_pubcomp_test)
+START(serialize_pubcomp_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -807,8 +773,8 @@ START_TEST(serialize_pubcomp_test)
 
 	serializer = pico_mqtt_serializer_create( &error );
 
-	pico_mqtt_serializer_total_reset( serializer );
-	serializer->packet_id = 0x9CC2;
+	pico_mqtt_serializer_clear( serializer );
+	serializer->message_id = 0x9CC2;
 
 	return_code = serialize_pubcomp( serializer );
 
@@ -820,11 +786,10 @@ START_TEST(serialize_pubcomp_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_length)
+START(serialize_length)
 {
 	int error = 0;
 	struct pico_mqtt_data result = {.data = NULL, .length = 0};
@@ -887,11 +852,10 @@ START_TEST(serialize_length)
 	ck_assert_msg( result.length == 4, "The generated output is not of the expected length.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_length)
+START(deserialize_length)
 {
 	int error = 0;
 	uint32_t length = 0;
@@ -941,192 +905,135 @@ START_TEST(deserialize_length)
 	error = pico_mqtt_deserialize_length( &error, reference_length_268435456,  &length);
 	ck_assert_msg( error == ERROR, "An error should be generated.\n");
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serializer_set_client_id)
+START(pico_mqtt_serializer_set_message_type_test)
+{
+	int error = 0;
+	struct pico_mqtt_serializer* serializer = NULL;
+	serializer = pico_mqtt_serializer_create( &error );
+
+	pico_mqtt_serializer_set_message_type( serializer, 7);
+	ck_assert_msg( serializer->message_type == 7, "The message type should be 7.\n");
+
+	pico_mqtt_serializer_destroy(serializer);
+}
+END
+
+START(serializer_set_client_id)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	struct pico_mqtt_data test_data_1 = {.data = (void*) 1, .length = 1};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 #if ALLOW_EMPTY_CLIENT_ID == 1
 
 	pico_mqtt_serializer_set_client_id( serializer, NULL);
-	ck_assert_msg( serializer->client_id.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->client_id.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->client_id_flag == 1, "The flag should be set");
-	pico_mqtt_serializer_clear( serializer );
-
-	pico_mqtt_serializer_set_client_id( serializer, PICO_MQTT_DATA_EMPTY);
-	ck_assert_msg( serializer->client_id.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->client_id.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->client_id_flag == 1, "The flag should be set");
+	ck_assert_msg( serializer->client_id->length == 0, "The length should be 0.\n");
+	ck_assert_msg( serializer->client_id->data == NULL, "The data pointer should be NULL.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 #endif
 
-	pico_mqtt_serializer_set_client_id( serializer, test_data_1);
-	ck_assert_msg( serializer->client_id.length == 1, "The length should be 1.\n");
-	ck_assert_msg( serializer->client_id.data == (void*) 1, "The data pointer should be 1.\n");
-	ck_assert_msg( serializer->client_id_flag == 1, "The flag should be set");
+	pico_mqtt_serializer_set_client_id( serializer, &test_data_1);
+	ck_assert_msg( serializer->client_id->length == 1, "The length should be 1.\n");
+	ck_assert_msg( serializer->client_id->data == (void*) 1, "The data pointer should be 1.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serializer_set_username)
+START(serializer_set_username)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	struct pico_mqtt_data test_data_1 = {.data = (void*) 1, .length = 1};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 #if ALLOW_EMPTY_USERNAME == 1
 
 	pico_mqtt_serializer_set_username( serializer, NULL);
-	ck_assert_msg( serializer->username.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->username.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->username_flag == 1, "The flag should be set");
-	pico_mqtt_serializer_clear( serializer );
-
-	pico_mqtt_serializer_set_username( serializer, PICO_MQTT_DATA_EMPTY);
-	ck_assert_msg( serializer->username.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->username.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->username_flag == 1, "The flag should be set");
+	ck_assert_msg( serializer->username->length == 0, "The length should be 0.\n");
+	ck_assert_msg( serializer->username->data == NULL, "The data pointer should be NULL.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 #endif
 
-	pico_mqtt_serializer_set_username( serializer, test_data_1);
-	ck_assert_msg( serializer->username.length == 1, "The length should be 1.\n");
-	ck_assert_msg( serializer->username.data == (void*) 1, "The data pointer should be 1.\n");
-	ck_assert_msg( serializer->username_flag == 1, "The flag should be set");
+	pico_mqtt_serializer_set_username( serializer, &test_data_1);
+	ck_assert_msg( serializer->username->length == 1, "The length should be 1.\n");
+	ck_assert_msg( serializer->username->data == (void*) 1, "The data pointer should be 1.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serializer_set_password)
+START(serializer_set_password)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	struct pico_mqtt_data test_data_1 = {.data = (void*) 1, .length = 1};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
-
-#if ALLOW_EMPTY_PASSWORD == 1
+	pico_mqtt_serializer_clear( serializer );
 
 	pico_mqtt_serializer_set_password( serializer, NULL);
-	ck_assert_msg( serializer->password.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->password.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->password_flag == 1, "The flag should be set");
+	ck_assert_msg( serializer->password->length == 0, "The length should be 0.\n");
+	ck_assert_msg( serializer->password->data == NULL, "The data pointer should be NULL.\n");
 	pico_mqtt_serializer_clear( serializer );
 
-	pico_mqtt_serializer_set_password( serializer, PICO_MQTT_DATA_EMPTY);
-	ck_assert_msg( serializer->password.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->password.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->password_flag == 1, "The flag should be set");
-	pico_mqtt_serializer_clear( serializer );
-
-#endif
-
-	pico_mqtt_serializer_set_password( serializer, test_data_1);
-	ck_assert_msg( serializer->password.length == 1, "The length should be 1.\n");
-	ck_assert_msg( serializer->password.data == (void*) 1, "The data pointer should be 1.\n");
-	ck_assert_msg( serializer->password_flag == 1, "The flag should be set");
+	pico_mqtt_serializer_set_password( serializer, &test_data_1);
+	ck_assert_msg( serializer->password->length == 1, "The length should be 1.\n");
+	ck_assert_msg( serializer->password->data == (void*) 1, "The data pointer should be 1.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serializer_set_will_topic)
+START(serializer_set_message_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
-	struct pico_mqtt_data test_data_1 = {.data = (void*) 1, .length = 1};
+	struct pico_mqtt_data topic = {.length=1, .data = (void*)1};
+	struct pico_mqtt_data message = {.length=1, .data = (void*)1};
+	struct pico_mqtt_message test_data_1 = {.retain = 1, .topic = &topic, .data = &message};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
-
-#if ALLOW_EMPTY_TOPIC == 1
-
-	pico_mqtt_serializer_set_will_topic( serializer, NULL);
-	ck_assert_msg( serializer->will_topic.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->will_topic.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->will_topic_flag == 1, "The flag should be set");
 	pico_mqtt_serializer_clear( serializer );
 
-	pico_mqtt_serializer_set_will_topic( serializer, PICO_MQTT_DATA_EMPTY);
-	ck_assert_msg( serializer->will_topic.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->will_topic.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->will_topic_flag == 1, "The flag should be set");
+	pico_mqtt_serializer_set_message( serializer, &test_data_1);
+	ck_assert_msg( serializer->retain == 1, "The retain flag should be set\n");
 	pico_mqtt_serializer_clear( serializer );
-
-#endif
-
-	pico_mqtt_serializer_set_will_topic( serializer, test_data_1);
-	ck_assert_msg( serializer->will_topic.length == 1, "The length should be 1.\n");
-	ck_assert_msg( serializer->will_topic.data == (void*) 1, "The data pointer should be 1.\n");
-	ck_assert_msg( serializer->will_topic_flag == 1, "The flag should be set");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serializer_set_will_message)
+START(pico_mqtt_serializer_set_keep_alive_time_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
-	struct pico_mqtt_data test_data_1 = {.data = (void*) 1, .length = 1};
-
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
 
-#if ALLOW_EMPTY_MESSAGE == 1
-
-	pico_mqtt_serializer_set_will_message( serializer, NULL);
-	ck_assert_msg( serializer->will_message.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->will_message.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->will_message_flag == 1, "The flag should be set");
-	pico_mqtt_serializer_clear( serializer );
-
-	pico_mqtt_serializer_set_will_message( serializer, PICO_MQTT_DATA_EMPTY);
-	ck_assert_msg( serializer->will_message.length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->will_message.data == NULL, "The data pointer should be NULL.\n");
-	ck_assert_msg( serializer->will_message_flag == 1, "The flag should be set");
-	pico_mqtt_serializer_clear( serializer );
-
-#endif
-
-	pico_mqtt_serializer_set_will_message( serializer, test_data_1);
-	ck_assert_msg( serializer->will_message.length == 1, "The length should be 1.\n");
-	ck_assert_msg( serializer->will_message.data == (void*) 1, "The data pointer should be 1.\n");
-	ck_assert_msg( serializer->will_message_flag == 1, "The flag should be set");
+	pico_mqtt_serializer_set_keep_alive_time( serializer, 7);
+	ck_assert_msg( serializer->keep_alive == 7, "The keep alive time should be 7.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_connect_check)
+START(serialize_connect_check)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	#ifndef ALLOW_EMPTY_CLIENT_ID
 		PERROR("ALLOW_EMPTY_CLIENT_ID should be defined but is not, see configuration file.\n");
@@ -1141,51 +1048,57 @@ START_TEST(serialize_connect_check)
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 	#endif
 
-	serializer->client_id_flag = 1;
+	serializer->client_id = (struct pico_mqtt_data*) 1;
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 
-	serializer->password_flag = 1;
+	serializer->password = (struct pico_mqtt_data*) 1;;
 	PERROR_DISABLE_ONCE();
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == ERROR, "An error should be generated.\n");
 
-	serializer->username_flag = 1;
+	serializer->username = (struct pico_mqtt_data*) 1;;
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 
-	serializer->will_topic_flag = 1;
+#if ALLOW_EMPTY_MESSAGE == 0
+	serializer->topic = (struct pico_mqtt_data*) 1;;
 	PERROR_DISABLE_ONCE();
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == ERROR, "An error should be generated.\n");
+#else
+	serializer->topic = (struct pico_mqtt_data*) 1;
+	PERROR_DISABLE_ONCE();
+	error = check_serialize_connect( serializer);
+	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
+#endif
 
-	serializer->will_message_flag = 1;
+	serializer->message = (struct pico_mqtt_data*) 1;
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 
-	serializer->will_topic_flag = 0;
+	serializer->topic = NULL;
 	PERROR_DISABLE_ONCE();
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == ERROR, "An error should be generated.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_connect_get_flags_test)
+START(serialize_connect_get_flags_test)
 {
 	int error = 0;
 	uint8_t flags = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x02, "Flags don't match the specifications\n");
 
-	serializer->client_id_flag = 1;
+	serializer->client_id = (struct pico_mqtt_data*) 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x00, "Flags don't match the specifications\n");
 
@@ -1199,38 +1112,38 @@ START_TEST(serialize_connect_get_flags_test)
 	ck_assert_msg( flags == 0x02, "Flags don't match the specifications\n");
 	serializer->clean_session = 0;
 
-	serializer->password_flag = 1;
+	serializer->password = (struct pico_mqtt_data*) 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x00, "Flags don't match the specifications\n");
 
-	serializer->username_flag = 1;
+	serializer->username = (struct pico_mqtt_data*) 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0xC0, "Flags don't match the specifications\n");
 
-	serializer->password_flag = 0;
+	serializer->password = NULL;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x80, "Flags don't match the specifications\n");
 
-	serializer->username_flag = 0;
-	serializer->will_retain = 1;
+	serializer->username = NULL;
+	serializer->retain = 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x00, "Flags don't match the specifications\n");
-	serializer->will_retain = 0;
+	serializer->retain = 0;
 
-	serializer->will_topic_flag = 1;
+	serializer->topic = (struct pico_mqtt_data*) 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x00, "Flags don't match the specifications\n");
 
-	serializer->will_message_flag = 1;
+	serializer->message = (struct pico_mqtt_data*) 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x04, "Flags don't match the specifications\n");
 
-	serializer->will_topic_flag = 0;
+	serializer->topic = NULL;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x00, "Flags don't match the specifications\n");
-	serializer->will_topic_flag = 1;
+	serializer->topic = (struct pico_mqtt_data*) 1;
 
-	serializer->will_retain = 1;
+	serializer->retain = 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x24, "Flags don't match the specifications\n");
 
@@ -1243,11 +1156,10 @@ START_TEST(serialize_connect_get_flags_test)
 	ck_assert_msg( flags == 0x34, "Flags don't match the specifications\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_connect_get_length_test)
+START(serialize_connect_get_length_test)
 {
 	int error = 0;
 	uint32_t length = 0;
@@ -1262,50 +1174,47 @@ START_TEST(serialize_connect_get_length_test)
 	struct pico_mqtt_data password = {.data = password_data, .length = 4};
 	struct pico_mqtt_data will_topic = {.data = will_topic_data, .length = 5};
 	struct pico_mqtt_data will_message = {.data = will_message_data, .length = 6};
+	struct pico_mqtt_message message = {.topic = &will_topic, .data = &will_message};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	length = serialize_connect_get_length( serializer);
 	ck_assert_msg( length == 12, "Length doesn't match the specifications\n");
 
-	pico_mqtt_serializer_set_client_id( serializer, client_id);
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
 	length = serialize_connect_get_length( serializer);
 	ck_assert_msg( length == 14, "Length doesn't match the specifications\n");
 
-	pico_mqtt_serializer_set_password( serializer, password);
+	pico_mqtt_serializer_set_password( serializer, &password);
 	length = serialize_connect_get_length( serializer);
 	ck_assert_msg( length == 14, "Length doesn't match the specifications\n");
-	pico_mqtt_serializer_total_reset( serializer );
-	pico_mqtt_serializer_set_client_id( serializer, client_id);
+	pico_mqtt_serializer_clear( serializer );
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
 
-	pico_mqtt_serializer_set_username( serializer, username);
+	pico_mqtt_serializer_set_username( serializer, &username);
 	length = serialize_connect_get_length( serializer);
 	ck_assert_msg( length == 19, "Length doesn't match the specifications\n");
 
-	pico_mqtt_serializer_set_password( serializer, password);
+	pico_mqtt_serializer_set_password( serializer, &password);
 	length = serialize_connect_get_length( serializer);
 	ck_assert_msg( length == 25, "Length doesn't match the specifications\n");
 
-	pico_mqtt_serializer_set_will_topic( serializer, will_topic);
-	length = serialize_connect_get_length( serializer);
-	ck_assert_msg( length == 25, "Length doesn't match the specifications\n");
-
-	pico_mqtt_serializer_set_will_message( serializer, will_message);
+	pico_mqtt_serializer_set_message( serializer, &message);
 	length = serialize_connect_get_length( serializer);
 	ck_assert_msg( length == 40, "Length doesn't match the specifications\n");
 
-	pico_mqtt_serializer_total_reset( serializer );
-	pico_mqtt_serializer_set_will_message( serializer, will_message);
+	pico_mqtt_serializer_clear( serializer );
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
+	pico_mqtt_serializer_set_message( serializer, &message);
 	length = serialize_connect_get_length( serializer);
-	ck_assert_msg( length == 12, "Length doesn't match the specifications\n");
+	ck_assert_msg( length == 29, "Length doesn't match the specifications\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_connect_test)
+START(serialize_connect_test)
 {
 	int error = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
@@ -1319,6 +1228,7 @@ START_TEST(serialize_connect_test)
 	struct pico_mqtt_data password = {.data = password_data, .length = 4};
 	struct pico_mqtt_data will_topic = {.data = will_topic_data, .length = 5};
 	struct pico_mqtt_data will_message = {.data = will_message_data, .length = 6};
+	struct pico_mqtt_message message = {.topic = &will_topic, .data = &will_message};
 
 	uint8_t reference_message_1[16] = { 0x10, 14, 0x00, 0x04, 0x4D, 0x51, 0x54, 0x54, 0x04, 0x00, 0x00, 0x00, 0x00, 0x02, 0x54, 0x67 };
 	uint8_t reference_message_2[21] = { 0x10, 19, 0x00, 0x04, 0x4D, 0x51, 0x54, 0x54, 0x04, 0x80, 0x00, 0x00, 0x00, 0x02, 0x54, 0x67, 0x00, 0x03, 0xD2, 0x01, 0x1E };
@@ -1326,9 +1236,9 @@ START_TEST(serialize_connect_test)
 	uint8_t reference_message_4[42] = { 0x10, 40, 0x00, 0x04, 0x4D, 0x51, 0x54, 0x54, 0x04, 0xC4, 0x00, 0x00, 0x00, 0x02, 0x54, 0x67, 0x00, 0x05, 0xFD, 0x21, 0x17, 0x76, 0x2F, 0x00, 0x06, 0x63, 0x21, 0xAA, 0x6A, 0xB7, 0x6A, 0x00, 0x03, 0xD2, 0x01, 0x1E, 0x00, 0x04, 0x4A, 0x11, 0xFD, 0x9A};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-	pico_mqtt_serializer_set_client_id( serializer, client_id);
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
 	error = serialize_connect( serializer );
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_1, serializer->stream.data, 16), "The generated output does not match the specifications.\n");
@@ -1337,27 +1247,32 @@ START_TEST(serialize_connect_test)
 
 	MALLOC_FAIL_ONCE();
 	PERROR_DISABLE_ONCE();
-	pico_mqtt_serializer_set_client_id( serializer, client_id);
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
 	error = serialize_connect( serializer );
 	ck_assert_msg( error == ERROR, "An error should be generated.\n");
 	pico_mqtt_serializer_clear( serializer );
 
-	pico_mqtt_serializer_set_username( serializer, username);
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
+	pico_mqtt_serializer_set_username( serializer, &username);
 	error = serialize_connect( serializer );
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_2, serializer->stream.data, 21), "The generated output does not match the specifications.\n");
 	ck_assert_msg( serializer->stream.length == 21, "The generated output is not of the expected length.\n");
 	pico_mqtt_serializer_clear( serializer );
 
-	pico_mqtt_serializer_set_password( serializer, password);
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
+	pico_mqtt_serializer_set_username( serializer, &username);
+	pico_mqtt_serializer_set_password( serializer, &password);
 	error = serialize_connect( serializer );
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_3, serializer->stream.data, 27), "The generated output does not match the specifications.\n");
 	ck_assert_msg( serializer->stream.length == 27, "The generated output is not of the expected length.\n");
 	pico_mqtt_serializer_clear( serializer );
 
-	pico_mqtt_serializer_set_will_message( serializer, will_message);
-	pico_mqtt_serializer_set_will_topic( serializer, will_topic);
+	pico_mqtt_serializer_set_client_id( serializer, &client_id);
+	pico_mqtt_serializer_set_username( serializer, &username);
+	pico_mqtt_serializer_set_password( serializer, &password);
+	pico_mqtt_serializer_set_message( serializer, &message);
 	error = serialize_connect( serializer );
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_4, serializer->stream.data, 42), "The generated output does not match the specifications.\n");
@@ -1366,11 +1281,10 @@ START_TEST(serialize_connect_test)
 	CHECK_ALLOCATIONS(1);
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_connack_test)
+START(deserialize_connack_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1391,7 +1305,7 @@ START_TEST(deserialize_connack_test)
 	struct pico_mqtt_data test_case_8 = {.data = test_data_6, .length = 4};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1447,11 +1361,10 @@ START_TEST(deserialize_connack_test)
 	ck_assert_msg( serializer->return_code == 6, "The return code should be 6.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_publish_test)
+START(serialize_publish_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1463,21 +1376,11 @@ START_TEST(serialize_publish_test)
 	uint8_t reference_message_8[17] = { 0x3D, 15, 0x00, 0x05, 0xFD, 0x21, 0x17, 0x76, 0x2F, 0xAA, 0x55, 0x63, 0x21, 0xAA, 0x6A, 0xB7, 0x6A};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
-
-#if ALLOW_EMPTY_TOPIC == 0
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_1[4] = { 0x30, 2, 0x00, 0x00 };
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_1, serializer->stream.data, 4), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 4, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	MALLOC_FAIL_ONCE();
 	PERROR_DISABLE_ONCE();
@@ -1487,132 +1390,76 @@ START_TEST(serialize_publish_test)
 	MALLOC_SUCCEED();
 
 	serializer->quality_of_service = 1;
-#if ALLOW_EMPTY_TOPIC == 0
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_2[6] = { 0x32, 4, 0x00, 0x00, 0x00, 0x00};
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_2, serializer->stream.data, 6), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 6, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 1;
-	serializer->packet_id = 0xAA55;
-#if ALLOW_EMPTY_TOPIC == 0
+	serializer->message_id = 0xAA55;
+
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_3[6] = { 0x32, 4, 0x00, 0x00, 0xAA, 0x55};
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_3, serializer->stream.data, 6), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 6, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 2;
-	serializer->packet_id = 0xAA55;
-#if ALLOW_EMPTY_TOPIC == 0
+	serializer->message_id = 0xAA55;
+
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_4[6] = { 0x34, 4, 0x00, 0x00, 0xAA, 0x55};
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_4, serializer->stream.data, 6), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 6, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 2;
-	serializer->packet_id = 0xAA55;
+	serializer->message_id = 0xAA55;
 	serializer->retain = 1;
-#if ALLOW_EMPTY_TOPIC == 0
+
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_5[6] = { 0x35, 4, 0x00, 0x00, 0xAA, 0x55};
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_5, serializer->stream.data, 6), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 6, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 2;
-	serializer->packet_id = 0xAA55;
+	serializer->message_id = 0xAA55;
 	serializer->retain = 1;
-#if ALLOW_EMPTY_TOPIC == 0
+
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_6[6] = { 0x3D, 4, 0x00, 0x00, 0xAA, 0x55};
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_5, serializer->stream.data, 6), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 6, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 2;
-	serializer->packet_id = 0xAA55;
+	serializer->message_id = 0xAA55;
 	serializer->retain = 1;
 	serializer->duplicate = 1;
-#if ALLOW_EMPTY_TOPIC == 0
+
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_6, serializer->stream.data, 6), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 6, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 2;
-	serializer->packet_id = 0xAA55;
+	serializer->message_id = 0xAA55;
 	serializer->retain = 1;
 	serializer->duplicate = 1;
-	serializer->topic = topic;
-#if ALLOW_EMPTY_TOPIC == 0
+	serializer->topic = &topic;
+
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
-#else
-	uint8_t reference_message_7[11] = { 0x3D, 9, 0x00, 0x05, 0xFD, 0x21, 0x17, 0x76, 0x2F, 0xAA, 0x55};
-	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_7, serializer->stream.data, 7), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 11, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#endif
+
 
 	serializer->quality_of_service = 2;
-	serializer->packet_id = 0xAA55;
+	serializer->message_id = 0xAA55;
 	serializer->retain = 1;
 	serializer->duplicate = 1;
-	serializer->topic = topic;
-	serializer->message = message;
+	serializer->topic = &topic;
+	serializer->message = &message;
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_8, serializer->stream.data, 17), "The generated output does not match the specifications.\n");
 	ck_assert_msg( serializer->stream.length == 17, "The generated output is not of the expected length.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_puback_test)
+START(deserialize_puback_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1631,7 +1478,7 @@ START_TEST(deserialize_puback_test)
 	struct pico_mqtt_data test_case_7 = {.data = test_data_5, .length = 4};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1660,24 +1507,23 @@ START_TEST(deserialize_puback_test)
 	serializer->stream = test_case_5;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x0000, "The session id should be 0x0000.\n");
+	ck_assert_msg( serializer->message_id == 0x0000, "The session id should be 0x0000.\n");
 
 	serializer->stream = test_case_6;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x1234, "The session id should be 0x1234.\n");
+	ck_assert_msg( serializer->message_id == 0x1234, "The session id should be 0x1234.\n");
 
 	serializer->stream = test_case_7;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_pubrec_test)
+START(deserialize_pubrec_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1696,7 +1542,7 @@ START_TEST(deserialize_pubrec_test)
 	struct pico_mqtt_data test_case_7 = {.data = test_data_5, .length = 4};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1725,24 +1571,23 @@ START_TEST(deserialize_pubrec_test)
 	serializer->stream = test_case_5;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x0000, "The session id should be 0x0000.\n");
+	ck_assert_msg( serializer->message_id == 0x0000, "The session id should be 0x0000.\n");
 
 	serializer->stream = test_case_6;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x1234, "The session id should be 0x1234.\n");
+	ck_assert_msg( serializer->message_id == 0x1234, "The session id should be 0x1234.\n");
 
 	serializer->stream = test_case_7;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_pubrel_test)
+START(deserialize_pubrel_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1761,7 +1606,7 @@ START_TEST(deserialize_pubrel_test)
 	struct pico_mqtt_data test_case_7 = {.data = test_data_5, .length = 4};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1790,24 +1635,23 @@ START_TEST(deserialize_pubrel_test)
 	serializer->stream = test_case_5;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x0000, "The session id should be 0x0000.\n");
+	ck_assert_msg( serializer->message_id == 0x0000, "The session id should be 0x0000.\n");
 
 	serializer->stream = test_case_6;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x1234, "The session id should be 0x1234.\n");
+	ck_assert_msg( serializer->message_id == 0x1234, "The session id should be 0x1234.\n");
 
 	serializer->stream = test_case_7;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_pubcomp_test)
+START(deserialize_pubcomp_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1826,7 +1670,7 @@ START_TEST(deserialize_pubcomp_test)
 	struct pico_mqtt_data test_case_7 = {.data = test_data_5, .length = 4};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1855,24 +1699,23 @@ START_TEST(deserialize_pubcomp_test)
 	serializer->stream = test_case_5;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x0000, "The session id should be 0x0000.\n");
+	ck_assert_msg( serializer->message_id == 0x0000, "The session id should be 0x0000.\n");
 
 	serializer->stream = test_case_6;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x1234, "The session id should be 0x1234.\n");
+	ck_assert_msg( serializer->message_id == 0x1234, "The session id should be 0x1234.\n");
 
 	serializer->stream = test_case_7;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_unsuback_test)
+START(deserialize_unsuback_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1891,7 +1734,7 @@ START_TEST(deserialize_unsuback_test)
 	struct pico_mqtt_data test_case_7 = {.data = test_data_5, .length = 4};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1920,24 +1763,23 @@ START_TEST(deserialize_unsuback_test)
 	serializer->stream = test_case_5;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x0000, "The session id should be 0x0000.\n");
+	ck_assert_msg( serializer->message_id == 0x0000, "The session id should be 0x0000.\n");
 
 	serializer->stream = test_case_6;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x1234, "The session id should be 0x1234.\n");
+	ck_assert_msg( serializer->message_id == 0x1234, "The session id should be 0x1234.\n");
 
 	serializer->stream = test_case_7;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_acknowledge(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 
 	pico_mqtt_serializer_destroy(serializer);
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_suback_test)
+START(deserialize_suback_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -1966,7 +1808,7 @@ START_TEST(deserialize_suback_test)
 	struct pico_mqtt_data test_case_12 = {.data = test_data_10, .length = 5};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_1;
 	serializer->stream_index = serializer->stream.data;
@@ -1999,35 +1841,35 @@ START_TEST(deserialize_suback_test)
 	serializer->stream = test_case_5;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_suback(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x0000, "The session id should be 0x0000.\n");
+	ck_assert_msg( serializer->message_id == 0x0000, "The session id should be 0x0000.\n");
 	ck_assert_msg( serializer->quality_of_service == 0, "The quality_of_service should be 0.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_6;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_suback(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x1234, "The session id should be 0x1234.\n");
+	ck_assert_msg( serializer->message_id == 0x1234, "The session id should be 0x1234.\n");
 	ck_assert_msg( serializer->quality_of_service == 0, "The quality_of_service should be 0.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_7;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_suback(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 	ck_assert_msg( serializer->quality_of_service == 0, "The quality_of_service should be 0.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_8;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_suback(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 	ck_assert_msg( serializer->quality_of_service == 1, "The quality_of_service should be 1.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream = test_case_9;
 	serializer->stream_index = serializer->stream.data;
 	return_code = deserialize_suback(serializer);	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->packet_id == 0x4321, "The session id should be 0x4321.\n");
+	ck_assert_msg( serializer->message_id == 0x4321, "The session id should be 0x4321.\n");
 	ck_assert_msg( serializer->quality_of_service == 2, "The quality_of_service should be 2.\n");
 	pico_mqtt_serializer_clear( serializer );
 
@@ -2053,11 +1895,10 @@ START_TEST(deserialize_suback_test)
 	pico_mqtt_serializer_clear( serializer );
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_publish_test)
+START(deserialize_publish_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2071,7 +1912,7 @@ START_TEST(deserialize_publish_test)
 	uint8_t reference_message_7[8] = { 0x3F, 4, 0x00, 0x01, 0x92, 0xAA, 0x55, 0x27};
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_1;
 	serializer->stream.length = 3;
@@ -2080,22 +1921,6 @@ START_TEST(deserialize_publish_test)
 	return_code = deserialize_publish(serializer);
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 
-#if ALLOW_EMPTY_TOPIC == 1
-	serializer->stream.data = reference_message_1;
-	serializer->stream.length = 4;
-	serializer->stream_index = serializer->stream.data;
-	return_code = deserialize_publish( serializer );
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->topic.length == 0, "The topic should be 0-length.\n");
-	ck_assert_msg( serializer->topic.data == NULL, "The topic data pointer should be NULL.\n");
-	ck_assert_msg( serializer->quality_of_service == 0, "The Quality of Service should be 0.\n");
-	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
-	ck_assert_msg( serializer->retain == 0, "The retain flag should not be set.\n");
-	ck_assert_msg( serializer->packet_id == 0, "Packet Id should be 0.\n");
-	ck_assert_msg( serializer->message.length == 0, "The length of the message should be 0.\n");
-	ck_assert_msg( serializer->message.data == NULL, "The message data should be NULL.\n");
-	pico_mqtt_serializer_clear( serializer );
-#else
 	serializer->stream.data = reference_message_1;
 	serializer->stream.length = 4;
 	serializer->stream_index = serializer->stream.data;
@@ -2103,7 +1928,6 @@ START_TEST(deserialize_publish_test)
 	return_code = deserialize_publish(serializer);
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 	pico_mqtt_serializer_clear( serializer );
-
 
 	serializer->stream.data = reference_message_2;
 	serializer->stream.length = 5;
@@ -2112,7 +1936,6 @@ START_TEST(deserialize_publish_test)
 	return_code = deserialize_publish(serializer);
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->stream.data = reference_message_3;
 	serializer->stream.length = 6;
@@ -2120,16 +1943,16 @@ START_TEST(deserialize_publish_test)
 
 	return_code = deserialize_publish( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->topic.length == 1, "The topic should be length 1.\n");
-	ck_assert_msg( serializer->topic.data != NULL, "The topic data pointer should not be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->topic.data) == 0x92, "The topic data should be 0x92.\n");
+	ck_assert_msg( serializer->topic->length == 1, "The topic should be length 1.\n");
+	ck_assert_msg( serializer->topic->data != NULL, "The topic data pointer should not be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->topic->data) == 0x92, "The topic data should be 0x92.\n");
 	ck_assert_msg( serializer->quality_of_service == 0, "The Quality of Service should be 0.\n");
 	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 0, "The retain flag should not be set.\n");
-	ck_assert_msg( serializer->packet_id == 0, "Packet Id should be 0.\n");
-	ck_assert_msg( serializer->message.length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message.data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message.data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->message_id == 0, "Packet Id should be 0.\n");
+	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_4;
@@ -2138,16 +1961,16 @@ START_TEST(deserialize_publish_test)
 
 	return_code = deserialize_publish( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->topic.length == 1, "The topic should be length 1.\n");
-	ck_assert_msg( serializer->topic.data != NULL, "The topic data pointer should not be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->topic.data) == 0x92, "The topic data should be 0x92.\n");
+	ck_assert_msg( serializer->topic->length == 1, "The topic should be length 1.\n");
+	ck_assert_msg( serializer->topic->data != NULL, "The topic data pointer should not be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->topic->data) == 0x92, "The topic data should be 0x92.\n");
 	ck_assert_msg( serializer->quality_of_service == 1, "The Quality of Service should be 1.\n");
 	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 0, "The retain flag should not be set.\n");
-	ck_assert_msg( serializer->packet_id == 0xAA55, "Packet Id should be 0xAA55.\n");
-	ck_assert_msg( serializer->message.length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message.data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message.data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->message_id == 0xAA55, "Packet Id should be 0xAA55.\n");
+	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_5;
@@ -2156,16 +1979,16 @@ START_TEST(deserialize_publish_test)
 
 	return_code = deserialize_publish( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->topic.length == 1, "The topic should be length 1.\n");
-	ck_assert_msg( serializer->topic.data != NULL, "The topic data pointer should not be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->topic.data) == 0x92, "The topic data should be 0x92.\n");
+	ck_assert_msg( serializer->topic->length == 1, "The topic should be length 1.\n");
+	ck_assert_msg( serializer->topic->data != NULL, "The topic data pointer should not be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->topic->data) == 0x92, "The topic data should be 0x92.\n");
 	ck_assert_msg( serializer->quality_of_service == 1, "The Quality of Service should be 1.\n");
 	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 1, "The retain flag should be set.\n");
-	ck_assert_msg( serializer->packet_id == 0xAA55, "Packet Id should be 0xAA55.\n");
-	ck_assert_msg( serializer->message.length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message.data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message.data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->message_id == 0xAA55, "Packet Id should be 0xAA55.\n");
+	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 
@@ -2175,16 +1998,16 @@ START_TEST(deserialize_publish_test)
 
 	return_code = deserialize_publish( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( serializer->topic.length == 1, "The topic should be length 1.\n");
-	ck_assert_msg( serializer->topic.data != NULL, "The topic data pointer should not be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->topic.data) == 0x92, "The topic data should be 0x92.\n");
+	ck_assert_msg( serializer->topic->length == 1, "The topic should be length 1.\n");
+	ck_assert_msg( serializer->topic->data != NULL, "The topic data pointer should not be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->topic->data) == 0x92, "The topic data should be 0x92.\n");
 	ck_assert_msg( serializer->quality_of_service == 2, "The Quality of Service should be 2.\n");
 	ck_assert_msg( serializer->duplicate == 1, "The duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 1, "The retain flag should be set.\n");
-	ck_assert_msg( serializer->packet_id == 0xAA55, "Packet Id should be 0xAA55.\n");
-	ck_assert_msg( serializer->message.length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message.data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message.data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->message_id == 0xAA55, "Packet Id should be 0xAA55.\n");
+	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_7;
@@ -2195,11 +2018,10 @@ START_TEST(deserialize_publish_test)
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_subscribe_test)
+START(serialize_subscribe_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2209,11 +2031,11 @@ START_TEST(serialize_subscribe_test)
 	uint8_t reference_message_1[9] = { 0x82, 7, 0xAA, 0x55, 0x00, 0x02, 0x12, 0x34, 0x01 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->quality_of_service = 1;
-	serializer->packet_id = 0xAA55;
-	serializer->topic = topic;
+	serializer->message_id = 0xAA55;
+	serializer->topic = &topic;
 	return_code = serialize_subscribe( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_1, serializer->stream.data, 9), "The generated output does not match the specifications.\n");
@@ -2222,11 +2044,10 @@ START_TEST(serialize_subscribe_test)
 
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_unsubscribe_test)
+START(serialize_unsubscribe_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2236,11 +2057,11 @@ START_TEST(serialize_unsubscribe_test)
 	uint8_t reference_message_1[9] = { 0xA2, 7, 0xAA, 0x55, 0x00, 0x02, 0x12, 0x34, 0x01 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->quality_of_service = 1;
-	serializer->packet_id = 0xAA55;
-	serializer->topic = topic;
+	serializer->message_id = 0xAA55;
+	serializer->topic = &topic;
 	return_code = serialize_unsubscribe( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_1, serializer->stream.data, 9), "The generated output does not match the specifications.\n");
@@ -2248,40 +2069,22 @@ START_TEST(serialize_unsubscribe_test)
 	pico_mqtt_serializer_clear( serializer );
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_subscribtion_test)
+START(serialize_subscribtion_test)
 {
 	int error = 0;
 	int return_code = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	uint8_t topic_data[2] = {0x12, 0x34};
 	struct pico_mqtt_data topic = {.data = topic_data, .length = 2};
-#if ALLOW_EMPTY_TOPIC == 1
-	uint8_t reference_message_1[7] = { 0x82, 5, 0x00, 0x00, 0x00, 0x00, 0x00 };
-	uint8_t reference_message_2[7] = { 0xA2, 5, 0x00, 0x00, 0x00, 0x00, 0x00 };
-#endif
 	uint8_t reference_message_3[9] = { 0x82, 7, 0xAA, 0x55, 0x00, 0x02, 0x12, 0x34, 0x01 };
 	uint8_t reference_message_4[9] = { 0xA2, 7, 0xAA, 0x55, 0x00, 0x02, 0x12, 0x34, 0x01 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
-
-#if ALLOW_EMPTY_TOPIC == 1
-	return_code = serialize_subscribtion( serializer , 1);
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_1, serializer->stream.data, 7), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 7, "The generated output is not of the expected length.\n");
 	pico_mqtt_serializer_clear( serializer );
 
-	return_code = serialize_subscribtion( serializer , 0);
-	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
-	ck_assert_msg( compare_arrays(reference_message_2, serializer->stream.data, 7), "The generated output does not match the specifications.\n");
-	ck_assert_msg( serializer->stream.length == 7, "The generated output is not of the expected length.\n");
-	pico_mqtt_serializer_clear( serializer );
-#else
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_subscribtion( serializer , 1);
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
@@ -2291,11 +2094,10 @@ START_TEST(serialize_subscribtion_test)
 	return_code = serialize_subscribtion( serializer , 0);
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 	pico_mqtt_serializer_clear( serializer );
-#endif
 
 	serializer->quality_of_service = 1;
-	serializer->packet_id = 0xAA55;
-	serializer->topic = topic;
+	serializer->message_id = 0xAA55;
+	serializer->topic = &topic;
 	return_code = serialize_subscribtion( serializer , 1);
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_3, serializer->stream.data, 9), "The generated output does not match the specifications.\n");
@@ -2305,26 +2107,25 @@ START_TEST(serialize_subscribtion_test)
 	MALLOC_FAIL_ONCE();
 	PERROR_DISABLE_ONCE();
 	serializer->quality_of_service = 1;
-	serializer->packet_id = 0xAA55;
-	serializer->topic = topic;
+	serializer->message_id = 0xAA55;
+	serializer->topic = &topic;
 	return_code = serialize_subscribtion( serializer , 1);
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->quality_of_service = 1;
-	serializer->packet_id = 0xAA55;
-	serializer->topic = topic;
+	serializer->message_id = 0xAA55;
+	serializer->topic = &topic;
 	return_code = serialize_subscribtion( serializer , 0);
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_4, serializer->stream.data, 9), "The generated output does not match the specifications.\n");
 	ck_assert_msg( serializer->stream.length == 9, "The generated output is not of the expected length.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_pingreq_test)
+START(serialize_pingreq_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2333,7 +2134,7 @@ START_TEST(serialize_pingreq_test)
 	uint8_t reference_message_1[2] = { 0xC0, 0x00 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	return_code = serialize_pingreq( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
@@ -2348,11 +2149,10 @@ START_TEST(serialize_pingreq_test)
 
 	pico_mqtt_serializer_destroy( serializer );
 
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_pingresp_test)
+START(serialize_pingresp_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2361,7 +2161,7 @@ START_TEST(serialize_pingresp_test)
 	uint8_t reference_message_1[2] = { 0xD0, 0x00 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	return_code = serialize_pingresp( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
@@ -2375,11 +2175,10 @@ START_TEST(serialize_pingresp_test)
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(serialize_disconnect_test)
+START(serialize_disconnect_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2388,7 +2187,7 @@ START_TEST(serialize_disconnect_test)
 	uint8_t reference_message_1[2] = { 0xE0, 0x00 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	return_code = serialize_disconnect( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
@@ -2402,11 +2201,10 @@ START_TEST(serialize_disconnect_test)
 	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_pingreq_test)
+START(deserialize_pingreq_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2416,7 +2214,7 @@ START_TEST(deserialize_pingreq_test)
 	uint8_t reference_message_2[2] = { 0x10, 0x00 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_1;
 	serializer->stream_index = serializer->stream.data;
@@ -2441,11 +2239,10 @@ START_TEST(deserialize_pingreq_test)
 	ck_assert_msg( serializer->stream.length == 2, "The generated output is not of the expected length.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(deserialize_pingresp_test)
+START(deserialize_pingresp_test)
 {
 	int error = 0;
 	int return_code = 0;
@@ -2455,7 +2252,7 @@ START_TEST(deserialize_pingresp_test)
 	uint8_t reference_message_2[2] = { 0x10, 0x00 };
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_1;
 	serializer->stream_index = serializer->stream.data;
@@ -2480,40 +2277,40 @@ START_TEST(deserialize_pingresp_test)
 	ck_assert_msg( serializer->stream.length == 2, "The generated output is not of the expected length.\n");
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
-START_TEST(pico_mqtt_serialize_test)
+START(pico_mqtt_serialize_test)
 {
 	int error = 0;
 	uint8_t index = 0;
 	int return_code = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
 	struct pico_mqtt_data message;
-	int expected_values[16] = {
-		/* 00 - RESERVED    */ ERROR,
-		/* 01 - CONNECT     */ ERROR,
-		/* 02 - CONNACK     */ ERROR,
-		/* 03 - PUBLISH     */ ERROR,
-		/* 04 - PUBACK      */ SUCCES,
-		/* 05 - PUBREC      */ SUCCES,
-		/* 06 - PUBREL      */ SUCCES,
-		/* 07 - PUBCOMP     */ SUCCES,
-		/* 08 - SUBSCRIBE   */ ERROR,
-		/* 09 - SUBACK      */ ERROR,
-		/* 10 - UNSUBSCRIBE */ ERROR,
-		/* 11 - UNSUBACK    */ ERROR,
-		/* 12 - PINGREQ     */ SUCCES,
-		/* 13 - PINGRESP    */ SUCCES,
-		/* 14 - DISCONNECT  */ SUCCES,
-		/* 15 - RESERVED    */ ERROR
+	int expected_values[16] = 
+	{
+		ERROR,	// 00 - RESERVED    
+		ERROR,	// 01 - CONNECT     
+		ERROR,	// 02 - CONNACK     
+		ERROR,	// 03 - PUBLISH     
+		SUCCES,	// 04 - PUBACK      
+		SUCCES,	// 05 - PUBREC      
+		SUCCES,	// 06 - PUBREL      
+		SUCCES,	// 07 - PUBCOMP     
+		ERROR,	// 08 - SUBSCRIBE   
+		ERROR,	// 09 - SUBACK      
+		ERROR,	// 10 - UNSUBSCRIBE 
+		ERROR,	// 11 - UNSUBACK    
+		SUCCES,	// 12 - PINGREQ     
+		SUCCES,	// 13 - PINGRESP    
+		SUCCES,	// 14 - DISCONNECT  
+		ERROR	// 15 - RESERVED    
 	};
 
 	PERROR_DISABLE();
 
 	serializer = pico_mqtt_serializer_create( &error );
-	pico_mqtt_serializer_total_reset( serializer );
+	pico_mqtt_serializer_clear( serializer );
 
 	for(index = 0; index < 16; ++index)
 	{
@@ -2524,9 +2321,8 @@ START_TEST(pico_mqtt_serialize_test)
 	}
 
 	pico_mqtt_serializer_destroy( serializer );
-	CHECK_NO_ALLOCATIONS();
 }
-END_TEST
+END
 
 Suite * functional_list_suite(void)
 {
@@ -2544,7 +2340,7 @@ Suite * functional_list_suite(void)
 	tcase_add_test(test_case_core, clear_serializer);
 	tcase_add_test(test_case_core, destroy_stream);
 	tcase_add_test(test_case_core, destroy_serializer);
-	tcase_add_test(test_case_core, create_stream);
+	tcase_add_test(test_case_core, create_stream_test);
 	tcase_add_test(test_case_core, bytes_left_stream);
 	tcase_add_test(test_case_core, add_byte_stream_test);
 	tcase_add_test(test_case_core, get_byte_stream_test);
@@ -2552,9 +2348,9 @@ Suite * functional_list_suite(void)
 	tcase_add_test(test_case_core, get_2_byte_stream_test);
 	tcase_add_test(test_case_core, add_data_stream_test);
 	tcase_add_test(test_case_core, get_data_stream_test);
-	tcase_add_test(test_case_core, add_array_stream_test);
 	tcase_add_test(test_case_core, add_data_and_length_stream_test);
 	tcase_add_test(test_case_core, get_data_and_length_stream_test);
+	tcase_add_test(test_case_core, add_array_stream_test);
 	tcase_add_test(test_case_core, skip_length_test);
 	tcase_add_test(test_case_core, serialize_acknowledge_test);
 	tcase_add_test(test_case_core, serialize_puback_test);
@@ -2563,11 +2359,12 @@ Suite * functional_list_suite(void)
 	tcase_add_test(test_case_core, serialize_pubcomp_test);
 	tcase_add_test(test_case_core, serialize_length);
 	tcase_add_test(test_case_core, deserialize_length);
+	tcase_add_test(test_case_core, pico_mqtt_serializer_set_message_type_test);
 	tcase_add_test(test_case_core, serializer_set_client_id);
 	tcase_add_test(test_case_core, serializer_set_username);
 	tcase_add_test(test_case_core, serializer_set_password);
-	tcase_add_test(test_case_core, serializer_set_will_message);
-	tcase_add_test(test_case_core, serializer_set_will_topic);
+	tcase_add_test(test_case_core, serializer_set_message_test);
+	tcase_add_test(test_case_core, pico_mqtt_serializer_set_keep_alive_time_test);
 	tcase_add_test(test_case_core, serialize_connect_check);
 	tcase_add_test(test_case_core, serialize_connect_get_flags_test);
 	tcase_add_test(test_case_core, serialize_connect_get_length_test);
@@ -2621,7 +2418,6 @@ int compare_arrays(void* a, void* b, uint32_t length)
 	uint32_t index = 0;
 	for (index = 0; index < length; ++index)
 	{
-		/*printf("--- %02X - %02X\n", *((uint8_t*)a + index), *((uint8_t*)b + index));*/
 		if(*((uint8_t*)a + index) != *((uint8_t*)b + index))
 			return 0;
 	}
