@@ -54,8 +54,30 @@
 #define CHECK_NOT_NULL( var ) do{} while(0)
 #define CHECK_ALLOCATIONS( var ) do{} while(0)
 #define CHECK_NO_ALLOCATIONS() CHECK_ALLOCATIONS(0)
+#define END CHECK_NO_ALLOCATIONS();} END_TEST
+#define START(test) START_TEST(test){
 
 #ifndef PRODUCTION
+
+	struct allocation{
+		struct allocation* next;
+		uint64_t size;
+		void* memory_pointer;
+		const char* file;
+		uint32_t line;
+		const char* func;
+	};
+
+	#ifndef ALLOCATION_EMPTY
+	#define ALLOCATION_EMPTY (struct debug){\
+		.next = NULL,\
+		.size = 0,\
+		.memory_pointer = NULL,\
+		.file = NULL,\
+		.line = 0,\
+		.func = NULL,\
+	};
+	#endif
 
 	struct debug{
 		uint8_t no_check_flag;
@@ -64,11 +86,14 @@
 		uint8_t auto_reset_no_error_flag;
 		uint8_t fail_flag;
 		uint8_t auto_reset_fail_flag;
-		uint32_t allocations;
-		uint32_t frees;
-		uint32_t total_allocated;
-		uint32_t max_bytes_allocated;
-
+		uint64_t allocations;
+		uint64_t frees;
+		uint64_t total_allocated;
+		uint64_t max_bytes_allocated;
+		uint64_t currently_allocated;
+		struct allocation* allocation_list;
+		const char* unit_test;
+		uint8_t printed_unit_test;
 	};
 
 	#ifndef DEBUG_EMPTY
@@ -82,14 +107,23 @@
 		.allocations = 0,\
 		.frees = 0,\
 		.total_allocated = 0,\
-		.max_bytes_allocated = 0\
+		.max_bytes_allocated = 0,\
+		.currently_allocated = 0,\
+		.allocation_list = 0,\
+		.unit_test = NULL,\
+		.printed_unit_test = 0,\
 		};
 	#endif
 
 	extern struct debug debug;
 
+	#undef START
+		#define START(test) START_TEST(test){ debug.unit_test=#test; debug.printed_unit_test=0;
+
 
 	#ifdef DEBUG /* if not in debug mode, nothing should be printed */
+
+		void print_unit_test( void );
 
 		#if DEBUG > 0
 			#ifndef PEDANTIC
@@ -147,6 +181,7 @@
 			#define PERROR_DISABLE_ONCE() debug.no_error_flag = 1; debug.auto_reset_no_error_flag = 1
 			#define PERROR( ...) do{\
 					if(debug.no_error_flag == 0){\
+						print_unit_test();\
 						printf("[ERROR] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 						printf(__VA_ARGS__);\
 					}else {\
@@ -162,6 +197,7 @@
 
 			#undef PWARNING
 			#define PWARNING(...) do{\
+				print_unit_test();\
 				printf("[WARNING] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 				printf(__VA_ARGS__);\
 				} while(0)
@@ -172,6 +208,7 @@
 
 			#undef PINFO
 			#define PINFO(...) do{\
+				print_unit_test();\
 				printf("[INFO] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 				printf(__VA_ARGS__);\
 				} while(0)
@@ -182,6 +219,7 @@
 
 			#undef PTODO
 			#define PTODO(...) do{\
+				print_unit_test();\
 				printf("[TODO] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
 				printf(__VA_ARGS__);\
 				} while(0)
@@ -192,6 +230,7 @@
 
 			#undef PTRACE
 			#define PTRACE() do{\
+				print_unit_test();\
 				printf("[TRACE] in %s - %s at line %d: called function returned error.\n", __FILE__,__func__,__LINE__);\
 				} while(0)
 		#endif
@@ -236,14 +275,15 @@
 		#undef FREE
 		#undef CHECK_ALLOCATIONS
 
-		void* my_debug_malloc(size_t length);
-		void my_debug_free(void* pointer);
+		void* my_debug_malloc(size_t length, const char* file, const char* func, uint32_t line);
+		void my_debug_free( void* memory_pointer, const char* file, const char* func, uint32_t line );
+		void print_allocation_table( void );
 
-		#define MALLOC(size) my_debug_malloc(size)
+		#define MALLOC(size) my_debug_malloc(size,__FILE__,__func__,__LINE__)
 		#define MALLOC_FAIL() debug.fail_flag = 1; debug.auto_reset_fail_flag = 0
 		#define MALLOC_SUCCEED() debug.fail_flag = 0; debug.auto_reset_fail_flag = 0
 		#define MALLOC_FAIL_ONCE() debug.fail_flag = 1; debug.auto_reset_fail_flag = 1
-		#define FREE(pointer) my_debug_free(pointer)
+		#define FREE(pointer) my_debug_free(pointer,__FILE__,__func__,__LINE__)
 		#define CHECK_ALLOCATIONS(var) do{\
 			int32_t allocated = (int32_t)debug.allocations - (int32_t)debug.frees;\
 			if(allocated < 0){\
@@ -251,13 +291,15 @@
 				printf("Their are more frees than allocations.\n");EXIT_ERROR();}\
 			if(allocated != var){\
 				printf("[LEAK] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
-				printf("There are more chunks allocated then expected (%d instead of %d).\n", debug.allocations - debug.frees, var); EXIT_ERROR();}}while(0)
+				printf("There are more chunks allocated then expected (%ld instead of %d).\n", debug.allocations - debug.frees, var);\
+				print_allocation_table(); EXIT_ERROR();}}while(0)
 		#define ALLOCATION_REPORT() do{\
 			printf("\nMemory allocation report:\n");\
-			printf("Total memory allocated: %ld\n", (long int) debug.total_allocated);\
-			printf("Allocations: %ld Frees: %ld\n", (long int) debug.allocations, (long int) debug.frees);\
-			printf("Biggest allocations: %ld\n", (long int) debug.max_bytes_allocated);\
-			printf("Currently allocated: %ld\n\n", (long int) debug.allocations - (long int) debug.frees);}while(0)
+			printf("Total memory allocated: %ld\n", debug.total_allocated);\
+			printf("Allocations: %ld Frees: %ld\n", debug.allocations, debug.frees);\
+			printf("Biggest allocations: %ld\n", debug.max_bytes_allocated);\
+			printf("Number of current allocations: %ld\n\n", debug.allocations - debug.frees);\
+			printf("Currently allocated: %ld\n\n", debug.currently_allocated);}while(0)
 	#endif /* ifndef DEBUG_MALLOC */
 
 	/**
