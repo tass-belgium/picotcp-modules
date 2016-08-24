@@ -1,0 +1,92 @@
+██████╗ ██╗ ██████╗ ██████╗     ███╗   ███╗ ██████╗ ████████╗████████╗
+██╔══██╗██║██╔════╝██╔═══██╗    ████╗ ████║██╔═══██╗╚══██╔══╝╚══██╔══╝
+██████╔╝██║██║     ██║   ██║    ██╔████╔██║██║   ██║   ██║      ██║   
+██╔═══╝ ██║██║     ██║   ██║    ██║╚██╔╝██║██║▄▄ ██║   ██║      ██║   
+██║     ██║╚██████╗╚██████╔╝    ██║ ╚═╝ ██║╚██████╔╝   ██║      ██║   
+╚═╝     ╚═╝ ╚═════╝ ╚═════╝     ╚═╝     ╚═╝ ╚══▀▀═╝    ╚═╝      ╚═╝   
+                                                                      
+.___________________________________________________________________.
+|																	|
+| Introduction														| 
+|___________________________________________________________________|
+
+The pico_mqtt project contains a blocking implementation of the
+MQTT 3.1.1 protocol with auto reconnect features. For more
+information about the project please refer to the paper.
+The main programming interface can be found in pico_mqtt.h
+
+.___________________________________________________________________.
+|																	|
+| Dependencies														| 
+|___________________________________________________________________|
+
+The library only requires a socket to work and access to the current
+time. If desired the library can be ported by implementing the
+pico_mqtt_socket.h file on another platform. The other files only
+require standard data types (stdint) and memory allocation. It is
+possible to use static allocations but much work is required.
+
+.___________________________________________________________________.
+|																	|
+| Testing															| 
+|___________________________________________________________________|
+
+In order to test the library the check framework, gcov and complexity
+is required. Gcov is a part of gcc and is normally installed on your
+system. If not please refer to [ https://gcc.gnu.org/install/ ].
+To install the complexity framework please try:
+[ sudo apt-get install complexity ] or refer to 
+[ https://ftp.gnu.org/gnu/complexity/ ].
+To install the check framework please try:
+[ sudo apt-get install check ] or refer to
+[ https://libcheck.github.io/check/web/install.html ]
+
+Running the make command will build and test the full library. The
+output will be written make_log.txt
+
+.___________________________________________________________________.
+|																	|
+| IMPORTANT															| 
+|___________________________________________________________________|
+
+Always define PRODUCTION for production code in order to remove all
+debug code. Different debug levels are defined for easy debugging.
+please refer to pico_mqtt_debug.h for more information.
+Change the values in pico_mqtt_configuration.h to match your brokers
+settings.
+
+.___________________________________________________________________.
+|																	|
+| Memory															| 
+|___________________________________________________________________|
+
+Helper functions are provided to handle the creation of messages and
+data objects. The functions copy the data and you are required to
+free the data. You can build the messages yourself without allocating
+the data. The library will always copy the data so you are free to
+modify modify the objects after passing them.
+Data returned from the library is allocated and it is your
+responsibility to free the memory.
+.___________________________________________________________________.
+|																	|
+| Basic usage														| 
+|___________________________________________________________________|
+
+- Set the fields required by the server before calling the connect
+  function
+- Use the provided functions to publish or receive data.
+- Use the disconnect function to disconnect from the server
+- Read messages until the timeouts expire, messages can still be
+  received when the disconnect is send
+- If you feel sure no more messages are being received, destroy the
+  MQTT object
+.___________________________________________________________________.
+|																	|
+| Contact															| 
+|___________________________________________________________________|
+
+For any questions you can contact me at
+                     __                                                         
+ ._ _   _. _|_ _|_  /  \ ._ _   _.  _. ._ _|_  _  ._   _. ._ o _|_  _   |_   _  
+ | | | (_|  |_  |_ | (|/ | | | (_| (_| |   |_ (/_ | | (_| |  |  |_ _> o |_) (/_ 
+         |          \__                                                         
