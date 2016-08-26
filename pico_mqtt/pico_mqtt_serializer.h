@@ -24,6 +24,8 @@ void pico_mqtt_serializer_set_message( struct pico_mqtt_serializer* serializer, 
 void pico_mqtt_serializer_set_keep_alive_time( struct pico_mqtt_serializer* serializer, uint16_t time);
 void pico_mqtt_serializer_set_message_id( struct pico_mqtt_serializer* serializer, uint16_t message_id);
 void pico_mqtt_serializer_set_clean_session( struct pico_mqtt_serializer* serializer, uint8_t clean_session);
+void pico_mqtt_serializer_set_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* topic);
+void pico_mqtt_serializer_set_quality_of_service( struct pico_mqtt_serializer* serializer, uint8_t qos);
 struct pico_mqtt_packet* pico_mqtt_serializer_get_packet( struct pico_mqtt_serializer* serializer);
 
 int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message); /* NO UT */

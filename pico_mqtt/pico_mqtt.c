@@ -413,11 +413,180 @@ int pico_mqtt_ping(struct pico_mqtt* mqtt, const uint32_t timeout )
 	return SUCCES;
 }
 
-int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout);
-int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout);
+int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout)
+{
+	struct pico_mqtt_packet* packet = NULL;
 
-int pico_mqtt_subscribe(struct pico_mqtt* mqtt, const char* topic, const uint8_t quality_of_service, const uint32_t timeout);
-int pico_mqtt_unsubscribe(struct pico_mqtt* mqtt, const char* topic, const uint32_t timeout);
+	if(mqtt == NULL)
+	{
+		PWARNING("The MQTT object is not specified, no action will be done.\n");
+		return ERROR;
+	}
+
+	if(!is_valid_topic(mqtt, message->topic))
+	{
+		PTRACE();
+		return ERROR;
+	}
+
+	if(has_wildcards(message->topic))
+	{
+		PTODO("Set the appropriate error.\n");
+		PERROR("The topic may not contain wildcards.\n");
+		return ERROR;
+	}
+
+	if(!is_quality_of_service_valid(mqtt, message->quality_of_service))
+		return ERROR;
+
+	pico_mqtt_serializer_set_message_type(mqtt->serializer, PUBLISH);
+
+	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+		return ERROR;
+
+	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
+
+	pico_mqtt_list_push_back(mqtt->output_queue, packet);
+
+	set_trigger_message(mqtt, packet);
+	if(protocol(mqtt, timeout) == ERROR)
+		return ERROR;
+
+	return SUCCES;
+}
+
+int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message** message, const uint32_t timeout)
+{
+	if(mqtt == NULL)
+	{
+		PWARNING("The MQTT object is not specified, no action will be done.\n");
+		return ERROR;
+	}
+
+	if(message == NULL)
+	{
+		PWARNING("The message object is not specified, no action will be done.\n");
+		return ERROR;
+	}
+
+	*message = NULL;
+
+	set_trigger_message(mqtt, NULL);
+	if(protocol(mqtt, timeout) == ERROR)
+		return ERROR;
+
+	if(pico_mqtt_list_length(mqtt->input_queue) > 0)
+	{
+		struct pico_mqtt_packet* packet = pico_mqtt_list_pop(mqtt->input_queue);
+		*message = packet->message;
+		packet->message = NULL;
+		destroy_packet(packet);
+	}
+
+	return SUCCES;
+}
+
+int pico_mqtt_subscribe(struct pico_mqtt* mqtt, const char* topic_string, const uint8_t quality_of_service, const uint32_t timeout)
+{
+	struct pico_mqtt_packet* packet = NULL;
+	struct pico_mqtt_data* topic = NULL;
+
+	if(mqtt == NULL)
+	{
+		PWARNING("The MQTT object is not specified, no action will be done.\n");
+		return ERROR;
+	}
+
+	if(!is_quality_of_service_valid(mqtt, quality_of_service))
+		return ERROR;
+
+	topic = pico_mqtt_string_to_data(topic_string);
+	if(topic == NULL)
+	{
+		PERROR("Unable to allocate the memory needed.\n");;
+		PTODO("set the appropriate error.\n");
+		return ERROR;
+	}
+
+	if(!is_valid_topic(mqtt, topic))
+	{
+		PTRACE();
+		pico_mqtt_destroy_data(topic);
+		return ERROR;
+	}
+
+	pico_mqtt_serializer_set_message_type(mqtt->serializer, SUBSCRIBE);
+	pico_mqtt_serializer_set_topic(mqtt->serializer, topic);
+	pico_mqtt_serializer_set_quality_of_service(mqtt->serializer, quality_of_service);
+
+
+	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	{
+		pico_mqtt_destroy_data(topic);
+		return ERROR;
+	}
+
+	pico_mqtt_destroy_data(topic);
+
+	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
+
+	pico_mqtt_list_push_back(mqtt->output_queue, packet);
+
+	set_trigger_message(mqtt, packet);
+	if(protocol(mqtt, timeout) == ERROR)
+		return ERROR;
+
+	return SUCCES;
+}
+
+int pico_mqtt_unsubscribe(struct pico_mqtt* mqtt, const char* topic_string, const uint32_t timeout)
+{
+	struct pico_mqtt_packet* packet = NULL;
+	struct pico_mqtt_data* topic = NULL;
+
+	if(mqtt == NULL)
+	{
+		PWARNING("The MQTT object is not specified, no action will be done.\n");
+		return ERROR;
+	}
+
+	topic = pico_mqtt_string_to_data(topic_string);
+	if(topic == NULL)
+	{
+		PERROR("Unable to allocate the memory needed.\n");;
+		PTODO("set the appropriate error.\n");
+		return ERROR;
+	}
+
+	if(!is_valid_topic(mqtt, topic))
+	{
+		PTRACE();
+		pico_mqtt_destroy_data(topic);
+		return ERROR;
+	}
+
+	pico_mqtt_serializer_set_message_type(mqtt->serializer, UNSUBSCRIBE);
+	pico_mqtt_serializer_set_topic(mqtt->serializer, topic);
+
+
+	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	{
+		pico_mqtt_destroy_data(topic);
+		return ERROR;
+	}
+
+	pico_mqtt_destroy_data(topic);
+
+	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
+
+	pico_mqtt_list_push_back(mqtt->output_queue, packet);
+
+	set_trigger_message(mqtt, NULL);
+	if(protocol(mqtt, timeout) == ERROR)
+		return ERROR;
+
+	return SUCCES;
+}
 
 /**
 * Helper Function Implementation
@@ -627,10 +796,10 @@ char* pico_mqtt_message_get_topic(struct pico_mqtt_message* message)
 	return string;
 }
 
-char* pico_mqtt_get_normative_error( const struct pico_mqtt* mqtt);
-uint32_t pico_mqtt_get_error_documentation_line( const struct pico_mqtt* mqtt);
-
-const char* pico_mqtt_get_protocol_version( void );
+const char* pico_mqtt_get_protocol_version( void )
+{
+	return "3.1.1";
+}
 
 /**
 * Private Function Implemenation

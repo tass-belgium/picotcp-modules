@@ -105,7 +105,7 @@ int main_sprinkler( void )
 
 	pico_mqtt_subscribe(mqtt, "garden/humidity", 1, 1000);
 
-	pico_mqtt_receive(mqtt, message, 60000); // wait 1 minute for a message
+	pico_mqtt_receive(mqtt, &message, 60000); // wait 1 minute for a message
 	if(message != NULL)
 	{
 		water_garden(*((uint8_t*) message->data->data ));

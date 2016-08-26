@@ -40,7 +40,7 @@ int pico_mqtt_disconnect(struct pico_mqtt* mqtt);
 int pico_mqtt_ping(struct pico_mqtt* mqtt, const uint32_t timeout );
 
 int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout);
-int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message* message, const uint32_t timeout);
+int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message** message, const uint32_t timeout);
 
 int pico_mqtt_subscribe(struct pico_mqtt* mqtt, const char* topic, const uint8_t quality_of_service, const uint32_t timeout);
 int pico_mqtt_unsubscribe(struct pico_mqtt* mqtt, const char* topic, const uint32_t timeout);
@@ -67,10 +67,6 @@ uint8_t pico_mqtt_message_get_retain(struct pico_mqtt_message* message);
 uint8_t pico_mqtt_message_is_duplicate_flag_set(struct pico_mqtt_message* message);
 uint16_t pico_mqtt_message_get_message_id(struct pico_mqtt_message* message);
 char* pico_mqtt_message_get_topic(struct pico_mqtt_message* message);
-
-
-char* pico_mqtt_get_normative_error( const struct pico_mqtt* mqtt);
-uint32_t pico_mqtt_get_error_documentation_line( const struct pico_mqtt* mqtt);
 
 const char* pico_mqtt_get_protocol_version( void );
 

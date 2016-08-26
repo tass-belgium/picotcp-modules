@@ -135,6 +135,22 @@ void pico_mqtt_serializer_set_message_id( struct pico_mqtt_serializer* serialize
 	*serializer->error = serializer_mock.error_value;
 }
 
+void pico_mqtt_serializer_set_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* topic)
+{
+	CHECK_NOT_NULL(serializer);
+	topic->length++;
+
+	*serializer->error = serializer_mock.error_value;
+}
+
+void pico_mqtt_serializer_set_quality_of_service( struct pico_mqtt_serializer* serializer, uint8_t qos)
+{
+	CHECK_NOT_NULL(serializer);
+	qos++;
+
+	*serializer->error = serializer_mock.error_value;
+}
+
 
 int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message)
 {

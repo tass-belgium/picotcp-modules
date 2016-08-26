@@ -349,6 +349,26 @@ void pico_mqtt_serializer_set_clean_session( struct pico_mqtt_serializer* serial
 	serializer->clean_session = clean_session;
 }
 
+void pico_mqtt_serializer_set_topic( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* topic)
+{
+	CHECK_NOT_NULL(serializer);
+
+	CHECK((topic->length == 0) == (topic->data == NULL),
+		"The topic has an invallid structure.\n");
+	CHECK((topic->length != 0) && (topic->data != NULL),
+		"The topic must contain a valid, non zero topic.\n");
+
+	serializer->topic = topic;
+}
+
+void pico_mqtt_serializer_set_quality_of_service( struct pico_mqtt_serializer* serializer, uint8_t qos)
+{
+	CHECK_NOT_NULL(serializer);
+	CHECK(qos<3, "invallid qos\n");
+
+	serializer->quality_of_service = qos;
+}
+
 /**
 * Packet serialization
 **/
