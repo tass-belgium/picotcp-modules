@@ -933,8 +933,7 @@ START(serializer_set_client_id)
 #if ALLOW_EMPTY_CLIENT_ID == 1
 
 	pico_mqtt_serializer_set_client_id( serializer, NULL);
-	ck_assert_msg( serializer->client_id->length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->client_id->data == NULL, "The data pointer should be NULL.\n");
+	ck_assert_msg( serializer->client_id == NULL, "The data pointer should be NULL.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 #endif
@@ -959,8 +958,7 @@ START(serializer_set_username)
 #if ALLOW_EMPTY_USERNAME == 1
 
 	pico_mqtt_serializer_set_username( serializer, NULL);
-	ck_assert_msg( serializer->username->length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->username->data == NULL, "The data pointer should be NULL.\n");
+	ck_assert_msg( serializer->username == NULL, "The data pointer should be NULL.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 #endif
@@ -983,8 +981,7 @@ START(serializer_set_password)
 	pico_mqtt_serializer_clear( serializer );
 
 	pico_mqtt_serializer_set_password( serializer, NULL);
-	ck_assert_msg( serializer->password->length == 0, "The length should be 0.\n");
-	ck_assert_msg( serializer->password->data == NULL, "The data pointer should be NULL.\n");
+	ck_assert_msg( serializer->password == NULL, "The data pointer should be NULL.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	pico_mqtt_serializer_set_password( serializer, &test_data_1);
@@ -1061,19 +1058,12 @@ START(serialize_connect_check)
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 
-#if ALLOW_EMPTY_MESSAGE == 0
-	serializer->topic = (struct pico_mqtt_data*) 1;;
-	PERROR_DISABLE_ONCE();
-	error = check_serialize_connect( serializer);
-	ck_assert_msg( error == ERROR, "An error should be generated.\n");
-#else
 	serializer->topic = (struct pico_mqtt_data*) 1;
 	PERROR_DISABLE_ONCE();
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
-#endif
 
-	serializer->message = (struct pico_mqtt_data*) 1;
+	serializer->data = (struct pico_mqtt_data*) 1;
 	error = check_serialize_connect( serializer);
 	ck_assert_msg( error == SUCCES, "No error should be generated.\n");
 
@@ -1134,7 +1124,7 @@ START(serialize_connect_get_flags_test)
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x00, "Flags don't match the specifications\n");
 
-	serializer->message = (struct pico_mqtt_data*) 1;
+	serializer->data = (struct pico_mqtt_data*) 1;
 	flags = serialize_connect_get_flags( serializer);
 	ck_assert_msg( flags == 0x04, "Flags don't match the specifications\n");
 
@@ -1441,7 +1431,8 @@ START(serialize_publish_test)
 
 	PERROR_DISABLE_ONCE();
 	return_code = serialize_publish( serializer );
-	ck_assert_msg( return_code == ERROR, "An error should be generated.\n");
+	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
+	pico_mqtt_serializer_clear(serializer);
 
 
 	serializer->quality_of_service = 2;
@@ -1449,7 +1440,7 @@ START(serialize_publish_test)
 	serializer->retain = 1;
 	serializer->duplicate = 1;
 	serializer->topic = &topic;
-	serializer->message = &message;
+	serializer->data = &message;
 	return_code = serialize_publish( serializer );
 	ck_assert_msg( return_code == SUCCES, "No error should be generated.\n");
 	ck_assert_msg( compare_arrays(reference_message_8, serializer->stream.data, 17), "The generated output does not match the specifications.\n");
@@ -1950,9 +1941,9 @@ START(deserialize_publish_test)
 	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 0, "The retain flag should not be set.\n");
 	ck_assert_msg( serializer->message_id == 0, "Packet Id should be 0.\n");
-	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->data->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->data->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->data->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_4;
@@ -1968,9 +1959,9 @@ START(deserialize_publish_test)
 	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 0, "The retain flag should not be set.\n");
 	ck_assert_msg( serializer->message_id == 0xAA55, "Packet Id should be 0xAA55.\n");
-	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->data->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->data->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->data->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_5;
@@ -1986,9 +1977,9 @@ START(deserialize_publish_test)
 	ck_assert_msg( serializer->duplicate == 0, "No duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 1, "The retain flag should be set.\n");
 	ck_assert_msg( serializer->message_id == 0xAA55, "Packet Id should be 0xAA55.\n");
-	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->data->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->data->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->data->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 
@@ -2005,9 +1996,9 @@ START(deserialize_publish_test)
 	ck_assert_msg( serializer->duplicate == 1, "The duplicate flag should be set.\n");
 	ck_assert_msg( serializer->retain == 1, "The retain flag should be set.\n");
 	ck_assert_msg( serializer->message_id == 0xAA55, "Packet Id should be 0xAA55.\n");
-	ck_assert_msg( serializer->message->length == 1, "The length of the message should be 1.\n");
-	ck_assert_msg( serializer->message->data != NULL, "The message data shouldn't be NULL.\n");
-	ck_assert_msg( *((uint8_t *)serializer->message->data) == 0x27, "The message data should be 0x27.\n");
+	ck_assert_msg( serializer->data->length == 1, "The length of the message should be 1.\n");
+	ck_assert_msg( serializer->data->data != NULL, "The message data shouldn't be NULL.\n");
+	ck_assert_msg( *((uint8_t *)serializer->data->data) == 0x27, "The message data should be 0x27.\n");
 	pico_mqtt_serializer_clear( serializer );
 
 	serializer->stream.data = reference_message_7;

@@ -7,6 +7,7 @@ struct pico_mqtt_serializer{
 
 struct serializer_mock{
 	struct pico_mqtt_data return_data;
+	struct pico_mqtt_packet* packet;
 	uint8_t fail_flag;
 	int error_value;
 	int return_value;
@@ -77,6 +78,15 @@ int pico_mqtt_deserialize_length( int* error, void* length_void, uint32_t* resul
 	return serializer_mock.return_value;
 }
 
+void pico_mqtt_serializer_set_message_type( struct pico_mqtt_serializer* serializer, uint8_t message_type )
+{
+	CHECK_NOT_NULL(serializer);
+	message_type++;
+
+	*serializer->error = serializer_mock.error_value;
+}
+
+
 void pico_mqtt_serializer_set_client_id( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* client_id)
 {
 	CHECK_NOT_NULL(serializer);
@@ -109,6 +119,23 @@ void pico_mqtt_serializer_set_message( struct pico_mqtt_serializer* serializer, 
 	*serializer->error = serializer_mock.error_value;
 }
 
+void pico_mqtt_serializer_set_keep_alive_time( struct pico_mqtt_serializer* serializer, uint16_t time)
+{
+	CHECK_NOT_NULL(serializer);
+	time++;
+
+	*serializer->error = serializer_mock.error_value;
+}
+
+void pico_mqtt_serializer_set_message_id( struct pico_mqtt_serializer* serializer, uint16_t message_id)
+{
+	CHECK_NOT_NULL(serializer);
+	message_id++;
+
+	*serializer->error = serializer_mock.error_value;
+}
+
+
 int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message)
 {
 	CHECK_NOT_NULL(serializer);
@@ -125,6 +152,14 @@ int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, struct pico_
 
 	*serializer->error = serializer_mock.error_value;
 	return serializer_mock.return_value;
+}
+
+struct pico_mqtt_packet* pico_mqtt_serializer_get_packet( struct pico_mqtt_serializer* serializer)
+{
+	CHECK_NOT_NULL(serializer);
+
+	*serializer->error = serializer_mock.error_value;
+	return serializer_mock.packet;
 }
 
 /**
@@ -159,4 +194,9 @@ void serializer_mock_set_error_value( int error_value )
 void serializer_mock_set_return_value( int return_value )
 {
   serializer_mock.return_value = return_value;
+}
+
+void serializer_mock_set_packet( struct pico_mqtt_packet* packet )
+{
+	serializer_mock.packet = packet;
 }
