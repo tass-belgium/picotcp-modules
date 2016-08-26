@@ -152,11 +152,14 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 	return SUCCES;
 }
 
-/* close pico mqtt socket*/
-void pico_mqtt_connection_close( struct pico_mqtt_socket* socket)
+void pico_mqtt_connection_destroy( struct pico_mqtt_socket* socket)
 {
-	PTODO("Write implementation.\n");
-	socket++;
+	if(socket == NULL)
+		return;
+
+	close(socket->descriptor);
+
+	FREE(socket);
 }
 
 uint64_t get_current_time( void  )
