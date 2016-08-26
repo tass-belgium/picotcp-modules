@@ -46,6 +46,9 @@
 #define PERROR_DISABLE()
 #define PERROR_ENABLE()
 #define PERROR_DISABLE_ONCE()
+#define PWARNING_DISABLE()
+#define PWARNING_ENABLE()
+#define PWARNING_DISABLE_ONCE()
 #define MALLOC_FAIL()
 #define MALLOC_SUCCEED()
 #define MALLOC_FAIL_ONCE()
@@ -84,6 +87,8 @@
 		uint8_t auto_reset_no_check_flag;
 		uint8_t no_error_flag;
 		uint8_t auto_reset_no_error_flag;
+		uint8_t no_warning_flag;
+		uint8_t auto_reset_no_warning_flag;
 		uint8_t fail_flag;
 		uint8_t auto_reset_fail_flag;
 		uint64_t allocations;
@@ -102,6 +107,8 @@
 		.auto_reset_no_check_flag = 0,\
 		.no_error_flag = 0,\
 		.auto_reset_no_error_flag = 0,\
+		.no_warning_flag = 0,\
+		.auto_reset_no_warning_flag = 0,\
 		.fail_flag = 0,\
 		.auto_reset_fail_flag = 0,\
 		.allocations = 0,\
@@ -194,12 +201,24 @@
 
 		#ifdef ENABLE_WARNING
 			#include <stdio.h>
-
 			#undef PWARNING
-			#define PWARNING(...) do{\
-				print_unit_test();\
-				printf("[WARNING] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
-				printf(__VA_ARGS__);\
+			#undef PWARNING_DISABLE
+			#undef PWARNING_ENABLE
+			#undef PWARNING_DISABLE_ONCE
+
+			#define PWARNING_DISABLE() debug.no_warning_flag = 1; debug.auto_reset_no_warning_flag = 0
+			#define PWARNING_ENABLE() debug.no_warning_flag = 0; debug.auto_reset_no_warning_flag = 0
+			#define PWARNING_DISABLE_ONCE() debug.no_warning_flag = 1; debug.auto_reset_no_warning_flag = 1
+			#define PWARNING( ...) do{\
+					if(debug.no_warning_flag == 0){\
+						print_unit_test();\
+						printf("[WARNING] in %s - %s at line %d:\t\t", __FILE__,__func__,__LINE__);\
+						printf(__VA_ARGS__);\
+					}else {\
+						if(debug.auto_reset_no_warning_flag != 0)\
+							debug.no_warning_flag = 0;\
+							debug.auto_reset_no_warning_flag = 0;\
+					}\
 				} while(0)
 		#endif /* DEBUG >= 2 */
 
