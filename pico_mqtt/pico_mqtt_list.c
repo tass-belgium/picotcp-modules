@@ -95,6 +95,25 @@ struct pico_mqtt_packet* pico_mqtt_list_get(struct pico_mqtt_list* list, uint16_
 	return NULL;
 }
 
+uint8_t pico_mqtt_list_contains(struct pico_mqtt_list* list, uint16_t packet_id)
+{
+	struct element* element = NULL;
+
+	CHECK_NOT_NULL(list);
+
+	element = list->first;
+
+	while(element != NULL)
+	{
+		if(element->packet->packet_id == packet_id)
+			return 1;
+
+		element = element->next;
+	}
+
+	return 0;
+}
+
 struct pico_mqtt_packet* pico_mqtt_list_pop(struct pico_mqtt_list* list)
 {
 	struct element* element = NULL;
