@@ -99,8 +99,7 @@ int pico_mqtt_connection_send_receive(
   return socket_mock.return_value;
 }
 
-/* close and free pico mqtt socket*/
-void pico_mqtt_connection_close( struct pico_mqtt_socket* socket)
+void pico_mqtt_connection_destroy( struct pico_mqtt_socket* socket)
 {
   *(socket->error) = socket_mock.error_value;
   FREE(socket);

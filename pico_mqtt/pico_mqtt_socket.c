@@ -62,7 +62,7 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 	}
 
 	flags = fcntl(connection->descriptor, F_GETFL, 0);
-	if(fcntl(connection->descriptor, F_SETFL, flags | O_NONBLOCK) == -1)
+	if(fcntl(connection->descriptor, F_SETFL, flags | O_NONBLOCK) != 0)
 	{
 		freeaddrinfo(addres);
 		PERROR("fnctl was not able to set the socket to Nonblocking mode error (%d): %s.\n", errno, strerror(errno));
@@ -77,20 +77,20 @@ int pico_mqtt_connection_open(struct pico_mqtt_socket* connection, const char* U
 
 int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, struct pico_mqtt_data* write_buffer, struct pico_mqtt_data* read_buffer, uint64_t time_left)
 {
-	int result = 0;
+/*	int result = 0;
 	struct pollfd poll_descriptor = (struct pollfd) {
 		.fd = connection->descriptor,
 		.events = 0,
 		.revents = 0
-	};
-
+	};*/
+		time_left++;
 	CHECK_NOT_NULL(connection);
 	CHECK_NOT_NULL(write_buffer);
 	CHECK_NOT_NULL(read_buffer);
-	CHECK(((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) == 0),
+	CHECK(((fcntl(connection->descriptor, F_GETFL, 0) & O_NONBLOCK) != 0),
 		"Nonblocking flags should be set for the socket.\n");
 
-	if((write_buffer->length == 0) && (read_buffer->length == 0))
+/*	if((write_buffer->length == 0) && (read_buffer->length == 0))
 	{
 		PWARNING("Called send and receive function without data to be send or received.\n");
 		return SUCCES;
@@ -108,9 +108,7 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 
 	result = poll(&poll_descriptor, 1, (int32_t)time_left);
 
-	CHECK((result > 1), "It should not be possible to have more then 1 active file descriptor.\n");
-	CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0),
-		"Poll returned without error, data should be ready to write or read but is not.\n");
+	CHECK((result < 2), "It should not be possible to have more then 1 active file descriptor.\n");
 
 	if(result == -1)
 	{
@@ -124,30 +122,51 @@ int pico_mqtt_connection_send_receive( struct pico_mqtt_socket* connection, stru
 		return SUCCES;
 	}
 
-	if(result == 1)
+	if(result == 0)
 	{
-		if(((poll_descriptor.revents & POLLIN) != 0) && (read_buffer->length != 0)) /* data to read */
+		CHECK(((poll_descriptor.revents & (POLLIN | POLLOUT)) == 0),
+			"Poll returned without error, data should be ready to write or read but is not.\n");
+*/
+//		if(((poll_descriptor.revents & POLLIN) != 0) && (read_buffer->length != 0)) /* data to read */
+		if((read_buffer->length != 0)) /* data to read */
 		{
-			uint32_t bytes_written = 0;
-			bytes_written = (uint32_t) read(connection->descriptor, read_buffer->data, read_buffer->length);
-			read_buffer->data += bytes_written;
-			read_buffer->length -= bytes_written;
-			PINFO("Written %d bytes to %d\n", bytes_written, connection->descriptor);
+			int64_t bytes_written = 0;
+			bytes_written = read(connection->descriptor, read_buffer->data, read_buffer->length);
+
+			if(bytes_written < 0)
+			{
+				if(errno != 11)
+					PERROR("read returned an error (%d): %s\n", errno, strerror(errno));
+			} else
+			{
+				read_buffer->data += (uint32_t) bytes_written;
+				read_buffer->length -= (uint32_t) bytes_written;
+				if(bytes_written != 0)
+					PINFO("Read %d bytes from %d\n", (uint32_t) bytes_written, connection->descriptor);
+			}
 		}
 
-		if(((poll_descriptor.revents & POLLOUT) != 0) && (write_buffer->length != 0))/* data to write */
+//		if(((poll_descriptor.revents & POLLOUT) != 0) && (write_buffer->length != 0))/* data to write */
+		if((write_buffer->length != 0))/* data to write */
 		{
-			uint32_t bytes_written = 0;
-			bytes_written = (uint32_t) write(connection->descriptor, write_buffer->data, write_buffer->length);
-			write_buffer->data += bytes_written;
-			write_buffer->length -= bytes_written;
-			PINFO("Written %d bytes to %d\n", bytes_written, connection->descriptor);
-		}
+			int64_t bytes_written = 0;
+			bytes_written = write(connection->descriptor, write_buffer->data, write_buffer->length);
+			
+			if(bytes_written < 0)
+			{
+				PERROR("write returned an error (%d): %s\n", errno, strerror(errno));
+			} else
+			{
+				write_buffer->data += (uint32_t) bytes_written;
+				write_buffer->length -= (uint32_t) bytes_written;
+				PINFO("Written %d bytes to %d\n", (uint32_t) bytes_written, connection->descriptor);
+			}
+		}/*
 	} else {
 		PERROR("Poll returned %d, only expected values are -1, 0 or 1.\n", result);
 		PTODO("Set a specific error.\n");
 		return ERROR;
-	}
+	}*/
 
 	return SUCCES;
 }

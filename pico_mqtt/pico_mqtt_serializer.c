@@ -327,7 +327,6 @@ void pico_mqtt_serializer_set_message( struct pico_mqtt_serializer* serializer, 
 	serializer->duplicate = message->duplicate;
 	serializer->retain = message->retain;
 	serializer->quality_of_service = message->quality_of_service;
-	serializer->message_id = message->message_id;
 }
 
 void pico_mqtt_serializer_set_keep_alive_time( struct pico_mqtt_serializer* serializer, uint16_t time)
@@ -373,7 +372,7 @@ void pico_mqtt_serializer_set_quality_of_service( struct pico_mqtt_serializer* s
 * Packet serialization
 **/
 
-int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message)
+int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer )
 {
 	int(* const serializers[16])(struct pico_mqtt_serializer* serializer ) =
 	{
@@ -396,11 +395,9 @@ int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mq
 	};
 
 	CHECK_NOT_NULL(serializer);
-	CHECK_NOT_NULL(message);
 	CHECK( serializer->message_type < 16, "Invallid message type, outside array bounds.\n");
 
 	PTODO("Use the message as a return.\n");
-	message++;
 
 	if(serializers[serializer->message_type] == NULL)
 	{
@@ -496,6 +493,8 @@ struct pico_mqtt_packet* pico_mqtt_serializer_get_packet( struct pico_mqtt_seria
 		(packet->type == DISCONNECT)
 	)
 		packet->packet_id = -1;
+
+	pico_mqtt_serializer_clear(serializer);
 
 	return packet;
 }

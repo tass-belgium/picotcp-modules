@@ -2277,7 +2277,6 @@ START(pico_mqtt_serialize_test)
 	uint8_t index = 0;
 	int return_code = 0;
 	struct pico_mqtt_serializer* serializer = NULL;
-	struct pico_mqtt_data message;
 	int expected_values[16] = 
 	{
 		ERROR,	// 00 - RESERVED    
@@ -2306,7 +2305,7 @@ START(pico_mqtt_serialize_test)
 	for(index = 0; index < 16; ++index)
 	{
 		serializer->message_type = index;
-		return_code = pico_mqtt_serialize(serializer, &message);
+		return_code = pico_mqtt_serialize(serializer);
 		ck_assert_msg( return_code == expected_values[index], "Not the expected return code (message type: %d).\n", index);
 		pico_mqtt_serializer_clear(serializer);
 	}

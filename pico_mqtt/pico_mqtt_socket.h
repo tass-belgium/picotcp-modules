@@ -46,9 +46,6 @@ int pico_mqtt_connection_send_receive(
   uint64_t time_left
 );
 
-/* close and free pico mqtt socket*/
-void pico_mqtt_connection_close( struct pico_mqtt_socket* socket);
-
 void pico_mqtt_connection_destroy( struct pico_mqtt_socket* socket);
 
 /* get current time in miliseconds */

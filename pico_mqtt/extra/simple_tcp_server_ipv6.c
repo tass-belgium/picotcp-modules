@@ -27,8 +27,8 @@
 #include <netdb.h>
 
 #include <arpa/inet.h>
-#include "pico_mqtt_error.h"
-#include "pico_mqtt_socket.h"
+#include "../pico_mqtt_debug.h"
+#include "../pico_mqtt_socket.h"
 
 /**
 * data structures
@@ -126,21 +126,7 @@ int main(int argc, char *argv[]) {
     };
     while(flag)
     {
-        result = poll(&socket_poll, 1, -1);
-
-        #ifdef DEBUG
-            if(result == 0)
-            {
-                PERROR("Not possible to have a timeout!\n");
-                return ERROR;
-            }
-
-            if(result > 1)
-            {
-                PERROR("Not possible to have more then 1 active fiel descriptor!\n");
-                return ERROR;
-            }
-        #endif
+        //result = poll(&socket_poll, 1, -1);
 
         n = read(newsockfd, &received_byte, 1);
         

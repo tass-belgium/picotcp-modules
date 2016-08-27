@@ -84,7 +84,7 @@ uint8_t pico_mqtt_stream_is_message_sending( const struct pico_mqtt_stream* stre
 {
 	CHECK_NOT_NULL(stream);
 
-	return stream->send_message.data != NULL;
+	return stream->send_message_buffer.length != 0;
 }
 
 uint8_t pico_mqtt_stream_is_message_received( const struct pico_mqtt_stream* stream )
@@ -149,10 +149,9 @@ void pico_mqtt_stream_destroy( struct pico_mqtt_stream* stream )
 	if(stream == NULL)
 		return;
 
-	FREE(stream->send_message.data);
 	FREE(stream->receive_message.data);
 
-	pico_mqtt_connection_close(stream->socket);
+	pico_mqtt_connection_destroy(stream->socket);
 	FREE(stream);
 }
 
@@ -200,7 +199,8 @@ static int send_receive_message(struct pico_mqtt_stream* stream, uint64_t time_l
 			return ERROR;
 		}
 
-		(stream->fixed_header_next_byte)++;
+		if(header.length == 0)
+			(stream->fixed_header_next_byte)++;
 
 		if(process_fixed_header( stream ) == ERROR)
 		{
@@ -290,7 +290,7 @@ static int process_fixed_header( struct pico_mqtt_stream* stream )
 	if(!is_fixed_header_complete( stream ))
 		return SUCCES;
 
-	if(pico_mqtt_deserialize_length(stream->error, stream->fixed_header, &length) == ERROR)
+	if(pico_mqtt_deserialize_length(stream->error, (stream->fixed_header)+1, &length) == ERROR)
 	{
 		PTRACE();
 		return ERROR;

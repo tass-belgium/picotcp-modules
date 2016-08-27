@@ -19,7 +19,6 @@ static uint8_t is_valid_topic( struct pico_mqtt* mqtt, const struct pico_mqtt_da
 static uint8_t is_quality_of_service_valid( struct pico_mqtt* mqtt, uint8_t quality_of_service);
 static void set_error(struct pico_mqtt* mqtt, int error);
 static int set_connect_options( struct pico_mqtt* mqtt );
-static uint8_t is_packet_id_required ( uint8_t type, uint8_t qos);
 static void set_new_packet_id( struct pico_mqtt* mqtt );
 static int set_uri(struct pico_mqtt* mqtt, const char* uri_string);
 static void unset_uri( struct pico_mqtt* mqtt);
@@ -66,10 +65,12 @@ struct pico_mqtt* pico_mqtt_create( void )
 	*mqtt = PICO_MQTT_EMPTY;
 
 	mqtt->stream = pico_mqtt_stream_create( &(mqtt->error) );
+	mqtt->serializer = pico_mqtt_serializer_create( &(mqtt->error));
 	mqtt->output_queue = pico_mqtt_list_create( &(mqtt->error) );
 	mqtt->wait_queue = pico_mqtt_list_create( &(mqtt->error) );
 	mqtt->input_queue = pico_mqtt_list_create( &(mqtt->error) );
 	if(	mqtt->stream == NULL ||
+		mqtt->serializer == NULL ||
 		mqtt->output_queue == NULL||
 		mqtt->wait_queue == NULL||
 		mqtt->input_queue == NULL )
@@ -87,6 +88,7 @@ void pico_mqtt_destroy(struct pico_mqtt* mqtt)
 		return;
 
 	pico_mqtt_stream_destroy(mqtt->stream);
+	pico_mqtt_serializer_destroy(mqtt->serializer);
 	pico_mqtt_list_destroy( mqtt->output_queue );
 	pico_mqtt_list_destroy( mqtt->wait_queue );
 	pico_mqtt_list_destroy( mqtt->input_queue );
@@ -343,14 +345,10 @@ int pico_mqtt_connect(struct pico_mqtt* mqtt, const char* uri, const char* port,
 	if(pico_mqtt_stream_connect( mqtt->stream, uri, port) == ERROR )
 		return ERROR;
 
-	set_new_packet_id(mqtt);
-
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 		return ERROR;
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
-
-	is_packet_id_required(CONNECT, 0);
 
 	pico_mqtt_list_push_back(mqtt->output_queue, packet);
 
@@ -374,14 +372,14 @@ int pico_mqtt_disconnect(struct pico_mqtt* mqtt)
 
 	pico_mqtt_serializer_set_message_type(mqtt->serializer, DISCONNECT);
 
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 		return ERROR;
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
 
 	pico_mqtt_list_push_back(mqtt->output_queue, packet);
 
-	set_trigger_message(mqtt, NULL);
+	set_trigger_message(mqtt, packet);
 	if(protocol(mqtt, 1) == ERROR)
 		return ERROR;
 
@@ -399,7 +397,7 @@ int pico_mqtt_ping(struct pico_mqtt* mqtt, const uint32_t timeout )
 
 	pico_mqtt_serializer_set_message_type(mqtt->serializer, PINGREQ);
 
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 		return ERROR;
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
@@ -440,11 +438,16 @@ int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message,
 		return ERROR;
 
 	pico_mqtt_serializer_set_message_type(mqtt->serializer, PUBLISH);
+	pico_mqtt_serializer_set_message(mqtt->serializer, message);
 
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(message->quality_of_service > 0)
+		set_new_packet_id(mqtt);
+
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 		return ERROR;
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
+	packet->message = NULL;
 
 	pico_mqtt_list_push_back(mqtt->output_queue, packet);
 
@@ -518,15 +521,14 @@ int pico_mqtt_subscribe(struct pico_mqtt* mqtt, const char* topic_string, const 
 	pico_mqtt_serializer_set_message_type(mqtt->serializer, SUBSCRIBE);
 	pico_mqtt_serializer_set_topic(mqtt->serializer, topic);
 	pico_mqtt_serializer_set_quality_of_service(mqtt->serializer, quality_of_service);
+	set_new_packet_id(mqtt);
 
-
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 	{
 		pico_mqtt_destroy_data(topic);
+		pico_mqtt_serializer_clear(mqtt->serializer);
 		return ERROR;
 	}
-
-	pico_mqtt_destroy_data(topic);
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
 
@@ -567,21 +569,21 @@ int pico_mqtt_unsubscribe(struct pico_mqtt* mqtt, const char* topic_string, cons
 
 	pico_mqtt_serializer_set_message_type(mqtt->serializer, UNSUBSCRIBE);
 	pico_mqtt_serializer_set_topic(mqtt->serializer, topic);
+	set_new_packet_id(mqtt);
 
-
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 	{
 		pico_mqtt_destroy_data(topic);
 		return ERROR;
 	}
 
-	pico_mqtt_destroy_data(topic);
+	//pico_mqtt_destroy_data(topic);
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
 
 	pico_mqtt_list_push_back(mqtt->output_queue, packet);
 
-	set_trigger_message(mqtt, NULL);
+	set_trigger_message(mqtt, packet);
 	if(protocol(mqtt, timeout) == ERROR)
 		return ERROR;
 
@@ -1051,27 +1053,6 @@ static int set_connect_options( struct pico_mqtt* mqtt )
 	return SUCCES;
 }
 
-static uint8_t is_packet_id_required ( uint8_t type, uint8_t qos)
-{
-	if((type == CONNECT) && (qos != 0))
-		return 1;
-
-	if((type == PUBACK) ||
-		(type == PUBREC) ||
-		(type == PUBREL) ||
-		(type == PUBCOMP) ||
-		(type == SUBSCRIBE) ||
-		(type == SUBACK) ||
-		(type == UNSUBSCRIBE) ||
-		(type == UNSUBACK) ||
-		(type == PINGREQ) ||
-		(type == PINGRESP) ||
-		(type == DISCONNECT))
-		return 1;
-
-	return 0;
-}
-
 static void set_new_packet_id( struct pico_mqtt* mqtt )
 {
 	CHECK_NOT_NULL(mqtt);
@@ -1164,6 +1145,7 @@ static void destroy_packet(struct pico_mqtt_packet* packet)
 
 	pico_mqtt_destroy_message(packet->message);
 	FREE(packet->streamed.data);
+	FREE(packet);
 }
 
 
@@ -1220,7 +1202,11 @@ static int protocol( struct pico_mqtt* mqtt, uint32_t timeout)
 				mqtt->status = NOT_CONNECTED;
 			}
 
-			if(pico_mqtt_stream_send_receive( mqtt->stream, &time_left, mqtt->trigger_message == NULL) == ERROR)
+			if(mqtt->request_complete)
+				return SUCCES;
+
+			if(pico_mqtt_stream_send_receive( mqtt->stream, &time_left, 
+				(mqtt->trigger_message == NULL) || (is_response_required(mqtt->trigger_message))) == ERROR)
 				return ERROR;
 		}
 	}
@@ -1357,7 +1343,10 @@ static void check_if_request_complete(struct pico_mqtt* mqtt, struct pico_mqtt_p
 		return;
 
 	if(mqtt->trigger_message == packet)
+	{
 		mqtt->request_complete = 1;
+		mqtt->trigger_message = NULL;
+	}
 }
 
 static int send_acknowledge( struct pico_mqtt* mqtt, struct pico_mqtt_packet* packet, uint8_t update_trigger_flag)
@@ -1370,7 +1359,7 @@ static int send_acknowledge( struct pico_mqtt* mqtt, struct pico_mqtt_packet* pa
 	pico_mqtt_serializer_clear(mqtt->serializer);
 	pico_mqtt_serializer_set_message_type(mqtt->serializer, (uint8_t) (packet->type + 1));
 	pico_mqtt_serializer_set_message_id(mqtt->serializer, (uint16_t) packet->packet_id);
-	if(pico_mqtt_serialize(mqtt->serializer, NULL) == ERROR)
+	if(pico_mqtt_serialize(mqtt->serializer) == ERROR)
 		return ERROR;
 
 	if(pico_mqtt_list_push_back(mqtt->output_queue, response_packet) == ERROR)
@@ -1434,9 +1423,10 @@ static int handle_publish( struct pico_mqtt* mqtt, struct pico_mqtt_packet* pack
 			return ERROR;
 		if(send_acknowledge(mqtt, packet, 0) == ERROR)
 			return ERROR;
+
+		destroy_packet(packet);
 	}
 
-	destroy_packet(packet);
 	return SUCCES;
 }
 

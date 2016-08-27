@@ -49,6 +49,9 @@ $(DEPDIR)/%.d: ;
 
 -include $(patsubst %,$(DEPDIR)/%.d,$(basename $(SOURCE_FILES)))
 
+
+
+
 #####################################################################################
 # Run the unit test and print to file												#
 #####################################################################################
@@ -56,7 +59,7 @@ clear_log:
 	@rm -f $(OUTPUT_LOG)
 
 %_test.out: %_test.o $(MOCK_OBJECT_FILES) pico_mqtt_debug.o
-	@$(CC) $(C_FLAGS) $(filter-out $(subst _test.out,_mock.o, $@), $^) -o $@ $(TEST_FLAGS) $(COVERAGE_FLAGS) $(DEBUG_FLAGS)
+	$(CC) $(C_FLAGS) $(filter-out $(subst _test.out,_mock.o, $@), $^) -o $@ $(TEST_FLAGS) $(COVERAGE_FLAGS) $(DEBUG_FLAGS)
 	@printf "+---------------------------------------------------------------+\n" 	| tee -a $(OUTPUT_LOG)
 	@printf "| %-60s  |\n" "$@"														| tee -a $(OUTPUT_LOG)
 	@printf "+---------------------------------------------------------------+\n"	| tee -a $(OUTPUT_LOG)
@@ -76,6 +79,13 @@ clear_log:
 	@gcov $(subst _test.out,_test.c, $@)											| tee -a $(OUTPUT_LOG)
 	@echo																			| tee -a $(OUTPUT_LOG)
 	@echo																			| tee -a $(OUTPUT_LOG)
+
+#####################################################################################
+# Run the unit test and print to file												#
+#####################################################################################
+pico_mqtt_functional_test.out: pico_mqtt_functional_test.o $(BASE_OBJECT_FILES) pico_mqtt_debug.o
+	@$(CC) $(C_FLAGS) $^ -o $@ $(TEST_FLAGS) $(COVERAGE_FLAGS) $(DEBUG_FLAGS)
+
 
 #####################################################################################
 # Cleaning up the generated files 													#

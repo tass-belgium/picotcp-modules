@@ -152,11 +152,10 @@ void pico_mqtt_serializer_set_quality_of_service( struct pico_mqtt_serializer* s
 }
 
 
-int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message)
+int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer )
 {
 	CHECK_NOT_NULL(serializer);
 	*serializer->error = serializer_mock.error_value;
-	*message = serializer_mock.return_data;
 	return serializer_mock.return_value;
 }
 

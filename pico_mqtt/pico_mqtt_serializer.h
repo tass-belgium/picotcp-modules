@@ -28,7 +28,7 @@ void pico_mqtt_serializer_set_topic( struct pico_mqtt_serializer* serializer, st
 void pico_mqtt_serializer_set_quality_of_service( struct pico_mqtt_serializer* serializer, uint8_t qos);
 struct pico_mqtt_packet* pico_mqtt_serializer_get_packet( struct pico_mqtt_serializer* serializer);
 
-int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data* message); /* NO UT */
+int pico_mqtt_serialize( struct pico_mqtt_serializer* serializer); /* NO UT */
 int pico_mqtt_deserialize( struct pico_mqtt_serializer* serializer, struct pico_mqtt_data message); /* NO UT */
 
 /**
