@@ -426,10 +426,11 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 
 		if ( userpass_flag ){
 			dbg("extract login and password\n");
-			memcpy(buffin, uri + credentials_index, (size_t)((last_index) - credentials_index)-1);
-			buffin[(last_index - credentials_index)-1]='\0';
+            size_t inLen = last_index - credentials_index - 1;
+			memcpy(buffin, uri + credentials_index, inLen);
+			buffin[inLen]='\0';
 
-			if (Base64_Encode(buffin, strlen(buffin), buffout, &outLen) != 0){
+			if (Base64_Encode((byte*) buffin, inLen, (byte*) buffout, &outLen) != 0){
 			    		/*encoding error*/
 			    		dbg("error happened while encoding\n");
 			 }
@@ -444,7 +445,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 				return HTTP_RETURN_ERROR;
 			}
 			memcpy(urikey->user_pass, buffout, (size_t)(strlen(buffout)+1));
-			dbg("processed userpass = %s and lenght = %i\n", urikey->user_pass, strlen(urikey->user_pass));
+			dbg("processed userpass = %s and lenght = %i\n", urikey->user_pass, (int) strlen(urikey->user_pass));
 		}
 
     }
@@ -2385,7 +2386,7 @@ int8_t pico_http_set_close_ev(uint16_t conn)
 		return HTTP_RETURN_ERROR;
 	}
 	client->wakeup(EV_HTTP_CLOSE, client->connectionID);
-
+    return EV_HTTP_CLOSE;
 }
 
 
