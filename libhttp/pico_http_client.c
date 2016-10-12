@@ -463,7 +463,13 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
         index++;
         while (uri[index] && uri[index] != '/')
         {
-            /* should check if every component is a digit */
+            if (!isdigit(uri[index])){
+                dbg("Port is not a number\n");
+                urikey->host = urikey->resource = urikey->user_pass = NULL;
+                urikey->port = urikey->protoHttp = 0u;
+                pico_http_uri_destroy(urikey);
+                return HTTP_RETURN_ERROR;
+            }
             urikey->port = (uint16_t)(urikey->port * 10 + (uri[index] - '0'));
             index++;
         }

@@ -275,7 +275,7 @@ START_TEST(tc_pico_http_client_open)
 {
     //TODO: test this: int32_t pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
     int32_t conn = 0;
-    char uri[50] = "http://user:pwd@httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org:8080/";
     printf("\n\nStart: tc_pico_http_client_open\n");
     /*Case1: no callback*/
     conn = pico_http_client_open(uri, NULL);
@@ -290,6 +290,9 @@ START_TEST(tc_pico_http_client_open)
     /*Case4: unknown protocol (no :// in hostname)*/
     conn = pico_http_client_open("//test.org/", cb);
     fail_if(conn > 0);
+    /*Case5: port is not a digit*/
+    conn = pico_http_client_open("http://user:pwd@httpbin.org:54notadigit43/", cb);
+    fail_if(conn != HTTP_RETURN_ERROR);
     printf("Stop: tc_pico_http_client_open\n");
 }
 END_TEST
