@@ -275,7 +275,7 @@ START_TEST(tc_pico_http_client_open)
 {
     //TODO: test this: int32_t pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
     int32_t conn = 0;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_open\n");
     /*Case1: no callback*/
     conn = pico_http_client_open(uri, NULL);
@@ -298,7 +298,7 @@ START_TEST(tc_pico_http_client_send_raw)
     //TODO: test this: int8_t pico_http_client_send_raw(uint16_t conn, char *request);
     int32_t ret = 0;
     int16_t conn = 0;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     char request[256] = "POST / HTTP/1.1\nUser-Agent: picotcp\nAccept: */*\nHost: 192.168.2.22:8080\nConnection: Keep-Alive\nContent-Type: application/x-www-form-urlencoded\nContent-Length: 17\n\nkey=1&test=robbin";
     printf("\n\nStart: tc_pico_http_client_send_raw\n");
     /*Case1: unknown client*/
@@ -338,7 +338,7 @@ START_TEST(tc_pico_http_client_send_get)
     //TODO: test this: int8_t pico_http_client_send_get(uint16_t conn, char *resource);
     int32_t ret = 0;
     int16_t conn = 0;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_send_get\n");
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
@@ -374,7 +374,7 @@ START_TEST(tc_pico_http_client_send_post)
     uint32_t post_data_len = strlen((char*)post_data);
     //char content_type[50] = "";
     //char cache_controle[50] = "";
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_send_post\n");
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
@@ -422,7 +422,7 @@ START_TEST(tc_pico_http_client_send_post_multipart)
     struct multipart_chunk **chunks1;
     unsigned char *data1 = (unsigned char*)"data1";
     unsigned char *data2 = (unsigned char*)"data2";
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_send_post_multipart\n");
     chunks1 = PICO_ZALLOC(2 * sizeof(struct multipart_chunk *));
     chunks1[0] = multipart_chunk_create(data1, 5, "name1", "filename1", "attachment", NULL);
@@ -479,7 +479,7 @@ START_TEST(tc_pico_http_client_send_delete)
     //TODO: test this: int8_t pico_http_client_send_delete(uint16_t conn, char *resource, uint8_t connection);
     int32_t ret = 0;
     int16_t conn = 0;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     printf("\n\nStart: tc_pico_http_client_send_delete\n");
     /*Case1: unknown client*/
     conn = pico_http_client_open(uri, cb);
@@ -516,7 +516,7 @@ START_TEST(tc_pico_http_client_close)
     int32_t ret = 0;
     int16_t conn = 0;
     printf("\n\nStart: tc_pico_http_client_close\n");
-    conn = pico_http_client_open("http://httpbin.org/", cb);
+    conn = pico_http_client_open("http://user:pwd@httpbin.org/", cb);
     /*Case1: unknown client*/
     ret = pico_http_client_close(99);
     fail_if(ret != HTTP_RETURN_ERROR);
@@ -536,12 +536,12 @@ START_TEST(tc_pico_http_client_long_poll_send_get)
     ret = pico_http_client_long_poll_send_get(99, "/", HTTP_CONN_CLOSE);
     fail_if(ret != HTTP_RETURN_ERROR);
     /*Case2: positive test*/
-    conn = pico_http_client_open("http://httpbin.org/", cb);
+    conn = pico_http_client_open("http://user:pwd@httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
     fail_if(ret != HTTP_RETURN_OK);
     ret = pico_http_client_long_poll_cancel(conn);
     /*Case3: positive test, no resource*/
-    conn = pico_http_client_open("http://httpbin.org/", cb);
+    conn = pico_http_client_open("http://user:pwd@httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, NULL, HTTP_CONN_CLOSE);
     fail_if(ret != HTTP_RETURN_OK);
     ret = pico_http_client_long_poll_cancel(conn);
@@ -558,7 +558,7 @@ START_TEST(tc_pico_http_client_long_poll_cancel)
     ret = pico_http_client_long_poll_cancel(99);
     fail_if(ret != HTTP_RETURN_ERROR);
     /*Case2: positive test*/
-    conn = pico_http_client_open("http://httpbin.org/", cb);
+    conn = pico_http_client_open("http://user:pwd@httpbin.org/", cb);
     ret = pico_http_client_long_poll_send_get(conn, "/", HTTP_CONN_CLOSE);
     ret = pico_http_client_long_poll_cancel(conn);
     fail_if(ret != HTTP_RETURN_OK);
@@ -574,7 +574,7 @@ START_TEST(tc_pico_http_client_get_write_progress)
     uint32_t post_data_len = strlen((char *)post_data);
     //char content_type[50] = "";
     //char cache_controle[50] = "";
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     uint32_t total_bytes_written = 0;
     uint32_t total_bytes_to_write = 0;
     printf("\n\nStart: tc_pico_http_client_get_write_progress\n");
@@ -628,7 +628,7 @@ START_TEST(tc_pico_http_client_read_header)
     int ret = 0;
     int conn = 0;
     struct pico_http_header *header = NULL;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     header_ev_cnt = 0;
     read_header_in_chunks = 0;
     clear_read_idx = 1;
@@ -662,7 +662,7 @@ START_TEST(tc_pico_http_client_read_uri_data)
     int ret = 0;
     int conn = 0;
     struct pico_http_uri *urikey = NULL;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     clear_read_idx = 1;
     printf("\n\nStart: tc_pico_http_client_read_uri_data\n");
     /*Cse1: Positive case*/
@@ -684,7 +684,7 @@ START_TEST(tc_pico_http_client_read_body)
     /*TODO: test this: int32_t pico_http_client_read_body(uint16_t conn, uint8_t *data, uint16_t size, uint8_t *body_read_done);*/
     int ret = 0;
     int conn = 0;
-    char uri[50] = "http://httpbin.org/";
+    char uri[50] = "http://user:pwd@httpbin.org/";
     uint8_t body_read_done = 0;
     uint8_t *data = PICO_ZALLOC(1024*1024);
     struct pico_http_header *header = NULL;
@@ -819,7 +819,6 @@ START_TEST(tc_pico_http_client_read_body)
     test_404_without_body = 0;*/
 }
 END_TEST
-
 /* API end */
 
 /*
