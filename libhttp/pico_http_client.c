@@ -12,6 +12,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <wolfssl/wolfcrypt/coding.h>
+#include <wolfcrypt/src/coding.c>
 #include "pico_tree.h"
 #include "pico_config.h"
 #include "pico_socket.h"

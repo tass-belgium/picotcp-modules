@@ -9,7 +9,7 @@ TEST_LDFLAGS=-pthread  $(PREFIX)/modules/*.o $(PREFIX)/lib/*.o -lvdeplug -lpcap
 OPTIONS?=
 UNITS_DIR=../build/test/units
 
-CFLAGS=-I$(PICOTCP)/build/include
+CFLAGS=-I$(PICOTCP)/build/include -I../../../out/include -I../../wolfssl
 CFLAGS += -Wall
 ifeq ($(CROSS_COMPILE),arm-none-eabi-)
 CFLAGS += -mcpu=cortex-m3 -mthumb -mlittle-endian -mthumb-interwork
