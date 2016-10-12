@@ -359,6 +359,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
         /* no protocol specified, assuming by default it's http */
         urikey->protoHttp = 1;
     }
+
     /* detect hostname */
     /*<user>:<password>@<host>:<port>/<url-path>*/
     /* Check if the user (and password) are specified. */
@@ -379,22 +380,19 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
     	index++;
     }
 
-    index = last_index;
-    credentials_index = last_index;
-    if ( userpass_flag )
-    {
-    	dbg("skipping user name and password to find host\n");
-    	/* skip username and password */
-		while ( uri[index] && uri[index] != '\0' && uri[index] != '@')
-		{
-			index++;
-		}
-		/* skip the @ */
-		index++;
-	}
+    if (userpass_flag){
+        dbg("skipping user name and password to find host\n");
+        /* Skip the @ */
+        index++;
+        credentials_index = last_index;
+        last_index = index;
+    }
+    else
+        index = last_index;
 
-    last_index = index;
+    dbg("Check hostname format\n");
     while (uri[index] && uri[index] != '/' && uri[index] != ':') index++;
+
     if (index == last_index)
     {
         /* wrong format */
