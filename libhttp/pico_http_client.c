@@ -278,6 +278,11 @@ static int8_t pico_http_uri_destroy(struct pico_http_uri *urikey)
             PICO_FREE(urikey->host);
             urikey->host = NULL;
         }
+        if (urikey->user_pass)
+        {
+            PICO_FREE(urikey->resource);
+            urikey->user_pass = NULL;
+        }
         PICO_FREE(urikey);
     }
     return HTTP_RETURN_OK;
