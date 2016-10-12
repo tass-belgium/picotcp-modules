@@ -271,6 +271,42 @@ START_TEST(tc_multipart_chunk_destroy)
     printf("Stop: tc_multipart_chunk_destroy\n");
 }
 END_TEST
+START_TEST(tc_pico_process_uri)
+    {
+        // Format : http://<user>:<pwd>@<host>:<port>/<path>/
+        printf("\n\nStart: tc_pico_process_uri\n");
+        struct pico_http_uri *urikey;
+        urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
+        int32_t conn = 0;
+        char uri[50] = "http://user:pwd@httpbin.org:8080/";
+        // Case 1: No urikey
+        conn = pico_process_uri("blabla", NULL);
+        fail_if(conn != HTTP_RETURN_ERROR);
+        // Case 2: No uri
+        conn = pico_process_uri(NULL, NULL);
+        fail_if(conn != HTTP_RETURN_ERROR);
+        // Case 3: unknown protocol (no :// in hostname)
+        conn = pico_process_uri("//test.org/", urikey);
+        fail_if(conn > 0);
+        // Case 4: No <host>
+        conn = pico_process_uri("http://user:pwd@:80/", urikey);
+        fail_if(conn != HTTP_RETURN_ERROR);
+        // Case 5: No <port> if there is :
+        conn = pico_process_uri("http://user:pwd@httpbin:/", urikey);
+        fail_if(conn != HTTP_RETURN_ERROR);
+        // Case 6: No host and port
+        conn = pico_process_uri("http://user:pwd@/", urikey);
+        fail_if(conn != HTTP_RETURN_ERROR);
+        // Case 7: port is not a digit
+        conn = pico_process_uri("http://user:pwd@httpbin.org:54notadigit43/", urikey);
+        fail_if(conn != HTTP_RETURN_ERROR);
+        // Case 8: positive test
+        conn = pico_process_uri(uri, urikey);
+        fail_if(conn < 0);
+        PICO_FREE(urikey);
+        urikey = NULL;
+    }
+END_TEST
 START_TEST(tc_pico_http_client_open)
 {
     //TODO: test this: int32_t pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
@@ -287,12 +323,6 @@ START_TEST(tc_pico_http_client_open)
     conn = pico_http_client_open(uri, cb);
     fail_if(conn < 0);
     pico_http_client_close(conn);
-    /*Case4: unknown protocol (no :// in hostname)*/
-    conn = pico_http_client_open("//test.org/", cb);
-    fail_if(conn > 0);
-    /*Case5: port is not a digit*/
-    conn = pico_http_client_open("http://user:pwd@httpbin.org:54notadigit43/", cb);
-    fail_if(conn != HTTP_RETURN_ERROR);
     printf("Stop: tc_pico_http_client_open\n");
 }
 END_TEST
@@ -822,6 +852,7 @@ START_TEST(tc_pico_http_client_read_body)
     test_404_without_body = 0;*/
 }
 END_TEST
+
 /* API end */
 
 /*
@@ -869,16 +900,7 @@ START_TEST(tc_socket_write_request_parts)
    // TODO: test this: static int32_t socket_write_request_parts(struct pico_http_client *client)
 }
 END_TEST
-START_TEST(tc_pico_process_uri)
-{
-   // TODO: test this: static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
-   int ret = 0;
-   ret = pico_process_uri(NULL, NULL);
-   fail_if(ret != HTTP_RETURN_ERROR);
-   ret = pico_process_uri("blabla", NULL);
-   fail_if(ret != HTTP_RETURN_ERROR);
-}
-END_TEST
+
 START_TEST(tc_compare_clients)
 {
    // TODO: test this: static int32_t compare_clients(void *ka, void *kb)

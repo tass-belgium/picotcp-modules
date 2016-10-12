@@ -337,6 +337,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
     if (!uri || !urikey || uri[0] == '/')
     {
         pico_err = PICO_ERR_EINVAL;
+        return HTTP_RETURN_ERROR;
     }
     urikey->raw_uri = (char *)PICO_ZALLOC(strlen(uri)+1);
     if (!urikey->raw_uri)
