@@ -12,7 +12,12 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <wolfssl/wolfcrypt/coding.h>
-#include <wolfcrypt/src/coding.c>
+
+/* Uncomment the following include to compile picotcp-modules in
+ * ci_lamp_dev_clean branch on its own and not with tass-connected-device
+ * */
+//#include <wolfcrypt/src/coding.c>
+
 #include "pico_tree.h"
 #include "pico_config.h"
 #include "pico_socket.h"
@@ -389,7 +394,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 
     if (userpass_flag){
         dbg("skipping user name and password to find host\n");
-        /* Skip the @ */
+        // Skip the @
         index++;
         credentials_index = last_index;
         last_index = index;
@@ -434,11 +439,12 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 			buffin[inLen]='\0';
 
 			if (Base64_Encode((byte*) buffin, inLen, (byte*) buffout, &outLen) != 0){
-			    		/*encoding error*/
+			    		// encoding error
 			    		dbg("error happened while encoding\n");
 			 }
-			/* removing the trailing \n \t from the base46_Encode*/
-			buffout[strlen(buffout)-2] = '\0';
+			// removing the trailing \n from the base46_Encode
+			buffout[strlen(buffout)-1] = '\0';
+
 			urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
 			if(!urikey->user_pass)
 			{
