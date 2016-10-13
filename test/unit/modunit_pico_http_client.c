@@ -288,23 +288,29 @@ START_TEST(tc_pico_process_uri)
         // Case 3: unknown protocol (no :// in hostname)
         conn = pico_process_uri("//test.org/", urikey);
         fail_if(conn > 0);
+        urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 4: No <host>
         conn = pico_process_uri("http://user:pwd@:80/", urikey);
         fail_if(conn != HTTP_RETURN_ERROR);
+        urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 5: No <port> if there is :
         conn = pico_process_uri("http://user:pwd@httpbin:/", urikey);
         fail_if(conn != HTTP_RETURN_ERROR);
+        urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 6: No host and port
         conn = pico_process_uri("http://user:pwd@/", urikey);
         fail_if(conn != HTTP_RETURN_ERROR);
+        urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 7: port is not a digit
         conn = pico_process_uri("http://user:pwd@httpbin.org:54notadigit43/", urikey);
         fail_if(conn != HTTP_RETURN_ERROR);
+        urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 8: positive test
         conn = pico_process_uri(uri, urikey);
         fail_if(conn < 0);
         PICO_FREE(urikey);
         urikey = NULL;
+        printf("Stop: tc_pico_process_uri\n");
     }
 END_TEST
 START_TEST(tc_pico_http_client_open)
@@ -1060,6 +1066,7 @@ Suite *pico_suite(void)
     /*API start*/
     TCase *TCase_multipart_chunk_create = tcase_create("Unit test for tc_multipart_chunk_create");
     TCase *TCase_multipart_chunk_destroy = tcase_create("Unit test for tc_multipart_chunk_destroy");
+    TCase *TCase_pico_process_uri = tcase_create("Unit test for tc_pico_process_uri");
     TCase *TCase_pico_http_client_open = tcase_create("Unit test for tc_pico_http_client_open");
     TCase *TCase_pico_http_client_send_raw = tcase_create("Unit test for tc_pico_http_client_send_raw");
     TCase *TCase_pico_http_client_send_get = tcase_create("Unit test for tc_pico_http_client_send_get");
@@ -1083,7 +1090,6 @@ Suite *pico_suite(void)
     TCase *TCase_print_request_part_info = tcase_create("Unit test for print_request_part_info");
     TCase *TCase_request_parts_destroy = tcase_create("Unit test for request_parts_destroy");
     TCase *TCase_socket_write_request_parts = tcase_create("Unit test for socket_write_request_parts");
-    TCase *TCase_pico_process_uri = tcase_create("Unit test for pico_process_uri");
     TCase *TCase_compare_clients = tcase_create("Unit test for compare_clients");
     TCase *TCase_parse_header_from_server = tcase_create("Unit test for parse_header_from_server");
     TCase *TCase_read_chunk_line = tcase_create("Unit test for read_chunk_line");
@@ -1121,6 +1127,8 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_multipart_chunk_create);
     tcase_add_test(TCase_multipart_chunk_destroy, tc_multipart_chunk_destroy);
     suite_add_tcase(s, TCase_multipart_chunk_destroy);
+    tcase_add_test(TCase_pico_process_uri, tc_pico_process_uri);
+    suite_add_tcase(s, TCase_pico_process_uri);
     tcase_add_test(TCase_pico_http_client_open, tc_pico_http_client_open);
     suite_add_tcase(s, TCase_pico_http_client_open);
     tcase_add_test(TCase_pico_http_client_send_raw, tc_pico_http_client_send_raw);
@@ -1162,8 +1170,6 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_request_parts_destroy);
     tcase_add_test(TCase_socket_write_request_parts, tc_socket_write_request_parts);
     suite_add_tcase(s, TCase_socket_write_request_parts);
-    tcase_add_test(TCase_pico_process_uri, tc_pico_process_uri);
-    suite_add_tcase(s, TCase_pico_process_uri);
     tcase_add_test(TCase_compare_clients, tc_compare_clients);
     suite_add_tcase(s, TCase_compare_clients);
     tcase_add_test(TCase_parse_header_from_server, tc_parse_header_from_server);

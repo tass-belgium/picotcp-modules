@@ -336,6 +336,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
     dbg("Start: pico_process_uri(..) %s\n", uri);
     if (!uri || !urikey || uri[0] == '/')
     {
+        if (urikey) pico_http_uri_destroy(urikey);
         pico_err = PICO_ERR_EINVAL;
         return HTTP_RETURN_ERROR;
     }
@@ -398,12 +399,10 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 
     dbg("Check hostname format\n");
     while (uri[index] && uri[index] != '/' && uri[index] != ':') index++;
-
     if (index == last_index)
     {
         /* wrong format */
     	dbg("wrong format\n");
-        urikey->host = urikey->resource = NULL;
         urikey->port = urikey->protoHttp = 0u;
         pico_err = PICO_ERR_EINVAL;
         pico_http_uri_destroy(urikey);
@@ -459,9 +458,13 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
         /* nothing specified */
         urikey->port = 80u;
     }
-    else if (uri[index] == '/')
-    {
-        urikey->port = 80u;
+    else if (uri[index] == ':' && uri[index+1] && uri[index+1] == '/') {
+        // No port after ':'
+        dbg("No port after ':' \n");
+        urikey->port = urikey->protoHttp = 0u;
+        pico_err = PICO_ERR_EINVAL;
+        pico_http_uri_destroy(urikey);
+        return HTTP_RETURN_ERROR;
     }
     else if (uri[index] == ':')
     {
