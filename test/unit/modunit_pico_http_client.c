@@ -313,6 +313,25 @@ START_TEST(tc_pico_process_uri)
         printf("Stop: tc_pico_process_uri\n");
     }
 END_TEST
+START_TEST(tc_base64_encode)
+{
+    char *userpass[] = {"user:pass\0", "panda:isalive\0", "rabbit:eatcarrots\0",
+                        "1plus1:is2\0", "Neversayno:toapanda\0", "ChuCk:NorRis\0",
+                        "Pooower:ranger\0", "super:pwd\0", "iam:god\0"};
+
+    char *encodes[] = {"dXNlcjpwYXNzIA==", "cGFuZGE6aXNhbGl2ZSA=", "cmFiYml0OmVhdGNhcnJvdHMg",
+                       "MXBsdXMxOmlzMiA=", "TmV2ZXJzYXlubzp0b2FwYW5kYSA=", "Q2h1Q2s6Tm9yUmlzIA==",
+                       "UG9vb3dlcjpyYW5nZXIg", "c3VwZXI6cHdkIA==", "aWFtOmdvZCA="};
+
+    char buffout[64];
+    word32 outLen = sizeof(buffout);
+    int i;
+    for (i = 0; i < 9; i++){
+        Base64_Encode((byte*) userpass[i], sizeof(userpass[i]), (byte*) buffout, &outLen);
+        fail_if(!strcmp(encodes[i], buffout));
+    }
+}
+END_TEST
 START_TEST(tc_pico_http_client_open)
 {
     //TODO: test this: int32_t pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn));
@@ -1067,6 +1086,7 @@ Suite *pico_suite(void)
     TCase *TCase_multipart_chunk_create = tcase_create("Unit test for tc_multipart_chunk_create");
     TCase *TCase_multipart_chunk_destroy = tcase_create("Unit test for tc_multipart_chunk_destroy");
     TCase *TCase_pico_process_uri = tcase_create("Unit test for tc_pico_process_uri");
+    TCase *TCase_tc_base64_encode = tcase_create("Unit test for Base64 Encoding");
     TCase *TCase_pico_http_client_open = tcase_create("Unit test for tc_pico_http_client_open");
     TCase *TCase_pico_http_client_send_raw = tcase_create("Unit test for tc_pico_http_client_send_raw");
     TCase *TCase_pico_http_client_send_get = tcase_create("Unit test for tc_pico_http_client_send_get");
@@ -1129,6 +1149,8 @@ Suite *pico_suite(void)
     suite_add_tcase(s, TCase_multipart_chunk_destroy);
     tcase_add_test(TCase_pico_process_uri, tc_pico_process_uri);
     suite_add_tcase(s, TCase_pico_process_uri);
+    tcase_add_test(TCase_tc_base64_encode, tc_base64_encode);
+    suite_add_tcase(s, TCase_tc_base64_encode);
     tcase_add_test(TCase_pico_http_client_open, tc_pico_http_client_open);
     suite_add_tcase(s, TCase_pico_http_client_open);
     tcase_add_test(TCase_pico_http_client_send_raw, tc_pico_http_client_send_raw);
