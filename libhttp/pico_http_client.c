@@ -1341,7 +1341,7 @@ static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn)
     }
 
     client->wakeup = wakeup;
-    client->connectionID = connID >= 0 ? connID : global_client_conn_ID;
+    client->connectionID = connID >= 0 ? connID : global_client_conn_ID++;
 
     client->urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
 
