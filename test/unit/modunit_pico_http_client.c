@@ -315,21 +315,25 @@ START_TEST(tc_pico_process_uri)
 END_TEST
 START_TEST(tc_base64_encode)
 {
-    char *userpass[] = {"user:pass\0", "panda:isalive\0", "rabbit:eatcarrots\0",
-                        "1plus1:is2\0", "Neversayno:toapanda\0", "ChuCk:NorRis\0",
-                        "Pooower:ranger\0", "super:pwd\0", "iam:god\0"};
+    printf("\n\nStart: tc_base64_encode\n");
+    char *userpass[] = {"user:pass", "panda:isalive", "rabbit:eatcarrots",
+                        "1plus1:is2", "Neversayno:toapanda", "ChuCk:NorRis",
+                        "Pooower:ranger", "super:pwd", "iam:god"};
 
-    char *encodes[] = {"dXNlcjpwYXNzIA==", "cGFuZGE6aXNhbGl2ZSA=", "cmFiYml0OmVhdGNhcnJvdHMg",
-                       "MXBsdXMxOmlzMiA=", "TmV2ZXJzYXlubzp0b2FwYW5kYSA=", "Q2h1Q2s6Tm9yUmlzIA==",
-                       "UG9vb3dlcjpyYW5nZXIg", "c3VwZXI6cHdkIA==", "aWFtOmdvZCA="};
+    char *encodes[] = {"dXNlcjpwYXNz", "cGFuZGE6aXNhbGl2ZQ==", "cmFiYml0OmVhdGNhcnJvdHM=",
+                       "MXBsdXMxOmlzMg==", "TmV2ZXJzYXlubzp0b2FwYW5kYQ==", "Q2h1Q2s6Tm9yUmlz",
+                       "UG9vb3dlcjpyYW5nZXI=", "c3VwZXI6cHdk", "aWFtOmdvZA=="};
 
-    char buffout[64];
-    word32 outLen = sizeof(buffout);
     int i;
     for (i = 0; i < 9; i++){
-        Base64_Encode((byte*) userpass[i], sizeof(userpass[i]), (byte*) buffout, &outLen);
-        fail_if(!strcmp(encodes[i], buffout));
+        char buffout[256];
+        word32 outLen = sizeof(buffout);
+        Base64_Encode((byte*) userpass[i], strlen(userpass[i]), (byte*) buffout, &outLen);
+        buffout[outLen - 1] = '\0';
+        printf("Real value : %s\nGet : %s\n\n", encodes[i], buffout);
+        fail_if(strcmp(encodes[i], buffout) != 0);
     }
+    printf("Stop: tc_base64_encode\n");
 }
 END_TEST
 START_TEST(tc_pico_http_client_open)
