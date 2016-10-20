@@ -443,7 +443,7 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
 			    		dbg("error happened while encoding\n");
 			 }
 			// removing the trailing \n from the base46_Encode
-			buffout[strlen(buffout)-1] = '\0';
+			buffout[strlen(buffout)-2] = '\0';
 
 			urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
 			if(!urikey->user_pass)
@@ -609,8 +609,8 @@ static void treat_read_event(struct pico_http_client *client)
     }
     else
     {
-        /* just let the user know that data has arrived, if chunked data comes, will be treated in the */
-        /* read api. */
+        /* just let the user know that data has arrived, if chunked data comes,
+         * will be treated in the  read api. */
         client->wakeup(EV_HTTP_BODY, client->connectionID);
     }
 }
@@ -1909,7 +1909,7 @@ static inline int32_t read_chunked_data(struct pico_http_client *client, unsigne
 {
     uint32_t len_read = 0;
     int32_t value;
-    /* read the chunk line */
+    // read the chunk line
     if (read_chunk_line(client) == HTTP_RETURN_ERROR)
     {
         dbg("Probably the chunk is malformed or parsed wrong...\n");
@@ -1917,7 +1917,7 @@ static inline int32_t read_chunked_data(struct pico_http_client *client, unsigne
         return HTTP_RETURN_ERROR;
     }
 
-    /* nothing to read, no use to try */
+    // nothing to read, no use to try
     if (client->state != HTTP_READING_BODY)
     {
         pico_err = PICO_ERR_EAGAIN;
@@ -1958,7 +1958,7 @@ int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, unsigned char *data, 
     }
     if (client->header->transfer_coding == HTTP_TRANSFER_FULL)
     {
-        //check to make sure we don't read moren that the header tols us, content-length
+        //check to make sure we don't read more than the header told us, content-length
         if ((client->header->content_length_or_chunk - client->body_read) < size)
         {
             size = client->header->content_length_or_chunk;
@@ -1973,7 +1973,11 @@ int32_t MOCKABLE pico_http_client_read_body(uint16_t conn, unsigned char *data, 
     }
     else
     {
-        //client->state will be set to HTTP_READ_BODY_DONE if we reach the ending '0' at the end of the body, read_chunked_data make sure we don't read to mutch.
+        /*
+         * client->state will be set to HTTP_READ_BODY_DONE if we reach the
+         * ending '0' at the end of the body, read_chunked_data make sure
+         * we don't read to mutch.
+         */
         client->body_read += bytes_read;
         bytes_read = read_chunked_data(client, data, size);
     }
