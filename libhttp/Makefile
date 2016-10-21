@@ -1,4 +1,6 @@
 PICOTCP?=../../picotcp
+WOLFSSL?=../../wolfssl
+OUT?=../../../out
 CC:=$(CROSS_COMPILE)gcc
 LD:=$(CROSS_COMPILE)ld
 AR:=$(CROSS_COMPILE)ar
@@ -9,7 +11,7 @@ TEST_LDFLAGS=-pthread  $(PREFIX)/modules/*.o $(PREFIX)/lib/*.o -lvdeplug -lpcap
 OPTIONS?=
 UNITS_DIR=../build/test/units
 
-CFLAGS=-I$(PICOTCP)/build/include -I../../../out/include -I../../wolfssl
+CFLAGS=-I$(PICOTCP)/build/include -I$(OUT)/include -I$(WOLFSSL)/wolfssl
 CFLAGS += -Wall
 ifeq ($(CROSS_COMPILE),arm-none-eabi-)
 CFLAGS += -mcpu=cortex-m3 -mthumb -mlittle-endian -mthumb-interwork
