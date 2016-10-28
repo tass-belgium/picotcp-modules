@@ -439,12 +439,13 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
             strncpy(buffin, uri + credentials_index, (size_t) inLen);
 			buffin[inLen]='\0';
 
+            memset(buffout, 0, outLen);
 			if (Base64_Encode((byte*) buffin, (word32) inLen, (byte*) buffout, (word32*) &outLen) != 0){
 			    		// encoding error
 			    		dbg("error happened while encoding\n");
 			 }
-			// removing the trailing \n from the base46_Encode
-			buffout[strlen(buffout)-2] = '\0';
+            // removing the trailing \n from the base46_Encode
+			buffout[strlen(buffout)-1] = '\0';
 
 			urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
 			if(!urikey->user_pass)
