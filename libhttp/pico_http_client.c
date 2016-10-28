@@ -13,11 +13,6 @@
 #include <stdio.h>
 #include <wolfssl/wolfcrypt/coding.h>
 
-/* Uncomment the following include to compile picotcp-modules in
- * ci_lamp_dev_clean branch on its own and not with tass-connected-device
- * */
-//#include <wolfcrypt/src/coding.c>
-
 #include "pico_tree.h"
 #include "pico_config.h"
 #include "pico_socket.h"

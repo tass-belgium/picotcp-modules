@@ -12,6 +12,7 @@
 #include "pico_stack.h"
 
 #include "pico_http_client.c"
+#include "wolfcrypt/src/coding.c"
 #include "check.h"
 
 volatile pico_err_t pico_err;
