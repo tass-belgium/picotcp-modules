@@ -3,3 +3,9 @@
 *.o
 ./tests/check/*/
 ./tests/check/*.*
+*.gcda
+*.gcno
+*.gcov
+*.yml
+/.d
+make_log.txt

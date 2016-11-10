@@ -264,7 +264,10 @@ int8_t pico_https_server_start(uint16_t port, void (*wakeup)(uint16_t ev, uint16
     }
 
     // Glue should implement this
-    pico_https_ssl_init(certificate_buffer, certificate_buffer_size, privkey_buffer, privkey_buffer_size);
+    if(pico_https_ssl_init(certificate_buffer, certificate_buffer_size, privkey_buffer, privkey_buffer_size) != 0) {
+        pico_err = PICO_ERR_EFAULT;
+        return HTTPS_RETURN_ERROR;
+    }
 
 	// Some state
     server.wakeup = wakeup;

@@ -1,0 +1,157 @@
++---------------------------------------------------------------+
+| pico_mqtt_serializer_test.out                                 |
++---------------------------------------------------------------+
+
+Running suite(s): MQTT serializer
+
++--------------------------------------+
+| test: deserialize_publish_test       |
++--------------------------------------+
+[INFO] in pico_mqtt_serializer.c - get_data_stream at line 634:     No bytes left in the stream, please check before requesting data.
+100%: Checks: 52, Failures: 0, Errors: 0
+
++-----------------------------+
+| Complexity  threshold: 3    |
++-----------------------------+
+
+Complexity Scores
+Score | ln-ct | nc-lns| file-name(line): proc-name
+    3      35      31   pico_mqtt_serializer.c(332): pico_mqtt_serialize
+    3      40      31   pico_mqtt_serializer.c(163): pico_mqtt_serialize_length
+    3      37      33   pico_mqtt_serializer.c(418): pico_mqtt_serializer_get_packet
+    3      43      35   pico_mqtt_serializer.c(371): pico_mqtt_deserialize
+    3      46      35   pico_mqtt_serializer.c(1172): deserialize_suback
+    3      46      36   pico_mqtt_serializer.c(730): serialize_connect
+    3      51      44   pico_mqtt_serializer.c(654): get_data_and_length_stream
+    3      59      46   pico_mqtt_serializer.c(1064): deserialize_publish
+    4      28      24   pico_mqtt_serializer.c(207): pico_mqtt_deserialize_length
+    4      65      49   pico_mqtt_serializer.c(782): serialize_publish
+total nc-lns      364
+
++-----------------------------+
+| Unit test coverage          |
++-----------------------------+
+
+File 'pico_mqtt_serializer_test.c'
+Lines executed:100.00% of 1705
+Creating 'pico_mqtt_serializer_test.c.gcov'
+
+File 'pico_mqtt_serializer.c'
+Lines executed:87.86% of 618
+Creating 'pico_mqtt_serializer.c.gcov'
+
+
+
++---------------------------------------------------------------+
+| pico_mqtt_stream_test.out                                     |
++---------------------------------------------------------------+
+
+Running suite(s): MQTT stream
+
++--------------------------------------+
+[INFO] in pico_mqtt_stream.c - pico_mqtt_stream_connect at line 79:     Succesfully created the I/O stream.
+
++--------------------------------------+
+[INFO] in pico_mqtt_stream.c - pico_mqtt_stream_send_receive at line 143:       A timeout occured while sending/receiving message.
+100%: Checks: 17, Failures: 0, Errors: 0
+
++-----------------------------+
+| Complexity  threshold: 3    |
++-----------------------------+
+
+Complexity Scores
+Score | ln-ct | nc-lns| file-name(line): proc-name
+    3      46      35   pico_mqtt_stream.c(283): process_fixed_header
+    6      60      51   pico_mqtt_stream.c(163): send_receive_message
+total nc-lns       86
+
++-----------------------------+
+| Unit test coverage          |
++-----------------------------+
+
+File 'pico_mqtt_stream_test.c'
+Lines executed:100.00% of 495
+Creating 'pico_mqtt_stream_test.c.gcov'
+
+File 'pico_mqtt_stream.c'
+Lines executed:100.00% of 137
+Creating 'pico_mqtt_stream.c.gcov'
+
+
+
++---------------------------------------------------------------+
+| pico_mqtt_test.out                                            |
++---------------------------------------------------------------+
+
+Running suite(s): MQTT serializer
+
++--------------------------------------+
+| test: pico_mqtt_set_will_message_test |
++--------------------------------------+
+[TRACE] in pico_mqtt.c - pico_mqtt_set_will_message at line 187: called function returned error.
+100%: Checks: 32, Failures: 0, Errors: 0
+
++-----------------------------+
+| Complexity  threshold: 3    |
++-----------------------------+
+
+Complexity Scores
+Score | ln-ct | nc-lns| file-name(line): proc-name
+    3      20      16   pico_mqtt.c(679): has_only_alphanumeric
+    3      48      43   pico_mqtt.c(96): pico_mqtt_set_client_id
+    3      57      46   pico_mqtt.c(794): set_connect_options
+total nc-lns      105
+
++-----------------------------+
+| Unit test coverage          |
++-----------------------------+
+
+File 'pico_mqtt_test.c'
+Lines executed:99.83% of 604
+Creating 'pico_mqtt_test.c.gcov'
+
+File 'pico_mqtt.c'
+Lines executed:72.03% of 429
+Creating 'pico_mqtt.c.gcov'
+
+
+
++---------------------------------------------------------------+
+| pico_mqtt_list_test.out                                       |
++---------------------------------------------------------------+
+
+Running suite(s): MQTT serializer
+
+Memory allocation report:
+Total memory allocated: 32
+Allocations: 1 Frees: 1
+Biggest allocations: 32
+Number of current allocations: 0
+
+Currently allocated: 0
+
+100%: Checks: 13, Failures: 0, Errors: 0
+
++-----------------------------+
+| Complexity  threshold: 3    |
++-----------------------------+
+
+Complexity Scores
+Score | ln-ct | nc-lns| file-name(line): proc-name
+    3      50      40   pico_mqtt_list.c(227): list_add
+total nc-lns       40
+
++-----------------------------+
+| Unit test coverage          |
++-----------------------------+
+
+File 'pico_mqtt_list_test.c'
+Lines executed:100.00% of 376
+Creating 'pico_mqtt_list_test.c.gcov'
+
+File 'pico_mqtt_list.c'
+Lines executed:93.38% of 136
+Creating 'pico_mqtt_list.c.gcov'
+
+
+
