@@ -442,9 +442,6 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey, in
 			memcpy(buffout, buffin, (size_t)strlen(buffin));
 		}
 
-	     	// removing the trailing \n from the base46_Encode
-		buffout[strlen(buffout)-1] = '\0';
-
 		urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
 		if(!urikey->user_pass) {
 			/* no memory */
