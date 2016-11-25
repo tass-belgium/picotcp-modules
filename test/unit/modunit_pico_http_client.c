@@ -11,8 +11,8 @@
 #include "pico_ipv4.h"
 #include "pico_stack.h"
 
+#include "encoding.c"
 #include "pico_http_client.c"
-#include "wolfcrypt/src/coding.c"
 #include "check.h"
 
 volatile pico_err_t pico_err;
@@ -281,33 +281,33 @@ START_TEST(tc_pico_process_uri)
         int32_t conn = 0;
         char uri[50] = "http://user:pwd@httpbin.org:8080/";
         // Case 1: No urikey
-        conn = pico_process_uri("blabla", NULL);
+        conn = pico_process_uri("blabla", NULL, NULL);
         fail_if(conn != HTTP_RETURN_ERROR);
         // Case 2: No uri
-        conn = pico_process_uri(NULL, NULL);
+        conn = pico_process_uri(NULL, NULL, NULL);
         fail_if(conn != HTTP_RETURN_ERROR);
         // Case 3: unknown protocol (no :// in hostname)
-        conn = pico_process_uri("//test.org/", urikey);
+        conn = pico_process_uri("//test.org/", urikey, NULL);
         fail_if(conn > 0);
         urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 4: No <host>
-        conn = pico_process_uri("http://user:pwd@:80/", urikey);
+        conn = pico_process_uri("http://user:pwd@:80/", urikey, NULL);
         fail_if(conn != HTTP_RETURN_ERROR);
         urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 5: No <port> if there is :
-        conn = pico_process_uri("http://user:pwd@httpbin:/", urikey);
+        conn = pico_process_uri("http://user:pwd@httpbin:/", urikey, NULL);
         fail_if(conn != HTTP_RETURN_ERROR);
         urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 6: No host and port
-        conn = pico_process_uri("http://user:pwd@/", urikey);
+        conn = pico_process_uri("http://user:pwd@/", urikey, NULL);
         fail_if(conn != HTTP_RETURN_ERROR);
         urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 7: port is not a digit
-        conn = pico_process_uri("http://user:pwd@httpbin.org:54notadigit43/", urikey);
+        conn = pico_process_uri("http://user:pwd@httpbin.org:54notadigit43/", urikey, NULL);
         fail_if(conn != HTTP_RETURN_ERROR);
         urikey = PICO_ZALLOC(sizeof(struct pico_http_uri));
         // Case 8: positive test
-        conn = pico_process_uri(uri, urikey);
+        conn = pico_process_uri(uri, urikey, NULL);
         fail_if(conn < 0);
         PICO_FREE(urikey);
         urikey = NULL;
@@ -317,24 +317,32 @@ END_TEST
 START_TEST(tc_base64_encode)
 {
     printf("\n\nStart: tc_base64_encode\n");
-    char *userpass[] = {"user:pass", "panda:isalive", "rabbit:eatcarrots",
-                        "1plus1:is2", "Neversayno:toapanda", "ChuCk:NorRis",
-                        "Pooower:ranger", "super:pwd", "iam:god"};
-
-    char *encodes[] = {"dXNlcjpwYXNz", "cGFuZGE6aXNhbGl2ZQ==", "cmFiYml0OmVhdGNhcnJvdHM=",
-                       "MXBsdXMxOmlzMg==", "TmV2ZXJzYXlubzp0b2FwYW5kYQ==", "Q2h1Q2s6Tm9yUmlz",
-                       "UG9vb3dlcjpyYW5nZXI=", "c3VwZXI6cHdk", "aWFtOmdvZA=="};
+    char *userpass[] = {"user:pass\n", "panda:isalive\n", "rabbit:eatcarrots\n"};
+    char *encodes[] = {"dXNlcjpwYXNz\n", "cGFuZGE6aXNhbGl2ZQ==\n", "cmFiYml0OmVhdGNhcnJvdHM=\n"};
 
     int i;
-    for (i = 0; i < 9; i++){
+    for (i = 0; i < 3; i++){
         char buffout[256];
-        word32 outLen = sizeof(buffout);
-        Base64_Encode((byte*) userpass[i], strlen(userpass[i]), (byte*) buffout, &outLen);
-        buffout[outLen - 1] = '\0';
+
+	int error = encode(buffout, userpass[i]);
+	fail_if(error < 0);
+
         printf("Real value : %s\nGet : %s\n\n", encodes[i], buffout);
         fail_if(strcmp(encodes[i], buffout) != 0);
     }
     printf("Stop: tc_base64_encode\n");
+
+    printf("\n\nStart: tc_pico_http_client_open_with_usr_pwd_encoding\n");
+
+    int32_t conn = 0;
+    char uri[50] = "http://user:pass@httpbin.org:8080/";
+
+    conn = pico_http_client_open_with_usr_pwd_encoding(uri, cb, encode);
+    fail_if(conn < 0);
+    pico_http_client_close(conn);
+
+    printf("Stop: tc_pico_http_client_open_with_usr_pwd_encoding\n");
+
 }
 END_TEST
 START_TEST(tc_pico_http_client_open)
