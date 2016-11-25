@@ -11,7 +11,7 @@
 #include <string.h>
 #include <stdint.h>
 #include <stdio.h>
-#include <wolfssl/wolfcrypt/coding.h>
+#include <ctype.h>
 
 #include "pico_tree.h"
 #include "pico_config.h"
@@ -34,8 +34,6 @@
  *
  * where <resource>,<host> and <port> will be added later.
  */
-
-#define WOLFSSL_BASE64_ENCODE
 
 #define HTTP_GET_BASIC_SIZE                 100u   //70u
 #define HTTP_POST_BASIC_SIZE                256u
@@ -127,7 +125,7 @@ struct pico_http_client
 #define HTTP_PROTO_LEN      7u
 
 static int8_t free_uri(struct pico_http_client *to_be_removed);
-static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID);
+static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID, int (*encoding)(char *out_buffer, char *in_buffer));
 static void free_header(struct pico_http_client *to_be_removed);
 
 struct request_part *request_part_create(char *buf, uint32_t buf_len, uint8_t copy, uint8_t mem)
@@ -324,7 +322,7 @@ static int8_t pico_process_resource(const char *resource, struct pico_http_uri *
     return HTTP_RETURN_OK;
 }
 
-static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
+static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey, int (*encoding)(char *out_buffer, char *in_buffer))
 {
     uint16_t last_index = 0, index;
     uint16_t credentials_index = 0;
@@ -426,33 +424,37 @@ static int8_t pico_process_uri(const char *uri, struct pico_http_uri *urikey)
         memcpy(urikey->host, uri + last_index, (size_t)(index - last_index));
 
         /* extract user credentials */
+	if ( userpass_flag ){
+		dbg("extract login and password\n");
+        	int inLen = last_index - credentials_index - 1;
+        	strncpy(buffin, uri + credentials_index, (size_t) inLen);
+		buffin[inLen]='\0';
 
+		//Clearing the memory of the out buffer
+            	memset(buffout, 0, outLen);
 
-		if ( userpass_flag ){
-			dbg("extract login and password\n");
-            int inLen = last_index - credentials_index - 1;
-            strncpy(buffin, uri + credentials_index, (size_t) inLen);
-			buffin[inLen]='\0';
-
-            memset(buffout, 0, outLen);
-			if (Base64_Encode((byte*) buffin, (word32) inLen, (byte*) buffout, (word32*) &outLen) != 0){
-			    		// encoding error
-			    		dbg("error happened while encoding\n");
-			 }
-            // removing the trailing \n from the base46_Encode
-			buffout[strlen(buffout)-1] = '\0';
-
-			urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
-			if(!urikey->user_pass)
-			{
-				/* no memory */
-				pico_err = PICO_ERR_ENOMEM;
-				pico_http_uri_destroy(urikey);
-				return HTTP_RETURN_ERROR;
+		//if encoding is specified then the encoding of the username and password can be applied
+		if (encoding != NULL) {
+			if (encoding(buffout, buffin) < 0) {
+				dbg("error happened while encoding");
 			}
-			memcpy(urikey->user_pass, buffout, (size_t)(strlen(buffout)+1));
-			dbg("processed userpass = %s and lenght = %i\n", urikey->user_pass, (int) strlen(urikey->user_pass));
+		} else {
+			memcpy(buffout, buffin, (size_t)strlen(buffin));
 		}
+
+	     	// removing the trailing \n from the base46_Encode
+		buffout[strlen(buffout)-1] = '\0';
+
+		urikey->user_pass = PICO_ZALLOC((uint32_t)(strlen(buffout)+1));
+		if(!urikey->user_pass) {
+			/* no memory */
+			pico_err = PICO_ERR_ENOMEM;
+			pico_http_uri_destroy(urikey);
+			return HTTP_RETURN_ERROR;
+		}
+		memcpy(urikey->user_pass, buffout, (size_t)(strlen(buffout)+1));
+		dbg("processed userpass = %s and lenght = %i\n", urikey->user_pass, (int) strlen(urikey->user_pass));
+	}
 
     }
 
@@ -665,7 +667,7 @@ static void treat_long_polling(struct pico_http_client *client, uint16_t ev)
         cpy_body_read_done = client->body_read_done;
         pico_http_client_close(client->connectionID);
         dbg("treat_long_polling before client_open\n");
-        conn = client_open(raw_uri, wakeup, conn);
+        conn = client_open(raw_uri, wakeup, conn, NULL);
         dbg("treat_long_polling after client_open\n");
         if (conn < 0)
         {
@@ -1318,7 +1320,7 @@ int8_t MOCKABLE pico_http_client_get_write_progress(uint16_t conn, uint32_t *tot
 
 }
 
-static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID)
+static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int32_t connID, int (*encoding)(char *out_buffer, char *in_buffer))
 {
     struct pico_http_client *client;
     uint32_t ip = 0;
@@ -1348,7 +1350,7 @@ static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn)
         return HTTP_RETURN_ERROR;
     }
 
-    if (pico_process_uri(uri, client->urikey) < 0)
+    if (pico_process_uri(uri, client->urikey, encoding) < 0)
     {
         PICO_FREE(client);
         return HTTP_RETURN_ERROR;
@@ -1388,11 +1390,16 @@ static int32_t client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn)
  * The function returns a connection ID >= 0 if successful
  * -1 if an error occured.
  */
-int32_t MOCKABLE pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
+int32_t MOCKABLE pico_http_client_open_with_usr_pwd_encoding(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn), int (*encoding)(char *out_buffer, char *in_buffer))
 {
-    return client_open(uri, wakeup, -1);
+    return client_open(uri, wakeup, -1, encoding);
 }
 
+
+int32_t MOCKABLE pico_http_client_open(char *uri, void (*wakeup)(uint16_t ev, uint16_t conn))
+{
+    return client_open(uri, wakeup, -1, NULL);
+}
 
 /*
  * API for sending a header POST multipart to the client.
@@ -2398,7 +2405,7 @@ int8_t pico_http_set_close_ev(uint16_t conn)
 		return HTTP_RETURN_ERROR;
 	}
 	client->wakeup(EV_HTTP_CLOSE, client->connectionID);
-    return EV_HTTP_CLOSE;
+    	return EV_HTTP_CLOSE;
 }
 
 
