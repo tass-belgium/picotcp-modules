@@ -9,3 +9,6 @@
 *.yml
 /.d
 make_log.txt
+.project
+.cproject
+.settings/
