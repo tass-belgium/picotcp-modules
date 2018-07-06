@@ -28,19 +28,19 @@
 
 // Private functions
 /* Helper*/
-static int get_value_via_key( char* source, char* key, uint32_t max_value_length, char* value );
+static int get_value_via_key( const char* source, const char* key, uint32_t max_value_length, char* value );
 static void sig_handler( int signo );
 /* Sprinkler*/
-static uint32_t is_watering_needed( char* state, uint8_t humidity );
+static uint32_t is_watering_needed( const char* state, uint8_t humidity );
 static uint32_t calculate_needed_water( uint8_t humidity, uint8_t temperature, uint32_t volume_of_air_m3);
-static void water_garden( float liters );
+static void water_garden( uint32_t liters );
 /* Humidity sensor*/
-static void print_humidity( uint8_t humidity, char* client_name);
+static void print_humidity( uint8_t humidity, const char* client_name);
 
 // functions
-int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name);
-int main_better_humidity_sensor( struct pico_mqtt* mqtt, char* client_name );
-int main_sprinkler( struct pico_mqtt* mqtt, char* client_name );
+int main_humidity_sensor( struct pico_mqtt* mqtt, const char* client_name);
+int main_better_humidity_sensor( struct pico_mqtt* mqtt, const char* client_name );
+int main_sprinkler( struct pico_mqtt* mqtt, const char* client_name );
 
 static int running = 1;
 
@@ -66,14 +66,17 @@ static void sig_handler(int signo)
  *         -1 when key not found or value did not start with a "
  *         -2 when value did not end with a "
  */
-static int get_value_via_key( char* source, char* key, uint32_t max_value_length, char* value )
+static int get_value_via_key( const char* source, const char* key, uint32_t max_value_length, char* value )
 {
 	char lookup_key[128];
+	char* start_value;
+	char* end_value;
+	uint32_t length;
 	memset(lookup_key, 0, 128);
 	snprintf(lookup_key, 128, "\"%s\":\"", key);
 
 	// Search for lookup_key in source, return pointer to start of lookup_key
-	char* start_value = strstr(source, lookup_key);
+	start_value = strstr(source, lookup_key);
 
 	if (start_value == NULL)
 	{
@@ -86,7 +89,7 @@ static int get_value_via_key( char* source, char* key, uint32_t max_value_length
 	start_value += strlen(lookup_key);
 
 	// Search for delimiting " at the end of the value
-	char* end_value = strchr(start_value,'"');
+	end_value = strchr(start_value,'"');
 
 	if (end_value == NULL)
 	{
@@ -94,7 +97,7 @@ static int get_value_via_key( char* source, char* key, uint32_t max_value_length
 		return -2;
 	}
 	memset(value, 0, max_value_length);
-	uint32_t length = (end_value - start_value) % max_value_length;
+	length = (uint32_t)((end_value - start_value) % max_value_length);
 	strncpy(value,start_value, length);
 
 	return 0;
@@ -103,7 +106,7 @@ static int get_value_via_key( char* source, char* key, uint32_t max_value_length
 /**
  * @brief Checks if sprinkler should start or stop watering the garden
  */
-static uint32_t is_watering_needed(char* state, uint8_t humidity )
+static uint32_t is_watering_needed( const char* state, uint8_t humidity )
 {
 	if (strcmp(state, "OFF") == 0)
 	{
@@ -141,9 +144,9 @@ static uint32_t calculate_needed_water( uint8_t humidity, uint8_t temperature, u
 
 	required_humidity = MAX_HUMIDITY;
 
-	water_to_reach_required_humidity = 6.0 * (required_humidity - humidity) / (humidity + 1);
-	adopted_weight_air = 1.2 / (1 + (temperature - 20)/200);
-	liters_needed = (float)(water_to_reach_required_humidity * adopted_weight_air * volume_of_air_m3);
+	water_to_reach_required_humidity = 6.0f * (float)(required_humidity - humidity) / (float)(humidity + 1);
+	adopted_weight_air = 1.2f / (float)(1 + (temperature - 20)/200);
+	liters_needed = (uint32_t)(water_to_reach_required_humidity * adopted_weight_air * (float)volume_of_air_m3);
 
 	return liters_needed;
 }
@@ -152,15 +155,15 @@ static uint32_t calculate_needed_water( uint8_t humidity, uint8_t temperature, u
  * @brief Output function to start the sprinkler
  *        Currently prints a string instead of squirting water from your PC.
  */
-static void water_garden( float liters )
+static void water_garden( uint32_t liters )
 {
-	printf("Watering the garden now with %f liters\n", liters);
+	printf("Watering the garden now with %d liters\n", liters);
 }
 
 /**
  * @brief Print local sensor data (debug purposes)
  */
-static void print_humidity( uint8_t humidity, char* client_name )
+static void print_humidity( uint8_t humidity, const char* client_name )
 {
 	printf("[LOCAL] Sensor_%s : %u %% humidity\n", client_name, humidity);
 }
@@ -170,7 +173,7 @@ static void print_humidity( uint8_t humidity, char* client_name )
  *        server on topic "garden/humidity" in JSON format:
  *        {"Name":"[client_name]","Value":"[humidity_sensor_data_in_percentage]"}
  */
-int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name)
+int main_humidity_sensor( struct pico_mqtt* mqtt, const char* client_name)
 {
 	struct pico_mqtt_message* message = NULL;
 	uint8_t humidity = 0;
@@ -183,7 +186,7 @@ int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name)
 	memset(buffer, 0, sizeof(buffer));
 
 	// Seed the random generator
-	srand(time(NULL));
+	srand((unsigned int)time(NULL));
 
 	running = 1;
 	while(running)
@@ -195,7 +198,7 @@ int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name)
 		snprintf(buffer, 128, "{\"Name\":\"%s\",\"Value\":\"%03d\"}\n", client_name, humidity);
 
 		// Create mqtt message
-		message = pico_mqtt_create_message(TOPIC_HUM, buffer, strlen(buffer));
+		message = pico_mqtt_create_message(TOPIC_HUM, buffer, (uint32_t)strlen(buffer));
 		pico_mqtt_message_set_quality_of_service(message, QOS);
 
 		// Publish on topic
@@ -219,7 +222,7 @@ int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name)
  * No memory allocations are made for each message (internally the data is copied
  * for sending). The Quality of Service has only to be set once.
  */
-int main_better_humidity_sensor( struct pico_mqtt* mqtt, char* client_name )
+int main_better_humidity_sensor( struct pico_mqtt* mqtt, const char* client_name )
 {
 	struct pico_mqtt_message message = PICO_MQTT_MESSAGE_EMPTY;
 	struct pico_mqtt_data data = PICO_MQTT_DATA_EMPTY;
@@ -263,12 +266,14 @@ int main_better_humidity_sensor( struct pico_mqtt* mqtt, char* client_name )
  *        After processing, the sprinkler will inform the network by publishing its state in JSON format:
  *        {"Name":"[actuator_name]","Value":"[state]"}
  */
-int main_sprinkler( struct pico_mqtt* mqtt, char* client_name )
+int main_sprinkler( struct pico_mqtt* mqtt, const char* client_name )
 {
 	struct pico_mqtt_message* message = NULL;
 	uint8_t humidity = 49;
 	char buffer[128];
-	char* state = "OFF";
+	const char* state;
+
+	state = "OFF";
 
 	if (pico_mqtt_subscribe(mqtt, TOPIC_HUM, 1, 5000))
 	{
@@ -291,7 +296,7 @@ int main_sprinkler( struct pico_mqtt* mqtt, char* client_name )
 		}
 		printf("Received humidity from your sensor >> %s\n", buffer);
 
-		humidity = atoi(buffer);
+		humidity = (uint8_t)atoi(buffer);
 		if (is_watering_needed(state, humidity))
 		{
 			water_garden(calculate_needed_water(humidity, 20, 4*10*2.5));
@@ -312,7 +317,7 @@ int main_sprinkler( struct pico_mqtt* mqtt, char* client_name )
 		snprintf(buffer, 128, "{\"Name\":\"%s\",\"Value\":\"%s\"}\n", client_name, state);
 
 		// Create mqtt message
-		message = pico_mqtt_create_message(TOPIC_SPR, buffer, strlen(buffer));
+		message = pico_mqtt_create_message(TOPIC_SPR, buffer, (uint32_t)strlen(buffer));
 
 		// Publish on topic
 		pico_mqtt_publish(mqtt, message, 1000);
