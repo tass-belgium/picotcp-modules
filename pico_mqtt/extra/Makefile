@@ -38,8 +38,11 @@ YELLOW_COLOR    = #\x1b[33;01m
 RED_COLOR       = #\x1b[31;01m
 WHITE_COLOR     = #\x1b[37;01m
 
-all: clean demo
+all: clean garden demo
 	
+
+garden: humiditySensor.elf sprinkler.elf
+	@echo 'Created humiditySensor.elf sprinkler.elf'
 
 demo: demo.elf
 	@echo 'Created gardenDemo.elf'
@@ -77,6 +80,14 @@ $(OUT_FILE).bin: $(OUT_FILE).elf
 $(OUT_FILE).elf: $(OBJ_FILES)
 	@echo -e '$(WHITE_COLOR)>>> LINKING$(NO_COLOR)'
 	$(LD) $(LFLAGS) -o $@ $^ -Wl,-Map,$(OUT_FILE).map
+	
+humiditySensor.elf: $(CORE_FILES) humiditySensor.o
+	@echo -e '$(WHITE_COLOR)>>> LINKING$(NO_COLOR)'
+	$(LD) $(LFLAGS) $^ -o $@
+	
+sprinkler.elf: $(CORE_FILES) sprinkler.o
+	@echo -e '$(WHITE_COLOR)>>> LINKING$(NO_COLOR)'
+	$(LD) $(LFLAGS) $^ -o $@
 	
 demo.elf: $(CORE_FILES) obj/garden_watering_example.o demo.o
 	@echo -e '$(WHITE_COLOR)>>> LINKING$(NO_COLOR)'
