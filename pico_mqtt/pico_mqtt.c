@@ -447,6 +447,8 @@ int pico_mqtt_publish(struct pico_mqtt* mqtt, struct pico_mqtt_message* message,
 		return ERROR;
 
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
+
+	FREE(packet->message);
 	packet->message = NULL;
 
 	pico_mqtt_list_push_back(mqtt->output_queue, packet);
@@ -482,6 +484,7 @@ int pico_mqtt_receive(struct pico_mqtt* mqtt, struct pico_mqtt_message** message
 	{
 		struct pico_mqtt_packet* packet = pico_mqtt_list_pop(mqtt->input_queue);
 		*message = packet->message;
+		// Free everything but the message, let it be used by the user
 		packet->message = NULL;
 		destroy_packet(packet);
 	}
@@ -579,9 +582,13 @@ int pico_mqtt_unsubscribe(struct pico_mqtt* mqtt, const char* topic_string, cons
 
 	//pico_mqtt_destroy_data(topic);
 
+	// TODO serializer->stream is currently not free'd when getting the packet as the stream seems not to be OWNED at the moment... FIX THIS MEMORY LEAK
 	packet = pico_mqtt_serializer_get_packet(mqtt->serializer);
 
 	pico_mqtt_list_push_back(mqtt->output_queue, packet);
+
+	pico_mqtt_destroy_message(packet->message);
+	packet->message = NULL;
 
 	set_trigger_message(mqtt, packet);
 	if(protocol(mqtt, timeout) == ERROR)
