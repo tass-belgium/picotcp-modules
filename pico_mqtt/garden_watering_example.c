@@ -1,123 +1,326 @@
 #include "pico_mqtt.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "time.h"
+#include <unistd.h>
+#include <signal.h>
 
 /*
-                     _                            _            _             
-                    | |                          | |          (_)            
-  __ _  __ _ _ __ __| | ___ _ __   __      ____ _| |_ ___ _ __ _ _ __   __ _ 
+                     _                            _            _
+                    | |                          | |          (_)
+  __ _  __ _ _ __ __| | ___ _ __   __      ____ _| |_ ___ _ __ _ _ __   __ _
  / _` |/ _` | '__/ _` |/ _ \ '_ \  \ \ /\ / / _` | __/ _ \ '__| | '_ \ / _` |
 | (_| | (_| | | | (_| |  __/ | | |  \ V  V / (_| | ||  __/ |  | | | | | (_| |
  \__, |\__,_|_|  \__,_|\___|_| |_|   \_/\_/ \__,_|\__\___|_|  |_|_| |_|\__, |
   __/ |                                                                 __/ |
- |___/                                                                 |___/ 
+ |___/                                                                 |___/
 
-*/
+ */
 
- static void water_garden( uint16_t minutes );
-int main_humidity_sensor( void );
-int main_better_humidity_sensor( void );
-int main_sprinkler( void );
+// CONFIGURATIONS
+#define QOS			0					// Quality of service for the MQTT communication [0 default, 1, 2]
+										// NOTE: QOS higher then 0 needs work
+#define TOPIC_HUM 	"garden/humidity"	// Topic used to send humidity data
+#define TOPIC_SPR 	"garden/sprinkler"	// Topic used to send humidity data
 
+#define MIN_HUMIDITY 40
+#define MAX_HUMIDITY 70
 
- static void water_garden( uint16_t minutes )
- {
- 	printf("Watering the garden for %d minutes\n", minutes);
- }
+// Private functions
+/* Helper*/
+static int get_value_via_key( char* source, char* key, uint32_t max_value_length, char* value );
+static void sig_handler( int signo );
+/* Sprinkler*/
+static uint32_t is_watering_needed( char* state, uint8_t humidity );
+static uint32_t calculate_needed_water( uint8_t humidity, uint8_t temperature, uint32_t volume_of_air_m3);
+static void water_garden( float liters );
+/* Humidity sensor*/
+static void print_humidity( uint8_t humidity, char* client_name);
+
+// functions
+int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name);
+int main_better_humidity_sensor( struct pico_mqtt* mqtt, char* client_name );
+int main_sprinkler( struct pico_mqtt* mqtt, char* client_name );
+
+static int running = 1;
 
 
 /**
-* Inefficient but simplest implementation
-**/
-
-int main_humidity_sensor( void )
+ * @brief Signal handler
+ *        Will break out of while loop to allow proper disconnection from the MQTT network
+ */
+static void sig_handler(int signo)
 {
-	struct pico_mqtt_message* message = NULL;
-	uint8_t humidity = 0;
+    if (signo == SIGINT)
+    {
+        printf("HALT received...\nShutting down (2s)\n");
+        running = 0;
+    }
+}
 
-	struct pico_mqtt* mqtt = pico_mqtt_create();
-	pico_mqtt_connect(mqtt, "www.mygarden.be", "1883", 1000);
+/**
+ * @brief Parse a JSON-like \p source string.
+ * 		  Find a \p key, return the matching value via \p value.
+ * @note: only works for " delimited strings: e.g. {"key":"value"}
+ * @return 0 on success
+ *         -1 when key not found or value did not start with a "
+ *         -2 when value did not end with a "
+ */
+static int get_value_via_key( char* source, char* key, uint32_t max_value_length, char* value )
+{
+	char lookup_key[128];
+	memset(lookup_key, 0, 128);
+	snprintf(lookup_key, 128, "\"%s\":\"", key);
 
-	while(1)
+	// Search for lookup_key in source, return pointer to start of lookup_key
+	char* start_value = strstr(source, lookup_key);
+
+	if (start_value == NULL)
 	{
-		humidity = (uint8_t)(rand() % 100);
-		message = pico_mqtt_create_message("garden/humidity", &humidity, 1);
-		pico_mqtt_message_set_quality_of_service(message, 1);
-		pico_mqtt_publish(mqtt, message, 1000);
-		pico_mqtt_destroy_message(message);
+		// Key not found
+		// or value did not start with "
+		return -1;
 	}
 
-	pico_mqtt_disconnect(mqtt);
-	pico_mqtt_destroy(mqtt);
+	// Set start of value to the end of the lookup_key
+	start_value += strlen(lookup_key);
+
+	// Search for delimiting " at the end of the value
+	char* end_value = strchr(start_value,'"');
+
+	if (end_value == NULL)
+	{
+		// Value did not end with a "
+		return -2;
+	}
+	memset(value, 0, max_value_length);
+	uint32_t length = (end_value - start_value) % max_value_length;
+	strncpy(value,start_value, length);
+
 	return 0;
 }
 
 /**
-* More efficient implementation:
-*
-* No memory allocations are made for each message (internally the data is copied
-* for sending). The Quality of Service has only to be set once.
-**/
+ * @brief Checks if sprinkler should start or stop watering the garden
+ */
+static uint32_t is_watering_needed(char* state, uint8_t humidity )
+{
+	if (strcmp(state, "OFF") == 0)
+	{
+		// Sprinkler "OFF" and below MIN humidity?
+		if (humidity <= MIN_HUMIDITY)
+		{
+			printf("[LOCAL] Your garden is getting thirsty... humidity: %d\n",humidity);
+			return 1;
+		}
+	}
+	else
+	{
+		// Sprinkler "ON" but not yet at MAX humidity?
+		if (humidity < MAX_HUMIDITY)
+		{
+			printf("[LOCAL] Your garden is still thirsty... humidity: %d\n",humidity);
+			return 1;
+		}
+	}
 
-int main_better_humidity_sensor( void )
+	return 0;
+}
+
+
+/**
+ * @brief Calculate how much water needed to hydrate a \p volume_of_air_m3 to reach a desired humidity
+ * @note  THIS IS NOT A VALID CALCULATION
+ */
+static uint32_t calculate_needed_water( uint8_t humidity, uint8_t temperature, uint32_t volume_of_air_m3)
+{
+	uint8_t required_humidity;
+	float water_to_reach_required_humidity; // Amount of H2O (gram) per kg air to reach the desired relative humidity [g/kg]
+	float adopted_weight_air; // Adopted weight of one cubic metre of air of [kg/m3]
+	uint32_t liters_needed;
+
+	required_humidity = MAX_HUMIDITY;
+
+	water_to_reach_required_humidity = 6.0 * (required_humidity - humidity) / (humidity + 1);
+	adopted_weight_air = 1.2 / (1 + (temperature - 20)/200);
+	liters_needed = (float)(water_to_reach_required_humidity * adopted_weight_air * volume_of_air_m3);
+
+	return liters_needed;
+}
+
+/**
+ * @brief Output function to start the sprinkler
+ *        Currently prints a string instead of squirting water from your PC.
+ */
+static void water_garden( float liters )
+{
+	printf("Watering the garden now with %f liters\n", liters);
+}
+
+/**
+ * @brief Print local sensor data (debug purposes)
+ */
+static void print_humidity( uint8_t humidity, char* client_name )
+{
+	printf("[LOCAL] Sensor_%s : %u %% humidity\n", client_name, humidity);
+}
+
+/**
+ * @brief MQTT client that publishes humidity data to the connected @a mqtt
+ *        server on topic "garden/humidity" in JSON format:
+ *        {"Name":"[client_name]","Value":"[humidity_sensor_data_in_percentage]"}
+ */
+int main_humidity_sensor( struct pico_mqtt* mqtt, char* client_name)
+{
+	struct pico_mqtt_message* message = NULL;
+	uint8_t humidity = 0;
+	char buffer[128];
+
+	// Install signal handler on ^C
+	signal(SIGINT, sig_handler);
+
+	// Clear buffer
+	memset(buffer, 0, sizeof(buffer));
+
+	// Seed the random generator
+	srand(time(NULL));
+
+	running = 1;
+	while(running)
+	{
+		// Send a random number between 0-99 ever 7 seconds
+		humidity = (uint8_t)(rand() % 100);
+
+		// Build JSON message
+		snprintf(buffer, 128, "{\"Name\":\"%s\",\"Value\":\"%03d\"}\n", client_name, humidity);
+
+		// Create mqtt message
+		message = pico_mqtt_create_message(TOPIC_HUM, buffer, strlen(buffer));
+		pico_mqtt_message_set_quality_of_service(message, QOS);
+
+		// Publish on topic
+		pico_mqtt_publish(mqtt, message, 5000);
+
+		// Clear message + internal buffers
+		pico_mqtt_destroy_message(message);
+		message = NULL;
+
+		// Print sensor data locally
+		print_humidity(humidity, client_name);
+		sleep(7);
+	}
+
+	return 0;
+}
+
+/**
+ * More efficient implementation:
+ *
+ * No memory allocations are made for each message (internally the data is copied
+ * for sending). The Quality of Service has only to be set once.
+ */
+int main_better_humidity_sensor( struct pico_mqtt* mqtt, char* client_name )
 {
 	struct pico_mqtt_message message = PICO_MQTT_MESSAGE_EMPTY;
 	struct pico_mqtt_data data = PICO_MQTT_DATA_EMPTY;
 	struct pico_mqtt_data topic = PICO_MQTT_DATA_EMPTY;
-	struct pico_mqtt* mqtt = NULL;
-	char topic_string[] = "garden/humidity";
+	char topic_string[] = TOPIC_HUM;
 	uint8_t humidity = 0;
+	char buffer[128];
 
-	pico_mqtt_message_set_quality_of_service(&message, 1);
+	// Install signal handler on ^C
+	signal(SIGINT, sig_handler);
 
-	data.data = &humidity;
-	data.length = sizeof(humidity);
+	// Clear buffer
+	memset(buffer, 0, sizeof(buffer));
+
+	pico_mqtt_message_set_quality_of_service(&message, QOS);
+
+	data.data = buffer;
+	data.length = sizeof(buffer);	// This will always send the full buffer now ...
 	message.data = &data;
 
 	topic.data = topic_string;
-	topic.length = sizeof("garden/humidity") - 1; //don't include NULL termination
+	topic.length = sizeof(TOPIC_HUM) - 1; //don't include NULL termination
 	message.topic = &topic;
 
-	mqtt = pico_mqtt_create();
-	pico_mqtt_connect(mqtt, "www.mygarden.be", "1883", 1000);
-
-	while(1)
+	running = 1;
+	while(running)
 	{
 		humidity = (uint8_t)(rand() % 100);
-		pico_mqtt_publish(mqtt, &message, 1000);
+		// Build JSON message
+		snprintf(buffer, 128, "{\"Name\":\"%s\",\"Value\":\"%03u\"}\n", client_name, humidity);
+		pico_mqtt_publish(mqtt, &message, 5000);
+		sleep(7);
 	}
 
-	pico_mqtt_disconnect(mqtt);
-	pico_mqtt_destroy(mqtt);
 	return 0;
 }
 
 /**
-* sprinkler implementation
-**/
-
-int main_sprinkler( void )
+ * @brief MQTT client that processes humidity data from the connected \p mqtt
+ *        server on topic "garden/humidity".
+ *        After processing, the sprinkler will inform the network by publishing its state in JSON format:
+ *        {"Name":"[actuator_name]","Value":"[state]"}
+ */
+int main_sprinkler( struct pico_mqtt* mqtt, char* client_name )
 {
 	struct pico_mqtt_message* message = NULL;
+	uint8_t humidity = 49;
+	char buffer[128];
+	char* state = "OFF";
 
-	struct pico_mqtt* mqtt = pico_mqtt_create();
-	pico_mqtt_connect(mqtt, "www.mygarden.be", "1883", 1000);
+	if (pico_mqtt_subscribe(mqtt, TOPIC_HUM, 1, 5000))
+	{
+		printf("Failed to subscribe on topic %s", TOPIC_HUM);
+		return -5;
+	}
 
-	pico_mqtt_subscribe(mqtt, "garden/humidity", 1, 1000);
+	pico_mqtt_receive(mqtt, &message, 60000); // blocking wait for max 60 seconds for a message
 
-	pico_mqtt_receive(mqtt, &message, 60000); // wait 1 minute for a message
 	if(message != NULL)
 	{
-		water_garden(*((uint8_t*) message->data->data ));
+		if (get_value_via_key(message->data->data, "Value", 128, buffer) != 0)
+		{
+			printf("Received unreadable data: %s\n", (char*)message->data->data);
+			// [MQTT] Clear the RECEIVED message and internal buffering
+			pico_mqtt_destroy_message(message);
+			message = NULL;
+			pico_mqtt_unsubscribe(mqtt, TOPIC_HUM, 5000 );
+			return 0;
+		}
+		printf("Received humidity from your sensor >> %s\n", buffer);
+
+		humidity = atoi(buffer);
+		if (is_watering_needed(state, humidity))
+		{
+			water_garden(calculate_needed_water(humidity, 20, 4*10*2.5));
+			// Update the sprinkler state to ON (will be published)
+			state = "ON";
+		}
+
 		pico_mqtt_destroy_message(message);
-		message = pico_mqtt_create_message("garden/sprinkler", "on", 2);
+		message = NULL;
+
+
+		/**********************************************************************
+		 * PUBLISH SPRINKLER STATE
+		 **********************************************************************/
+		// Clear buffer
+		memset(buffer, 0, sizeof(buffer));
+		// Build JSON message
+		snprintf(buffer, 128, "{\"Name\":\"%s\",\"Value\":\"%s\"}\n", client_name, state);
+
+		// Create mqtt message
+		message = pico_mqtt_create_message(TOPIC_SPR, buffer, strlen(buffer));
+
+		// Publish on topic
 		pico_mqtt_publish(mqtt, message, 1000);
+
+		// Clear the message and internal buffering
 		pico_mqtt_destroy_message(message);
 		message = NULL;
 	}
-
-	pico_mqtt_unsubscribe(mqtt, "garden/humidity", 1000 );
-	pico_mqtt_disconnect(mqtt);
-	pico_mqtt_destroy(mqtt);
+	pico_mqtt_unsubscribe(mqtt, TOPIC_HUM, 5000 );
 	return 0;
 }
