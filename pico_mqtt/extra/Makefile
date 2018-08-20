@@ -38,7 +38,7 @@ YELLOW_COLOR    = #\x1b[33;01m
 RED_COLOR       = #\x1b[31;01m
 WHITE_COLOR     = #\x1b[37;01m
 
-all: clean garden demo
+all: clean init garden demo
 	
 
 garden: humiditySensor.elf sprinkler.elf
