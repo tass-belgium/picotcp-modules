@@ -20,15 +20,8 @@
 /*******************************************************************************
  * MACROS
  ******************************************************************************/
-#define LOCALHOST       0                       // Trick to compare in the preprocessor (no string comparison possible)
-#define HOSTNAME        LOCALHOST               // Hostname used by MQTT server in the network: e.g. "10.222.23.157"
-/* Offer warning when compiling with localhost...*/
-#if HOSTNAME == LOCALHOST
-        #undef HOSTNAME
-        #define HOSTNAME        "localhost"
-        #warning HOSTNAME set to "localhost", are you sure you are running a local MQTT server?
-#endif
-#define PORT            "1883"                  // Port used by MQTT server
+#define HOSTNAME     "127.0.0.1"        // Hostname used by MQTT server in the network: e.g. "10.222.23.157"
+#define PORT         "1883"             // Port     used by MQTT server
 
 #define USER            "IOT"                   // Credentials needed to connect with the MQTT broker
 #define PWD             "fundamentals"          // Credentials needed to connect with the MQTT broker
